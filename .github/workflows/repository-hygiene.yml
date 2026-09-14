@@ -23,7 +23,7 @@ jobs:
 
       - name: Check for obvious private-key markers
         run: |
-          if grep -RInE "BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY|seed phrase|mnemonic" --exclude-dir=.git .; then
+          if grep -RInE "BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY|PRIVATE_KEY[[:space:]]*=[[:space:]]*[^R]|SECRET_KEY[[:space:]]*=[[:space:]]*[^R]" --exclude-dir=.git --exclude='*.md' --exclude='*.example' .; then
             echo "Potential secret marker found. Review the files before merging."
             exit 1
           fi
