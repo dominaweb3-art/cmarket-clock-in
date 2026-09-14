@@ -1,4 +1,4 @@
-export function formatError(error: unknown) {
+export function formatError(error: unknown, fallback: string) {
   if (error instanceof Error) {
     return error.message
   }
@@ -8,5 +8,5 @@ export function formatError(error: unknown) {
   if (typeof error === 'string' && error.trim().length > 0) {
     return error
   }
-  return 'Unknown error occurred'
+  return fallback
 }

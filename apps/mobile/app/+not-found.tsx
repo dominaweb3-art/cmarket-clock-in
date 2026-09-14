@@ -4,17 +4,20 @@ import { StyleSheet } from 'react-native'
 import { AppText } from '@/components/app-text'
 
 import { AppView } from '@/components/app-view'
+import { useI18n } from '@/components/i18n/i18n-provider'
 
 export default function NotFoundScreen() {
+  const { t } = useI18n()
+
   return (
     <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
+      <Stack.Screen options={{ title: t('notFound.title') }} />
       <AppView style={styles.container}>
         <AppText type="title" style={{ textAlign: 'center' }}>
-          This screen does not exist.
+          {t('notFound.message')}
         </AppText>
         <Link href="/" style={styles.link}>
-          <AppText type="link">Go to home screen!</AppText>
+          <AppText type="link">{t('notFound.home')}</AppText>
         </Link>
       </AppView>
     </>

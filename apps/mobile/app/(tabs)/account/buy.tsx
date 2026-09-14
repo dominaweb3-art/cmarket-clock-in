@@ -26,6 +26,7 @@ import { useGetUsdcBalance } from '@/components/account/use-get-usdc-balance'
 import { ellipsify } from '@/utils/ellipsify'
 import { useCluster } from '@/components/cluster/cluster-provider'
 import { AppConfig } from '@/constants/app-config'
+import { useI18n } from '@/components/i18n/i18n-provider'
 
 const MIN_PURCHASE_USDC = 5
 const QUICK_AMOUNTS = [5, 10, 50]
@@ -51,6 +52,7 @@ export default function BuyScreen() {
   const router = useRouter()
   const { account, signTransactions } = useMobileWallet()
   const { getExplorerUrl } = useCluster()
+  const { t } = useI18n()
 
   const [amount, setAmount] = useState('5')
   const [error, setError] = useState('')
@@ -77,11 +79,11 @@ export default function BuyScreen() {
   })
 
   const usdcDisplay = !walletPublicKey
-    ? 'Conecta tu wallet'
+    ? t('buy.connectWallet')
     : usdcQuery.isLoading
-      ? 'Consultando…'
+      ? t('buy.loadingBalance')
       : usdcQuery.error
-        ? 'No disponible'
+        ? t('buy.balanceUnavailable')
         : `${(usdcQuery.balance ?? 0).toFixed(2)} USDC`
 
   const handleAmountChange = (value: string) => {
@@ -95,37 +97,38 @@ export default function BuyScreen() {
     setError('')
 
     if (!account || !walletPublicKey) {
-      setError('Conecta tu wallet antes de continuar.')
+      setError(t('buy.walletRequired'))
       return
     }
 
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError('Escribe un monto válido.')
+      setError(t('buy.invalidAmount'))
       return
     }
 
     if (numericAmount < MIN_PURCHASE_USDC) {
-      setError('El monto mínimo de compra es de 5 USDC.')
+      setError(t('buy.minimumError'))
       return
     }
 
     if (usdcQuery.isLoading) {
-      setError('Espera a que cargue tu saldo USDC.')
+      setError(t('buy.waitForBalance'))
       return
     }
 
     const availableUsdc = usdcQuery.balance
 
     if (usdcQuery.error || availableUsdc === undefined) {
-      setError('No se pudo verificar tu saldo USDC. Intenta nuevamente.')
+      setError(t('buy.verifyBalanceError'))
       return
     }
 
     if (numericAmount > availableUsdc) {
       setError(
-        `Saldo USDC insuficiente. Tienes ${formatUsdc(
-          availableUsdc,
-        )} USDC y necesitas ${formatUsdc(numericAmount)} USDC.`,
+        t('buy.insufficientBalance', {
+          available: formatUsdc(availableUsdc),
+          needed: formatUsdc(numericAmount),
+        }),
       )
       return
     }
@@ -147,7 +150,7 @@ export default function BuyScreen() {
       })
 
       if (!sourceTokenAccount) {
-        setError('No se encontró una cuenta USDC con saldo suficiente.')
+        setError(t('buy.tokenAccountError'))
         return
       }
 
@@ -209,8 +212,8 @@ export default function BuyScreen() {
       await usdcQuery.refresh()
 
       Alert.alert(
-        'Pago enviado',
-        `Se enviaron ${formatUsdc(numericAmount)} USDC a la tesorería de C3 en Devnet.\n\nFirma:\n${signature}`,
+        t('buy.paymentSentTitle'),
+        t('buy.paymentSentMessage', { amount: formatUsdc(numericAmount), signature }),
       )
     } catch (cause) {
       console.error('C3 purchase error', cause)
@@ -218,9 +221,9 @@ export default function BuyScreen() {
       const message = cause instanceof Error ? cause.message : ''
 
       if (message.toLowerCase().includes('reject') || message.toLowerCase().includes('cancel')) {
-        setError('Cancelaste la operación en Phantom.')
+        setError(t('buy.cancelled'))
       } else {
-        setError(`No se pudo enviar el pago. ${message || 'Intenta nuevamente.'}`)
+        setError(t('buy.sendFailed', { message: message || t('buy.tryAgain') }))
       }
     } finally {
       setIsSubmitting(false)
@@ -229,12 +232,12 @@ export default function BuyScreen() {
 
   const copySignature = () => {
     Clipboard.setString(signature)
-    Alert.alert('Firma copiada', 'La firma quedó copiada en el portapapeles.')
+    Alert.alert(t('buy.signatureCopiedTitle'), t('buy.signatureCopiedMessage'))
   }
 
   const openExplorer = () => {
     Linking.openURL(getExplorerUrl(`tx/${signature}`)).catch(() => {
-      Alert.alert('No se pudo abrir Explorer', 'Copia la firma para verla manualmente.')
+      Alert.alert(t('buy.explorerErrorTitle'), t('buy.explorerErrorMessage'))
     })
   }
 
@@ -247,15 +250,15 @@ export default function BuyScreen() {
               <AppText style={styles.backText}>‹</AppText>
             </Pressable>
 
-            <AppText style={styles.headerTitle}>Comprar C3</AppText>
+            <AppText style={styles.headerTitle}>{t('buy.title')}</AppText>
 
             <View style={styles.headerSpacer} />
           </View>
 
           <View style={styles.card}>
             <View style={styles.sectionHeader}>
-              <AppText style={styles.sectionTitle}>Monto</AppText>
-              <AppText style={styles.minimum}>Mínimo: $5</AppText>
+              <AppText style={styles.sectionTitle}>{t('buy.amount')}</AppText>
+              <AppText style={styles.minimum}>{t('buy.minimum')}</AppText>
             </View>
 
             <View style={styles.amountInput}>
@@ -302,10 +305,10 @@ export default function BuyScreen() {
                 <AppText style={styles.usdcIconText}>$</AppText>
               </View>
 
-              <AppText style={styles.paymentTitle}>Pagar con USDC</AppText>
+              <AppText style={styles.paymentTitle}>{t('buy.payWithUsdc')}</AppText>
 
-              <Pressable onPress={() => Alert.alert('USDC', 'USDC será el activo de pago.')}>
-                <AppText style={styles.changeText}>Cambiar</AppText>
+              <Pressable onPress={() => Alert.alert('USDC', t('buy.usdcPaymentAsset'))}>
+                <AppText style={styles.changeText}>{t('buy.change')}</AppText>
               </Pressable>
             </View>
 
@@ -314,13 +317,15 @@ export default function BuyScreen() {
 
               <View style={styles.walletInfo}>
                 <AppText style={styles.walletAddress}>
-                  {walletAddress ? ellipsify(walletAddress, 6) : 'Wallet no conectada'}
+                  {walletAddress ? ellipsify(walletAddress, 6) : t('buy.walletNotConnected')}
                 </AppText>
 
                 <View style={styles.connectedRow}>
                   <View style={styles.connectedDot} />
 
-                  <AppText style={styles.connectedText}>{account ? 'Wallet conectada' : 'Conecta tu wallet'}</AppText>
+                  <AppText style={styles.connectedText}>
+                    {account ? t('buy.walletConnected') : t('buy.connectWallet')}
+                  </AppText>
                 </View>
               </View>
 
@@ -328,7 +333,7 @@ export default function BuyScreen() {
             </View>
 
             <View style={styles.availableBalanceRow}>
-              <AppText style={styles.availableBalanceLabel}>Saldo USDC disponible</AppText>
+              <AppText style={styles.availableBalanceLabel}>{t('buy.availableUsdc')}</AppText>
 
               <AppText style={[styles.availableBalanceValue, usdcQuery.error && styles.availableBalanceError]}>
                 {usdcDisplay}
@@ -337,22 +342,22 @@ export default function BuyScreen() {
           </View>
 
           <View style={styles.card}>
-            <AppText style={styles.summaryTitle}>Resumen de la compra</AppText>
+            <AppText style={styles.summaryTitle}>{t('buy.summary')}</AppText>
 
             <View style={styles.summaryRow}>
-              <AppText style={styles.summaryLabel}>Monto a pagar</AppText>
+              <AppText style={styles.summaryLabel}>{t('buy.amountToPay')}</AppText>
 
               <AppText style={styles.summaryValue}>{formatUsdc(numericAmount)} USDC</AppText>
             </View>
 
             <View style={styles.summaryRow}>
-              <AppText style={styles.summaryLabel}>Estado de C3</AppText>
+              <AppText style={styles.summaryLabel}>{t('buy.c3Status')}</AppText>
 
-              <AppText style={styles.summaryValue}>Prototipo Devnet</AppText>
+              <AppText style={styles.summaryValue}>{t('buy.devnetPrototype')}</AppText>
             </View>
 
             <View style={styles.summaryRow}>
-              <AppText style={styles.summaryLabel}>Comisión estimada</AppText>
+              <AppText style={styles.summaryLabel}>{t('buy.estimatedFee')}</AppText>
 
               <AppText style={styles.summaryValue}>~$0.10 USDC</AppText>
             </View>
@@ -362,11 +367,7 @@ export default function BuyScreen() {
                 <AppText style={styles.infoIconText}>✓</AppText>
               </View>
 
-              <AppText style={styles.infoText}>
-                Este prototipo registra el aporte USDC en la tesorería de Devnet.
-                {'\n'}La distribución SOL 50% · USDC 30% · JitoSOL 20% se habilitará cuando el vault C3 esté desplegado
-                y verificado.
-              </AppText>
+              <AppText style={styles.infoText}>{t('buy.prototypeDisclosure')}</AppText>
             </View>
           </View>
 
@@ -375,26 +376,26 @@ export default function BuyScreen() {
             disabled={!account || usdcQuery.isLoading || isSubmitting}
             style={[styles.buyButton, (!account || usdcQuery.isLoading || isSubmitting) && styles.disabledButton]}
           >
-            <AppText style={styles.buyButtonText}>{isSubmitting ? 'Procesando…' : 'Comprar'}</AppText>
+            <AppText style={styles.buyButtonText}>{isSubmitting ? t('buy.processing') : t('buy.buy')}</AppText>
           </Pressable>
 
           {signature ? (
             <View style={styles.receiptCard}>
-              <AppText style={styles.receiptTitle}>Pago USDC confirmado en Devnet</AppText>
+              <AppText style={styles.receiptTitle}>{t('buy.paymentConfirmed')}</AppText>
               <AppText style={styles.receiptSignature}>{ellipsify(signature, 10)}</AppText>
               <View style={styles.receiptActions}>
                 <Pressable onPress={copySignature} style={styles.receiptButton}>
-                  <AppText style={styles.receiptButtonText}>Copiar firma</AppText>
+                  <AppText style={styles.receiptButtonText}>{t('buy.copySignature')}</AppText>
                 </Pressable>
                 <Pressable onPress={openExplorer} style={styles.receiptButton}>
-                  <AppText style={styles.receiptButtonText}>Abrir Explorer</AppText>
+                  <AppText style={styles.receiptButtonText}>{t('buy.openExplorer')}</AppText>
                 </Pressable>
               </View>
             </View>
           ) : null}
 
           <Pressable onPress={() => router.back()} style={styles.compositionButton}>
-            <AppText style={styles.compositionButtonText}>Ver composición</AppText>
+            <AppText style={styles.compositionButtonText}>{t('buy.viewComposition')}</AppText>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -2,8 +2,10 @@ import { Connection, PublicKey } from '@solana/web3.js'
 import { useCallback, useEffect, useState } from 'react'
 
 import { AppConfig } from '@/constants/app-config'
+import { useI18n } from '@/components/i18n/i18n-provider'
 
 export function useGetUsdcBalance({ address }: { address?: PublicKey }) {
+  const { t } = useI18n()
   const addressText = address?.toBase58()
 
   const [balance, setBalance] = useState<number | undefined>()
@@ -34,11 +36,11 @@ export function useGetUsdcBalance({ address }: { address?: PublicKey }) {
 
       setBalance(total)
     } catch (cause) {
-      setError(cause instanceof Error ? cause : new Error('No se pudo consultar el saldo USDC'))
+      setError(cause instanceof Error ? cause : new Error(t('balance.usdcQueryError')))
     } finally {
       setIsLoading(false)
     }
-  }, [addressText])
+  }, [addressText, t])
 
   useEffect(() => {
     const timeout = setTimeout(() => {

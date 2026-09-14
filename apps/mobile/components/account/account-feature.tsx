@@ -10,6 +10,10 @@ import { AccountUiUsdcBalance } from './account-ui-usdc-balance'
 import { useGetBalanceInvalidate } from '@/components/account/use-get-balance'
 import { WalletUiButtonConnect } from '@/components/solana/wallet-ui-button-connect'
 import { ellipsify } from '@/utils/ellipsify'
+import { LanguageSelector } from '@/components/i18n/language-selector'
+import { useI18n } from '@/components/i18n/i18n-provider'
+import { TranslationKey } from '@/locales'
+import { AppConfig } from '@/constants/app-config'
 
 type IndexKey = 'C3' | 'C5' | 'C10' | 'C20' | 'C50'
 
@@ -22,8 +26,8 @@ type Asset = {
 
 type IndexConfig = {
   label: IndexKey
-  title: string
-  description: string
+  titleKey: TranslationKey
+  descriptionKey: TranslationKey
   active: boolean
   assets: Asset[]
 }
@@ -35,8 +39,8 @@ const INDEX_KEYS: IndexKey[] = ['C3', 'C5', 'C10', 'C20', 'C50']
 const INDEX_CONFIGS: Record<IndexKey, IndexConfig> = {
   C3: {
     label: 'C3',
-    title: 'Una canasta. Menos complejidad.',
-    description: 'Compra una sola canasta con exposición a varios activos del ecosistema Solana.',
+    titleKey: 'account.c3Title',
+    descriptionKey: 'account.c3Description',
     active: true,
     assets: [
       {
@@ -62,32 +66,32 @@ const INDEX_CONFIGS: Record<IndexKey, IndexConfig> = {
 
   C5: {
     label: 'C5',
-    title: 'Top 5 del mercado cripto.',
-    description: 'Esta canasta estará disponible próximamente.',
+    titleKey: 'account.c5Title',
+    descriptionKey: 'account.comingSoonDescription',
     active: false,
     assets: [],
   },
 
   C10: {
     label: 'C10',
-    title: 'Top 10 del mercado cripto.',
-    description: 'Esta canasta estará disponible próximamente.',
+    titleKey: 'account.c10Title',
+    descriptionKey: 'account.comingSoonDescription',
     active: false,
     assets: [],
   },
 
   C20: {
     label: 'C20',
-    title: 'Top 20 del mercado cripto.',
-    description: 'Esta canasta estará disponible próximamente.',
+    titleKey: 'account.c20Title',
+    descriptionKey: 'account.comingSoonDescription',
     active: false,
     assets: [],
   },
 
   C50: {
     label: 'C50',
-    title: 'Top 50 del mercado cripto.',
-    description: 'Esta canasta estará disponible próximamente.',
+    titleKey: 'account.c50Title',
+    descriptionKey: 'account.comingSoonDescription',
     active: false,
     assets: [],
   },
@@ -98,6 +102,7 @@ const CHART_BARS = [28, 34, 31, 44, 40, 52, 48, 61, 58, 69, 65, 78, 73, 84, 80, 
 export function AccountFeature() {
   const router = useRouter()
   const { account } = useMobileWallet()
+  const { t } = useI18n()
 
   const [refreshing, setRefreshing] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<IndexKey>('C3')
@@ -133,7 +138,7 @@ export function AccountFeature() {
   }, [invalidateBalance])
 
   const showComingSoon = (index: IndexKey) => {
-    Alert.alert(`${index} próximamente`, 'Primero terminaremos y probaremos C3 en Devnet.')
+    Alert.alert(t('account.comingSoonTitle', { index }), t('account.comingSoonMessage'))
   }
 
   const showPurchaseInfo = () => {
@@ -146,7 +151,7 @@ export function AccountFeature() {
   }
 
   const showWithdrawInfo = () => {
-    Alert.alert('Retirar', 'El retiro estará disponible después de completar la primera compra.')
+    Alert.alert(t('account.withdrawTitle'), t('account.withdrawMessage'))
   }
 
   return (
@@ -161,12 +166,12 @@ export function AccountFeature() {
             contentContainerStyle={styles.content}
           >
             <View style={styles.header}>
-              <AppText style={styles.brand}>C Market</AppText>
+              <AppText style={styles.brand}>{AppConfig.name}</AppText>
 
               <View style={styles.headerActions}>
                 <View style={styles.networkPill}>
                   <View style={styles.onlineDot} />
-                  <AppText style={styles.networkText}>En Devnet</AppText>
+                  <AppText style={styles.networkText}>{t('account.onDevnet')}</AppText>
                 </View>
 
                 <View style={styles.walletPill}>
@@ -175,6 +180,8 @@ export function AccountFeature() {
                 </View>
               </View>
             </View>
+
+            <LanguageSelector />
 
             <ScrollView
               horizontal
@@ -204,7 +211,9 @@ export function AccountFeature() {
                       {indexKey}
                     </AppText>
 
-                    <AppText style={styles.indexPillCaption}>{index.active ? 'Activo' : 'Próximo'}</AppText>
+                    <AppText style={styles.indexPillCaption}>
+                      {index.active ? t('account.active') : t('account.upcoming')}
+                    </AppText>
                   </Pressable>
                 )
               })}
@@ -215,9 +224,9 @@ export function AccountFeature() {
                 <View style={styles.cardHeaderText}>
                   <AppText style={styles.cardEyebrow}>{selectedConfig.label}</AppText>
 
-                  <AppText style={styles.cardTitle}>{selectedConfig.title}</AppText>
+                  <AppText style={styles.cardTitle}>{t(selectedConfig.titleKey)}</AppText>
 
-                  <AppText style={styles.cardDescription}>{selectedConfig.description}</AppText>
+                  <AppText style={styles.cardDescription}>{t(selectedConfig.descriptionKey)}</AppText>
                 </View>
 
                 <View style={styles.devnetBadge}>
@@ -226,13 +235,13 @@ export function AccountFeature() {
               </View>
 
               <View style={styles.valueHeader}>
-                <AppText style={styles.sectionLabel}>Saldo conectado</AppText>
+                <AppText style={styles.sectionLabel}>{t('account.connectedBalance')}</AppText>
 
                 <View style={styles.periodSelector}>
-                  <AppText style={styles.periodActive}>1D</AppText>
-                  <AppText style={styles.periodText}>1S</AppText>
-                  <AppText style={styles.periodText}>1M</AppText>
-                  <AppText style={styles.periodText}>Todo</AppText>
+                  <AppText style={styles.periodActive}>{t('account.periodDay')}</AppText>
+                  <AppText style={styles.periodText}>{t('account.periodWeek')}</AppText>
+                  <AppText style={styles.periodText}>{t('account.periodMonth')}</AppText>
+                  <AppText style={styles.periodText}>{t('account.periodAll')}</AppText>
                 </View>
               </View>
 
@@ -241,7 +250,7 @@ export function AccountFeature() {
                 <AccountUiUsdcBalance address={walletAddress} />
               </View>
 
-              <AppText style={styles.balanceNote}>Saldo disponible para probar C3 en Devnet</AppText>
+              <AppText style={styles.balanceNote}>{t('account.balanceNote')}</AppText>
 
               <View style={styles.chart}>
                 <View style={styles.gridLineOne} />
@@ -256,23 +265,23 @@ export function AccountFeature() {
               </View>
 
               <View style={styles.chartLabels}>
-                <AppText style={styles.chartLabel}>Inicio</AppText>
-                <AppText style={styles.chartLabel}>Ahora</AppText>
+                <AppText style={styles.chartLabel}>{t('account.chartStart')}</AppText>
+                <AppText style={styles.chartLabel}>{t('account.chartNow')}</AppText>
               </View>
 
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>Comprado</AppText>
+                  <AppText style={styles.statLabel}>{t('account.purchased')}</AppText>
                   <AppText style={styles.statValue}>—</AppText>
                 </View>
 
                 <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>Ganancia</AppText>
+                  <AppText style={styles.statLabel}>{t('account.gain')}</AppText>
                   <AppText style={styles.statValue}>—</AppText>
                 </View>
 
                 <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>Rendimiento</AppText>
+                  <AppText style={styles.statLabel}>{t('account.performance')}</AppText>
                   <AppText style={styles.statValue}>—</AppText>
                 </View>
               </View>
@@ -280,9 +289,9 @@ export function AccountFeature() {
 
             <View style={styles.exposureCard}>
               <View style={styles.sectionHeader}>
-                <AppText style={styles.sectionTitle}>Composición objetivo</AppText>
+                <AppText style={styles.sectionTitle}>{t('account.targetComposition')}</AppText>
 
-                <AppText style={styles.linkText}>Ver todos</AppText>
+                <AppText style={styles.linkText}>{t('account.viewAll')}</AppText>
               </View>
 
               <View style={styles.exposureRow}>
@@ -306,21 +315,21 @@ export function AccountFeature() {
               </View>
 
               <View style={styles.infoText}>
-                <AppText style={styles.infoTitle}>Tu posición evolucionará</AppText>
+                <AppText style={styles.infoTitle}>{t('account.positionTitle')}</AppText>
 
-                <AppText style={styles.infoDescription}>
-                  Después de la primera compra podremos mostrar el valor, rendimiento y rebalanceo de tu canasta.
-                </AppText>
+                <AppText style={styles.infoDescription}>{t('account.positionDescription')}</AppText>
               </View>
             </View>
 
             <View style={styles.actionRow}>
               <Pressable style={styles.primaryButton} onPress={showPurchaseInfo}>
-                <AppText style={styles.primaryButtonText}>Comprar {selectedConfig.label}</AppText>
+                <AppText style={styles.primaryButtonText}>
+                  {t('account.buyIndex', { index: selectedConfig.label })}
+                </AppText>
               </Pressable>
 
               <Pressable style={styles.secondaryButton} onPress={showWithdrawInfo}>
-                <AppText style={styles.secondaryButtonText}>Retirar</AppText>
+                <AppText style={styles.secondaryButtonText}>{t('account.withdraw')}</AppText>
               </Pressable>
             </View>
           </ScrollView>
@@ -328,35 +337,35 @@ export function AccountFeature() {
           <View style={styles.bottomNav}>
             <View style={styles.navItem}>
               <AppText style={styles.navIconActive}>⌂</AppText>
-              <AppText style={styles.navTextActive}>Inicio</AppText>
+              <AppText style={styles.navTextActive}>{t('nav.home')}</AppText>
             </View>
 
             <View style={styles.navItem}>
               <AppText style={styles.navIcon}>▥</AppText>
-              <AppText style={styles.navText}>Mercados</AppText>
+              <AppText style={styles.navText}>{t('nav.markets')}</AppText>
             </View>
 
             <View style={styles.navItem}>
               <AppText style={styles.navIcon}>＋</AppText>
-              <AppText style={styles.navText}>Comprar</AppText>
+              <AppText style={styles.navText}>{t('nav.buy')}</AppText>
             </View>
 
             <View style={styles.navItem}>
               <AppText style={styles.navIcon}>▤</AppText>
-              <AppText style={styles.navText}>Actividad</AppText>
+              <AppText style={styles.navText}>{t('nav.activity')}</AppText>
             </View>
 
             <View style={styles.navItem}>
               <AppText style={styles.navIcon}>•••</AppText>
-              <AppText style={styles.navText}>Más</AppText>
+              <AppText style={styles.navText}>{t('nav.more')}</AppText>
             </View>
           </View>
         </>
       ) : (
         <View style={styles.connect}>
-          <AppText style={styles.connectTitle}>Conecta tu wallet</AppText>
+          <AppText style={styles.connectTitle}>{t('account.connectTitle')}</AppText>
 
-          <AppText style={styles.connectDescription}>Usa Phantom en tu Seeker para comenzar.</AppText>
+          <AppText style={styles.connectDescription}>{t('account.connectDescription')}</AppText>
 
           <WalletUiButtonConnect />
         </View>

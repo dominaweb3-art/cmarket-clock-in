@@ -9,9 +9,11 @@ import { View } from 'react-native'
 import { Image } from 'expo-image'
 import { useState } from 'react'
 import { showError } from '@/utils/show-error'
+import { useI18n } from '@/components/i18n/i18n-provider'
 
 export default function SignIn() {
   const { connect } = useMobileWallet()
+  const { t } = useI18n()
   const [isSigningIn, setIsSigningIn] = useState(false)
 
   // Sign-in goes through the wallet, which can decline or fail the request.
@@ -25,7 +27,7 @@ export default function SignIn() {
       // We only get here when sign-in succeeded, so it is safe to navigate.
       router.replace('/')
     } catch (error) {
-      showError('Could not sign in', error)
+      showError(t('auth.signInError'), error, t('errors.unknown'))
     } finally {
       setIsSigningIn(false)
     }
@@ -58,7 +60,7 @@ export default function SignIn() {
             disabled={isSigningIn}
             onPress={() => void handleSignIn()}
           >
-            {isSigningIn ? 'Connecting...' : 'Connect'}
+            {isSigningIn ? t('auth.connecting') : t('auth.connect')}
           </AppButton>
         </View>
       </SafeAreaView>
