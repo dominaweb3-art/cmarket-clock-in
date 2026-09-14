@@ -34,7 +34,13 @@ export function HomeScreen({ onSelectBasket }: HomeScreenProps) {
       </View>
 
       {BASKETS.map((basket) => (
-        <BasketCard key={basket.id} basket={basket} onPress={() => onSelectBasket(basket)} />
+        <BasketCard
+          key={basket.id}
+          basket={basket}
+          onPress={() => {
+            if (basket.status === 'live') onSelectBasket(basket)
+          }}
+        />
       ))}
 
       <View style={styles.notice}>
