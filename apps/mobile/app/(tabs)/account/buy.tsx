@@ -1,0 +1,727 @@
+import { useMobileWallet } from '@wallet-ui/react-native-web3js'
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+} from '@solana/spl-token'
+import { Connection, PublicKey, Transaction } from '@solana/web3.js'
+import { useRouter } from 'expo-router'
+import { useMemo, useState } from 'react'
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
+import Clipboard from '@react-native-clipboard/clipboard'
+
+import { AppText } from '@/components/app-text'
+import { DEVNET_USDC_MINT, useGetUsdcBalance } from '@/components/account/use-get-usdc-balance'
+import { ellipsify } from '@/utils/ellipsify'
+import { useCluster } from '@/components/cluster/cluster-provider'
+
+const DEVNET_RPC_URL = 'https://api.devnet.solana.com'
+const TREASURY_PUBLIC_KEY = new PublicKey('FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ')
+const USDC_DECIMALS = 6
+const MIN_PURCHASE_USDC = 5
+const QUICK_AMOUNTS = [5, 10, 50]
+
+type ParsedTokenAccountData = {
+  parsed?: {
+    info?: {
+      tokenAmount?: {
+        uiAmount?: number | null
+        uiAmountString?: string
+      }
+    }
+  }
+}
+
+function formatUsdc(value: number) {
+  if (!Number.isFinite(value)) return '$0'
+
+  return Number.isInteger(value) ? `$${value.toFixed(0)}` : `$${value.toFixed(2)}`
+}
+
+export default function BuyScreen() {
+  const router = useRouter()
+  const { account, signTransactions } = useMobileWallet()
+  const { getExplorerUrl } = useCluster()
+
+  const [amount, setAmount] = useState('5')
+  const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [signature, setSignature] = useState('')
+
+  const connection = useMemo(() => new Connection(DEVNET_RPC_URL, 'confirmed'), [])
+
+  const numericAmount = Number(amount.replace(',', '.'))
+  const walletAddress = account?.address?.toString()
+
+  const walletPublicKey = useMemo(() => {
+    if (!walletAddress) return undefined
+
+    try {
+      return new PublicKey(walletAddress)
+    } catch {
+      return undefined
+    }
+  }, [walletAddress])
+
+  const usdcQuery = useGetUsdcBalance({
+    address: walletPublicKey,
+  })
+
+  const usdcDisplay = !walletPublicKey
+    ? 'Conecta tu wallet'
+    : usdcQuery.isLoading
+      ? 'Consultando…'
+      : usdcQuery.error
+        ? 'No disponible'
+        : `${(usdcQuery.balance ?? 0).toFixed(2)} USDC`
+
+  const handleAmountChange = (value: string) => {
+    const cleanValue = value.replace(',', '.').replace(/[^0-9.]/g, '')
+
+    setAmount(cleanValue)
+    setError('')
+  }
+
+  const handlePurchase = async () => {
+    setError('')
+
+    if (!account || !walletPublicKey) {
+      setError('Conecta tu wallet antes de continuar.')
+      return
+    }
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setError('Escribe un monto válido.')
+      return
+    }
+
+    if (numericAmount < MIN_PURCHASE_USDC) {
+      setError('El monto mínimo de compra es de 5 USDC.')
+      return
+    }
+
+    if (usdcQuery.isLoading) {
+      setError('Espera a que cargue tu saldo USDC.')
+      return
+    }
+
+    const availableUsdc = usdcQuery.balance
+
+    if (usdcQuery.error || availableUsdc === undefined) {
+      setError('No se pudo verificar tu saldo USDC. Intenta nuevamente.')
+      return
+    }
+
+    if (numericAmount > availableUsdc) {
+      setError(
+        `Saldo USDC insuficiente. Tienes ${formatUsdc(
+          availableUsdc,
+        )} USDC y necesitas ${formatUsdc(numericAmount)} USDC.`,
+      )
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPublicKey, {
+        mint: DEVNET_USDC_MINT,
+      })
+
+      const sourceTokenAccount = tokenAccounts.value.find((item) => {
+        const data = item.account.data as unknown as ParsedTokenAccountData
+        const tokenAmount = data.parsed?.info?.tokenAmount
+
+        const accountBalance = Number(tokenAmount?.uiAmountString ?? tokenAmount?.uiAmount ?? 0)
+
+        return accountBalance >= numericAmount
+      })
+
+      if (!sourceTokenAccount) {
+        setError('No se encontró una cuenta USDC con saldo suficiente.')
+        return
+      }
+
+      const destinationTokenAccount = await getAssociatedTokenAddress(DEVNET_USDC_MINT, TREASURY_PUBLIC_KEY)
+
+      const transaction = new Transaction()
+
+      const destinationExists = await connection.getAccountInfo(destinationTokenAccount)
+
+      if (!destinationExists) {
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            walletPublicKey,
+            destinationTokenAccount,
+            TREASURY_PUBLIC_KEY,
+            DEVNET_USDC_MINT,
+          ),
+        )
+      }
+
+      const amountInBaseUnits = Math.round(numericAmount * 10 ** USDC_DECIMALS)
+
+      transaction.add(
+        createTransferCheckedInstruction(
+          sourceTokenAccount.pubkey,
+          DEVNET_USDC_MINT,
+          destinationTokenAccount,
+          walletPublicKey,
+          amountInBaseUnits,
+          USDC_DECIMALS,
+        ),
+      )
+
+      const latestBlockhash = await connection.getLatestBlockhash('confirmed')
+
+      transaction.feePayer = walletPublicKey
+      transaction.recentBlockhash = latestBlockhash.blockhash
+
+      const signedTransaction = await signTransactions(transaction)
+
+      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
+        skipPreflight: false,
+        maxRetries: 3,
+      })
+
+      await connection.confirmTransaction(
+        {
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        },
+        'confirmed',
+      )
+
+      setSignature(signature)
+      await usdcQuery.refresh()
+
+      Alert.alert(
+        'Pago enviado',
+        `Se enviaron ${formatUsdc(numericAmount)} USDC a la tesorería de C3 en Devnet.\n\nFirma:\n${signature}`,
+      )
+    } catch (cause) {
+      console.error('C3 purchase error', cause)
+
+      const message = cause instanceof Error ? cause.message : ''
+
+      if (message.toLowerCase().includes('reject') || message.toLowerCase().includes('cancel')) {
+        setError('Cancelaste la operación en Phantom.')
+      } else {
+        setError(`No se pudo enviar el pago. ${message || 'Intenta nuevamente.'}`)
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const copySignature = () => {
+    Clipboard.setString(signature)
+    Alert.alert('Firma copiada', 'La firma quedó copiada en el portapapeles.')
+  }
+
+  const openExplorer = () => {
+    Linking.openURL(getExplorerUrl(`tx/${signature}`)).catch(() => {
+      Alert.alert('No se pudo abrir Explorer', 'Copia la firma para verla manualmente.')
+    })
+  }
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <AppText style={styles.backText}>‹</AppText>
+            </Pressable>
+
+            <AppText style={styles.headerTitle}>Comprar C3</AppText>
+
+            <View style={styles.headerSpacer} />
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>Monto</AppText>
+              <AppText style={styles.minimum}>Mínimo: $5</AppText>
+            </View>
+
+            <View style={styles.amountInput}>
+              <AppText style={styles.currency}>$</AppText>
+
+              <TextInput
+                value={amount}
+                onChangeText={handleAmountChange}
+                keyboardType="decimal-pad"
+                placeholder="5"
+                placeholderTextColor="#8A9AB0"
+                style={styles.input}
+                selectionColor="#087F5B"
+              />
+            </View>
+
+            <View style={styles.quickAmounts}>
+              {QUICK_AMOUNTS.map((quickAmount) => {
+                const selected = numericAmount === quickAmount
+
+                return (
+                  <Pressable
+                    key={quickAmount}
+                    onPress={() => {
+                      setAmount(String(quickAmount))
+                      setError('')
+                    }}
+                    style={[styles.quickButton, selected && styles.quickButtonSelected]}
+                  >
+                    <AppText style={[styles.quickButtonText, selected && styles.quickButtonTextSelected]}>
+                      ${quickAmount}
+                    </AppText>
+                  </Pressable>
+                )
+              })}
+            </View>
+
+            {error ? <AppText style={styles.error}>{error}</AppText> : null}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.paymentHeader}>
+              <View style={styles.usdcIcon}>
+                <AppText style={styles.usdcIconText}>$</AppText>
+              </View>
+
+              <AppText style={styles.paymentTitle}>Pagar con USDC</AppText>
+
+              <Pressable onPress={() => Alert.alert('USDC', 'USDC será el activo de pago.')}>
+                <AppText style={styles.changeText}>Cambiar</AppText>
+              </Pressable>
+            </View>
+
+            <View style={styles.walletRow}>
+              <View style={styles.walletAvatar} />
+
+              <View style={styles.walletInfo}>
+                <AppText style={styles.walletAddress}>
+                  {walletAddress ? ellipsify(walletAddress, 6) : 'Wallet no conectada'}
+                </AppText>
+
+                <View style={styles.connectedRow}>
+                  <View style={styles.connectedDot} />
+
+                  <AppText style={styles.connectedText}>{account ? 'Wallet conectada' : 'Conecta tu wallet'}</AppText>
+                </View>
+              </View>
+
+              <AppText style={styles.chevron}>›</AppText>
+            </View>
+
+            <View style={styles.availableBalanceRow}>
+              <AppText style={styles.availableBalanceLabel}>Saldo USDC disponible</AppText>
+
+              <AppText style={[styles.availableBalanceValue, usdcQuery.error && styles.availableBalanceError]}>
+                {usdcDisplay}
+              </AppText>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <AppText style={styles.summaryTitle}>Resumen de la compra</AppText>
+
+            <View style={styles.summaryRow}>
+              <AppText style={styles.summaryLabel}>Monto a pagar</AppText>
+
+              <AppText style={styles.summaryValue}>{formatUsdc(numericAmount)} USDC</AppText>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <AppText style={styles.summaryLabel}>Estado de C3</AppText>
+
+              <AppText style={styles.summaryValue}>Prototipo Devnet</AppText>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <AppText style={styles.summaryLabel}>Comisión estimada</AppText>
+
+              <AppText style={styles.summaryValue}>~$0.10 USDC</AppText>
+            </View>
+
+            <View style={styles.infoBox}>
+              <View style={styles.infoIcon}>
+                <AppText style={styles.infoIconText}>✓</AppText>
+              </View>
+
+              <AppText style={styles.infoText}>
+                Este prototipo registra el aporte USDC en la tesorería de Devnet.
+                {'\n'}La distribución SOL 50% · USDC 30% · JitoSOL 20% se habilitará cuando el vault C3 esté desplegado
+                y verificado.
+              </AppText>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => void handlePurchase()}
+            disabled={!account || usdcQuery.isLoading || isSubmitting}
+            style={[styles.buyButton, (!account || usdcQuery.isLoading || isSubmitting) && styles.disabledButton]}
+          >
+            <AppText style={styles.buyButtonText}>{isSubmitting ? 'Procesando…' : 'Comprar'}</AppText>
+          </Pressable>
+
+          {signature ? (
+            <View style={styles.receiptCard}>
+              <AppText style={styles.receiptTitle}>Pago USDC confirmado en Devnet</AppText>
+              <AppText style={styles.receiptSignature}>{ellipsify(signature, 10)}</AppText>
+              <View style={styles.receiptActions}>
+                <Pressable onPress={copySignature} style={styles.receiptButton}>
+                  <AppText style={styles.receiptButtonText}>Copiar firma</AppText>
+                </Pressable>
+                <Pressable onPress={openExplorer} style={styles.receiptButton}>
+                  <AppText style={styles.receiptButtonText}>Abrir Explorer</AppText>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          <Pressable onPress={() => router.back()} style={styles.compositionButton}>
+            <AppText style={styles.compositionButtonText}>Ver composición</AppText>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: '#F4F7FB',
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 36,
+    gap: 16,
+  },
+  header: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backText: {
+    color: '#172D48',
+    fontSize: 40,
+    fontWeight: '300',
+  },
+  headerTitle: {
+    flex: 1,
+    color: '#172D48',
+    fontSize: 25,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  card: {
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#172D48',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  sectionHeader: {
+    marginBottom: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    color: '#172D48',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  minimum: {
+    color: '#58718F',
+    fontSize: 16,
+  },
+  amountInput: {
+    minHeight: 76,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D9E3EF',
+    borderRadius: 16,
+  },
+  currency: {
+    color: '#172D48',
+    fontSize: 40,
+    fontWeight: '800',
+  },
+  input: {
+    flex: 1,
+    padding: 0,
+    color: '#172D48',
+    fontSize: 40,
+    fontWeight: '800',
+  },
+  quickAmounts: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: 999,
+    backgroundColor: '#EEF2F7',
+  },
+  quickButtonSelected: {
+    backgroundColor: '#087F5B',
+  },
+  quickButtonText: {
+    color: '#172D48',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  quickButtonTextSelected: {
+    color: '#FFFFFF',
+  },
+  error: {
+    marginTop: 12,
+    color: '#B42318',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  usdcIcon: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: '#2879D0',
+  },
+  usdcIconText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  paymentTitle: {
+    flex: 1,
+    color: '#172D48',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  changeText: {
+    color: '#456685',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  walletRow: {
+    marginTop: 18,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: '#F5F8FC',
+    borderWidth: 1,
+    borderColor: '#E2EAF3',
+  },
+  walletAvatar: {
+    width: 42,
+    height: 42,
+    marginRight: 12,
+    borderRadius: 21,
+    backgroundColor: '#7DAEF5',
+  },
+  walletInfo: {
+    flex: 1,
+    gap: 5,
+  },
+  walletAddress: {
+    color: '#172D48',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  connectedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  connectedDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#18B981',
+  },
+  connectedText: {
+    color: '#087F5B',
+    fontSize: 13,
+  },
+  chevron: {
+    color: '#172D48',
+    fontSize: 30,
+  },
+  availableBalanceRow: {
+    marginTop: 14,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#E2EAF3',
+  },
+  availableBalanceLabel: {
+    color: '#456685',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  availableBalanceValue: {
+    color: '#2879D0',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  availableBalanceError: {
+    color: '#B42318',
+  },
+  summaryTitle: {
+    marginBottom: 10,
+    color: '#172D48',
+    fontSize: 19,
+    fontWeight: '800',
+  },
+  summaryRow: {
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E6ECF3',
+  },
+  summaryLabel: {
+    flex: 1,
+    color: '#456685',
+    fontSize: 15,
+  },
+  summaryValue: {
+    color: '#172D48',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  infoBox: {
+    marginTop: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    backgroundColor: '#E1F7F0',
+  },
+  infoIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: '#C4EFE1',
+  },
+  infoIconText: {
+    color: '#087F5B',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  infoText: {
+    flex: 1,
+    color: '#276D59',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  buyButton: {
+    alignItems: 'center',
+    paddingVertical: 17,
+    borderRadius: 18,
+    backgroundColor: '#087F5B',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  receiptCard: {
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: '#EAF3FF',
+    borderWidth: 1,
+    borderColor: '#C9DDF7',
+  },
+  receiptTitle: {
+    color: '#172D48',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  receiptSignature: {
+    marginTop: 8,
+    color: '#456685',
+    fontSize: 13,
+    fontFamily: 'SpaceMono',
+  },
+  receiptActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  receiptButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  receiptButtonText: {
+    color: '#1761A0',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  buyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  compositionButton: {
+    alignItems: 'center',
+    paddingVertical: 17,
+    borderRadius: 18,
+    backgroundColor: '#DDF4ED',
+  },
+  compositionButtonText: {
+    color: '#087F5B',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+})
