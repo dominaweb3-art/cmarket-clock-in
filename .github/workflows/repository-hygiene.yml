@@ -1,0 +1,29 @@
+name: Repository hygiene
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check whitespace errors
+        run: git diff --check
+
+      - name: Verify required documentation
+        run: |
+          test -s README.md
+          test -s docs/HACKATHON_COMPLIANCE.md
+          test -s docs/DEMO_RUNBOOK.md
+          test -s docs/RELEASE_CHECKLIST.md
+
+      - name: Check for obvious private-key markers
+        run: |
+          if grep -RInE "BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY|seed phrase|mnemonic" --exclude-dir=.git .; then
+            echo "Potential secret marker found. Review the files before merging."
+            exit 1
+          fi
