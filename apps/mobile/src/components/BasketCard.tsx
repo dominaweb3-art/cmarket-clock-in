@@ -8,14 +8,22 @@ type BasketCardProps = {
 }
 
 export function BasketCard({ basket, onPress }: BasketCardProps) {
+  const isPlanned = basket.status === 'planned'
+
   return (
-    <Pressable onPress={onPress} style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      disabled={isPlanned}
+      style={[styles.card, isPlanned && styles.plannedCard]}
+    >
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.name}>{basket.name}</Text>
           <Text style={styles.tagline}>{basket.tagline}</Text>
         </View>
-        <Text style={styles.arrow}>›</Text>
+        <Text style={[styles.actionLabel, isPlanned && styles.plannedLabel]}>
+          {isPlanned ? 'Coming soon' : 'Open ›'}
+        </Text>
       </View>
 
       <View style={styles.composition}>
@@ -42,6 +50,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#DCE7F3',
   },
+  plannedCard: {
+    opacity: 0.7,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -57,10 +68,13 @@ const styles = StyleSheet.create({
     color: '#5C7690',
     fontSize: 14,
   },
-  arrow: {
-    color: '#102A43',
-    fontSize: 32,
-    fontWeight: '300',
+  actionLabel: {
+    color: '#087F5B',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  plannedLabel: {
+    color: '#7D5B0A',
   },
   composition: {
     gap: 9,
