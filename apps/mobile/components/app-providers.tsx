@@ -7,11 +7,6 @@ import { AuthProvider } from '@/components/auth/auth-provider'
 import { ClusterProvider, useCluster } from '@/components/cluster/cluster-provider'
 import { AppConfig } from '@/constants/app-config'
 
-const identity = {
-  name: 'C Market',
-  uri: AppConfig.uri,
-}
-
 const queryClient = new QueryClient()
 
 export function AppProviders({ children }: PropsWithChildren) {
@@ -32,7 +27,7 @@ function SolanaProvider({ children }: PropsWithChildren) {
   const { selectedCluster } = useCluster()
 
   return (
-    <MobileWalletProvider chain={selectedCluster.id} endpoint={selectedCluster.endpoint} identity={identity}>
+    <MobileWalletProvider chain={selectedCluster.id} endpoint={selectedCluster.endpoint} identity={AppConfig.identity}>
       {children}
     </MobileWalletProvider>
   )

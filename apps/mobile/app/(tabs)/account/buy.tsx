@@ -22,13 +22,11 @@ import {
 import Clipboard from '@react-native-clipboard/clipboard'
 
 import { AppText } from '@/components/app-text'
-import { DEVNET_USDC_MINT, useGetUsdcBalance } from '@/components/account/use-get-usdc-balance'
+import { useGetUsdcBalance } from '@/components/account/use-get-usdc-balance'
 import { ellipsify } from '@/utils/ellipsify'
 import { useCluster } from '@/components/cluster/cluster-provider'
+import { AppConfig } from '@/constants/app-config'
 
-const DEVNET_RPC_URL = 'https://api.devnet.solana.com'
-const TREASURY_PUBLIC_KEY = new PublicKey('FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ')
-const USDC_DECIMALS = 6
 const MIN_PURCHASE_USDC = 5
 const QUICK_AMOUNTS = [5, 10, 50]
 
@@ -59,7 +57,7 @@ export default function BuyScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [signature, setSignature] = useState('')
 
-  const connection = useMemo(() => new Connection(DEVNET_RPC_URL, 'confirmed'), [])
+  const connection = useMemo(() => new Connection(AppConfig.endpoint, 'confirmed'), [])
 
   const numericAmount = Number(amount.replace(',', '.'))
   const walletAddress = account?.address?.toString()
@@ -136,7 +134,7 @@ export default function BuyScreen() {
 
     try {
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(walletPublicKey, {
-        mint: DEVNET_USDC_MINT,
+        mint: AppConfig.usdcMint,
       })
 
       const sourceTokenAccount = tokenAccounts.value.find((item) => {
@@ -153,7 +151,10 @@ export default function BuyScreen() {
         return
       }
 
-      const destinationTokenAccount = await getAssociatedTokenAddress(DEVNET_USDC_MINT, TREASURY_PUBLIC_KEY)
+      const destinationTokenAccount = await getAssociatedTokenAddress(
+        AppConfig.usdcMint,
+        AppConfig.treasuryPublicKey,
+      )
 
       const transaction = new Transaction()
 
@@ -164,22 +165,22 @@ export default function BuyScreen() {
           createAssociatedTokenAccountInstruction(
             walletPublicKey,
             destinationTokenAccount,
-            TREASURY_PUBLIC_KEY,
-            DEVNET_USDC_MINT,
+            AppConfig.treasuryPublicKey,
+            AppConfig.usdcMint,
           ),
         )
       }
 
-      const amountInBaseUnits = Math.round(numericAmount * 10 ** USDC_DECIMALS)
+      const amountInBaseUnits = Math.round(numericAmount * 10 ** AppConfig.usdcDecimals)
 
       transaction.add(
         createTransferCheckedInstruction(
           sourceTokenAccount.pubkey,
-          DEVNET_USDC_MINT,
+          AppConfig.usdcMint,
           destinationTokenAccount,
           walletPublicKey,
           amountInBaseUnits,
-          USDC_DECIMALS,
+          AppConfig.usdcDecimals,
         ),
       )
 

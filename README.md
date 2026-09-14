@@ -90,11 +90,14 @@ submission/                  Final submission material checklist
 
 ```bash
 cd apps/mobile
+cp ../../.env.example .env
 npm install
 npm run android
 ```
 
 Mobile Wallet Adapter uses native Android modules, so the app must run through a custom Expo development build rather than Expo Go.
+
+The mobile runtime reads its public configuration through `apps/mobile/constants/app-config.ts`. The required variables are `EXPO_PUBLIC_SOLANA_CLUSTER`, `EXPO_PUBLIC_SOLANA_RPC_URL`, `EXPO_PUBLIC_DEVNET_USDC_MINT`, `EXPO_PUBLIC_USDC_DECIMALS`, `EXPO_PUBLIC_DEVNET_TREASURY_PUBLIC_KEY`, `EXPO_PUBLIC_APP_NAME`, and `EXPO_PUBLIC_APP_IDENTITY_URI`. The app validates them at startup. Keep the local `apps/mobile/.env` file untracked.
 
 The development environment should use Solana Devnet until the application has a tested, reviewed, and explicitly approved production configuration.
 

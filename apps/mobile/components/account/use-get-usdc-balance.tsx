@@ -1,9 +1,7 @@
 import { Connection, PublicKey } from '@solana/web3.js'
 import { useCallback, useEffect, useState } from 'react'
 
-const DEVNET_RPC_URL = 'https://api.devnet.solana.com'
-
-export const DEVNET_USDC_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')
+import { AppConfig } from '@/constants/app-config'
 
 export function useGetUsdcBalance({ address }: { address?: PublicKey }) {
   const addressText = address?.toBase58()
@@ -22,10 +20,10 @@ export function useGetUsdcBalance({ address }: { address?: PublicKey }) {
     setError(null)
 
     try {
-      const connection = new Connection(DEVNET_RPC_URL, 'confirmed')
+      const connection = new Connection(AppConfig.endpoint, 'confirmed')
 
       const response = await connection.getParsedTokenAccountsByOwner(new PublicKey(addressText), {
-        mint: DEVNET_USDC_MINT,
+        mint: AppConfig.usdcMint,
       })
 
       const total = response.value.reduce((sum, item) => {
