@@ -3,6 +3,7 @@ export type Basket = {
   name: string
   tagline: string
   description: string
+  status: 'live' | 'planned'
   composition: Array<{
     symbol: string
     weight: number
