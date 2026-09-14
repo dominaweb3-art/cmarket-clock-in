@@ -22,7 +22,18 @@ The product is designed around transparency, mobile-native approval, clear confi
 
 ## Current prototype status
 
-The current prototype has successfully demonstrated the following flow on Solana Devnet:
+The repository now contains an initial Expo/React Native mobile foundation with:
+
+- Android-first C Market screens.
+- C3 and C10 basket discovery.
+- Mobile Wallet Adapter wallet connection.
+- Devnet USDC balance lookup.
+- C3 Devnet USDC purchase flow.
+- Transaction confirmation and Explorer links.
+- Session activity history.
+- Hackathon compliance, demo, security, and release documentation.
+
+The earlier local prototype also demonstrated the following flow on Solana Devnet:
 
 - Android/Seeker development-client execution.
 - Phantom connection through Mobile Wallet Adapter.
@@ -65,11 +76,7 @@ C Market is designed specifically for a mobile wallet environment:
 | Innovation / X-Factor | A mobile-first basket layer that makes diversified on-chain exposure easier to understand and interact with. |
 | Presentation and demo | A short, verifiable demo: connect, review, approve, confirm, and inspect the transaction on Explorer. |
 
-## Repository status
-
-This repository currently contains the submission foundation and compliance documentation. The complete Expo/React Native application source from the local development project must be imported into the repository before final submission.
-
-Planned repository structure:
+## Repository structure
 
 ```text
 apps/mobile/                 Expo/React Native application source
@@ -81,13 +88,13 @@ submission/                  Final submission material checklist
 
 ## Local development
 
-After the complete mobile source has been imported:
-
 ```bash
 cd apps/mobile
 npm install
-npx expo start --dev-client
+npm run android
 ```
+
+Mobile Wallet Adapter uses native Android modules, so the app must run through a custom Expo development build rather than Expo Go.
 
 The development environment should use Solana Devnet until the application has a tested, reviewed, and explicitly approved production configuration.
 
@@ -95,8 +102,8 @@ Never place a seed phrase, private key, wallet export, signing credential, or se
 
 ## Required work before submission
 
-- Import and verify the complete mobile application source.
-- Add a signed release APK that judges can install.
+- Reconcile the repository foundation with the Seeker-tested local implementation.
+- Add and verify the signed release APK that judges can install.
 - Complete the basket allocation logic or clearly limit the product claims to the functionality actually implemented.
 - Add persistent activity/history.
 - Test rejected signatures, insufficient USDC, insufficient SOL, wrong network, RPC failures, duplicate taps, and interrupted sessions.
@@ -115,4 +122,5 @@ C Market is an experimental software project. Nothing in this repository is inve
 - [CLOCK IN terms and conditions](https://solanamobile.radiant.nexus/legal/clock-in-terms.pdf)
 - [Solana Mobile documentation](https://docs.solanamobile.com/)
 - [Mobile Wallet Adapter documentation](https://docs.solanamobile.com/solana-mobile-stack/mobile-wallet-adapter)
+- [React Native Wallet UI quickstart](https://docs.solanamobile.com/get-started/react-native/quickstart)
 - [Solana Mobile dApp Store documentation](https://docs.solanamobile.com/dapp-store/intro)
