@@ -24,3 +24,4 @@ credentials.json
 /.brand-work/
 /apps/mobile/release-signing/
 /artifacts/releases/*.apk
+/apps/identity/.vercel/

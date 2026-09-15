@@ -27,3 +27,27 @@ Digest record: `submission/releases/c-market-0.1.0-release.sha256`
 - Wrong-network handling requires a wallet that is already on a non-Devnet cluster.
 
 No USDC transaction was approved, signed, or sent during this QA phase. Do not alter balances, drain funds, or change a wallet network only to manufacture these pending states.
+
+## Confirmed payment evidence
+
+The earlier 5 USDC payment with signature
+`5488cmumJ5Jj38VuVq8Dxw4qJA9scd5g5Fco3Lw9w7JvbRbCqewtdQyEJgRV5xxrNk3KDwgrzRBD4gkrKpNeay4g`
+is finalized on Solana Devnet and is not present on Testnet. Official RPC data reports:
+
+- Sender and token authority: `DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej`
+- Source token account: `87B29Ue5b9R3wSLneJc9HW6cMPkFXynnw5UY71HcwoB3`
+- Treasury owner: `FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ`
+- Destination token account: `EXPP2i58cX56m1A5cAvENJsSAmb2DL1PjEqqrnH83Z2Q`
+- Devnet USDC mint: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
+- Amount: 5 USDC (`5000000` base units, 6 decimals)
+- Slot: `498822672`; status: finalized with no transaction error
+
+The wallet cancellation/rejection path was also exercised without sending a transaction. C Market returned control to the Buy screen, displayed the localized cancellation/rejection message, and released the duplicate-submit lock.
+
+## Wallet identity trust
+
+The former wallet identity URI pointed to GitHub, which caused Phantom to identify the requester as `github.com`. The canonical identity URI is now `https://cmarket-identity.vercel.app`. The page identifies C Market as a Solana Devnet prototype and states that C3 basket settlement is not enabled.
+
+Although Phantom displayed `Testnet` for the earlier request, the signed transaction is provably a Devnet transaction: it is available and finalized through the official Devnet RPC and absent from the official Testnet RPC. The app configuration requires `devnet`, passes `solana:devnet` to Mobile Wallet Adapter, and now exposes only Devnet in its canonical cluster list.
+
+The rebuilt standalone APK contains the new identity URI and no longer contains the former GitHub identity URI. It was installed on Seeker, cold-launched with Metro stopped, opened the wallet entry point, returned to the C Market account, resolved Devnet balances, and passed the wallet-chooser cancellation test. Phantom was locked behind device biometrics, so visual confirmation of the domain on Phantom's transaction-review screen remains pending; no unlock, approval, signature, or transaction was attempted.

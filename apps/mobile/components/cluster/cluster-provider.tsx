@@ -40,9 +40,6 @@ function getClusterUrlParam(cluster: Cluster): string {
     case ClusterNetwork.Mainnet:
       suffix = ''
       break
-    case ClusterNetwork.Testnet:
-      suffix = 'testnet'
-      break
     default:
       suffix = `custom&customUrl=${encodeURIComponent(cluster.endpoint)}`
       break

@@ -1,4 +1,4 @@
-import { clusterApiUrl, PublicKey } from '@solana/web3.js'
+import { PublicKey } from '@solana/web3.js'
 import { Cluster } from '@/components/cluster/cluster'
 import { ClusterNetwork } from '@/components/cluster/cluster-network'
 
@@ -110,12 +110,6 @@ export class AppConfig {
       name: 'Devnet',
       endpoint,
       network,
-    },
-    {
-      id: 'solana:testnet',
-      name: 'Testnet',
-      endpoint: clusterApiUrl('testnet'),
-      network: ClusterNetwork.Testnet,
     },
   ]
 }
