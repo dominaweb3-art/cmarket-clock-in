@@ -10,6 +10,7 @@
 - The interface states that the prototype records a USDC treasury payment on Solana Devnet and that basket settlement has not occurred.
 - Approved C Market APP ICON and ICON ONLY assets are configured for the launcher, adaptive icon, splash screen, favicon, and sign-in brand area.
 - A locally signed standalone APK has been signature-verified, installed on Seeker, and launched without Metro.
+- The release APK is preserved locally at `artifacts/releases/c-market-0.1.0-release.apk`; its committed SHA-256 record is under `submission/releases`.
 
 ## Known prototype limitations
 
@@ -79,8 +80,7 @@ This command creates or reuses a dedicated keystore and password under the ignor
 ## Remaining blockers before final submission
 
 - Back up the dedicated local signing key and password securely, then formally designate whether it will be the permanent Android update key.
-- Preserve the verified standalone APK and its SHA-256 digest outside generated build directories before final submission.
-- Complete controlled failure-path tests; code-level messages exist, but every wallet/RPC failure must still be exercised on-device.
+- Complete the remaining manual wallet states: explicit signature rejection after Phantom unlock, insufficient SOL, and wrong network. Do not alter funds or network settings solely to manufacture these conditions.
 - Review the currently reported npm vulnerabilities in a dedicated dependency-upgrade phase; do not apply npm's incompatible major downgrade suggestions blindly.
 - Complete the demo video, pitch deck, team roster, compliance confirmations, and final official-terms review.
 - Either implement and verify basket settlement later or continue presenting C Market strictly as a Devnet USDC payment prototype.

@@ -2,54 +2,54 @@
 
 ## Source and build
 
-- [ ] Complete Expo/React Native source is present under apps/mobile.
+- [x] Complete Expo/React Native source is present under apps/mobile.
 - [ ] A clean checkout installs dependencies successfully.
-- [ ] Lockfile is committed.
-- [ ] TypeScript checks pass.
-- [ ] Linting passes.
-- [ ] No development-only localhost or Metro dependency remains in the release configuration.
-- [ ] The app name, package identifier, icon, and version are final.
-- [ ] A signed Android release APK is produced.
-- [ ] The APK installs on the Seeker from a clean device state.
+- [x] Lockfile is committed.
+- [x] TypeScript checks pass.
+- [x] Linting passes.
+- [x] No development-only localhost or Metro dependency remains in the release configuration.
+- [x] The app name, package identifier, icon, and version are final.
+- [x] A signed Android release APK is produced.
+- [x] The APK installs on the Seeker from a clean device state.
 
 ## Wallet and Solana
 
-- [ ] Mobile Wallet Adapter is used through the supported integration.
-- [ ] Devnet is visible during judging.
-- [ ] The app never asks for a seed phrase or private key.
+- [x] Mobile Wallet Adapter is used through the supported integration.
+- [x] Devnet is visible during judging.
+- [x] The app never asks for a seed phrase or private key.
 - [ ] The wallet approval screen shows the intended transaction.
 - [ ] Wrong-network behavior is handled.
 - [ ] Insufficient token and fee balances are handled.
 - [ ] Rejected signatures are handled.
-- [ ] Duplicate taps cannot submit duplicate purchases.
+- [x] Duplicate taps cannot submit duplicate purchases.
 - [ ] Confirmation waits for the correct signature and cluster.
 - [ ] Explorer links use the correct cluster.
-- [ ] Treasury public addresses are configuration values, not secrets.
+- [x] Treasury public addresses are configuration values, not secrets.
 
 ## Product truthfulness
 
-- [ ] Every screen describes only functionality that exists.
-- [ ] No guaranteed-return or profit language is present.
-- [ ] No investment-advice language is present.
-- [ ] The Devnet prototype limitation is visible in documentation.
+- [x] Every screen describes only functionality that exists.
+- [x] No guaranteed-return or profit language is present.
+- [x] No investment-advice language is present.
+- [x] The Devnet prototype limitation is visible in documentation.
 - [ ] Basket allocation claims are supported by code and on-chain evidence.
 - [ ] Any fee, weight, or constituent display matches the implementation.
 
 ## Security
 
-- [ ] No seed phrase is in source, logs, screenshots, or video.
-- [ ] No private key is in source, logs, screenshots, or video.
-- [ ] No production secret RPC key is committed.
-- [ ] Environment files are ignored.
-- [ ] Dependencies are reviewed.
-- [ ] Android permissions are reviewed.
+- [x] No seed phrase is in source, logs, screenshots, or video.
+- [x] No private key is in source, logs, screenshots, or video.
+- [x] No production secret RPC key is committed.
+- [x] Environment files are ignored.
+- [x] Dependencies are reviewed.
+- [x] Android permissions are reviewed.
 - [ ] Test wallets are separate from personal wallets.
-- [ ] The final repository has been searched for accidental secrets.
+- [x] The final repository has been searched for accidental secrets.
 
 ## Submission
 
 - [ ] GitHub repository is accessible to judges.
-- [ ] README explains how to build and run the project.
+- [x] README explains how to build and run the project.
 - [ ] Hackathon compliance matrix is complete.
 - [ ] Demo video is complete.
 - [ ] Pitch deck or brief presentation is complete.
