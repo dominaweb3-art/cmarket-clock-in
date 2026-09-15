@@ -28,6 +28,20 @@ Digest record: `submission/releases/c-market-0.1.0-release.sha256`
 
 No USDC transaction was approved, signed, or sent during this QA phase. Do not alter balances, drain funds, or change a wallet network only to manufacture these pending states.
 
+## Phase 4C corrected MWA payment verification
+
+The supervised standalone signed APK payment completed successfully after the MWA submission fix. The valid Devnet signature is:
+
+`4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd`
+
+The official Devnet RPC reports slot `498959976`, no transaction error, and finalized status. The sender is `DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej`; the C3 treasury owner is `FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ`; and the destination token account is `EXPP2i58cX56m1A5cAvENJsSAmb2DL1PjEqqrnH83Z2Q`. The Devnet USDC mint is `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`. The transfer amount is 5 USDC (`5000000` base units, 6 decimals); the sender balance changed from 260 to 255 USDC and the treasury balance from 0 to 5 USDC.
+
+Explorer: `https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet`
+
+This is a Devnet USDC payment to the C3 treasury. It does not perform basket settlement; C3 settlement remains planned for a later phase.
+
+The signature text initially supplied for verification was 86 characters and was rejected by RPC as `WrongSize`; the canonical 88-character signature above is the finalized transaction returned by the sender's Devnet history.
+
 ## Confirmed payment evidence
 
 The earlier 5 USDC payment with signature
