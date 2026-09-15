@@ -61,6 +61,7 @@ export const zhCN = {
   'buy.paymentSentTitle': '付款已发送',
   'buy.paymentSentMessage': '已向 Solana Devnet 上的 C3 金库发送 {amount} USDC。\n\n签名：\n{signature}',
   'buy.cancelled': '钱包请求已取消或拒绝。',
+  'buy.walletResponseError': '钱包未返回交易结果。请先检查钱包活动记录，再重试。',
   'buy.insufficientSol': 'Devnet SOL 不足，无法支付网络费用。',
   'buy.networkMismatch': '钱包网络与 Solana Devnet 不匹配。',
   'buy.rpcError': 'Solana Devnet 暂时不可用，请重试。',

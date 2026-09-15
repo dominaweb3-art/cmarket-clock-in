@@ -60,6 +60,8 @@ export const en = {
   'buy.paymentSentTitle': 'Payment sent',
   'buy.paymentSentMessage': '{amount} USDC was sent to the C3 treasury on Solana Devnet.\n\nSignature:\n{signature}',
   'buy.cancelled': 'The wallet request was cancelled or rejected.',
+  'buy.walletResponseError':
+    'The wallet did not return a transaction result. Check wallet activity before trying again.',
   'buy.insufficientSol': 'Not enough Devnet SOL to pay the network fee.',
   'buy.networkMismatch': 'The wallet network does not match Solana Devnet.',
   'buy.rpcError': 'Solana Devnet is temporarily unavailable. Try again.',

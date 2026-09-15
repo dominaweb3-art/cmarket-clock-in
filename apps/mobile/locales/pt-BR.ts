@@ -66,6 +66,8 @@ export const ptBR = {
   'buy.paymentSentMessage':
     'Foram enviados {amount} USDC para a tesouraria da C3 na Solana Devnet.\n\nAssinatura:\n{signature}',
   'buy.cancelled': 'A solicitação foi cancelada ou rejeitada na carteira.',
+  'buy.walletResponseError':
+    'A carteira não retornou o resultado da transação. Verifique a atividade da carteira antes de tentar novamente.',
   'buy.insufficientSol': 'Não há SOL de Devnet suficiente para pagar a taxa de rede.',
   'buy.networkMismatch': 'A rede da carteira não corresponde à Solana Devnet.',
   'buy.rpcError': 'A Solana Devnet está temporariamente indisponível. Tente novamente.',

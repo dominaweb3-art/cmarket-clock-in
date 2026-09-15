@@ -51,3 +51,16 @@ The former wallet identity URI pointed to GitHub, which caused Phantom to identi
 Although Phantom displayed `Testnet` for the earlier request, the signed transaction is provably a Devnet transaction: it is available and finalized through the official Devnet RPC and absent from the official Testnet RPC. The app configuration requires `devnet`, passes `solana:devnet` to Mobile Wallet Adapter, and now exposes only Devnet in its canonical cluster list.
 
 The rebuilt standalone APK contains the new identity URI and no longer contains the former GitHub identity URI. It was installed on Seeker, cold-launched with Metro stopped, opened the wallet entry point, returned to the C Market account, resolved Devnet balances, and passed the wallet-chooser cancellation test. Phantom was locked behind device biometrics, so visual confirmation of the domain on Phantom's transaction-review screen remains pending; no unlock, approval, signature, or transaction was attempted.
+
+## Phase 4B payment-attempt diagnosis
+
+At approximately 15:02 COT on 2026-09-15, Phantom displayed the new C Market identity and the user confirmed a 5 USDC request. C Market did not receive a transaction signature and displayed a Devnet availability error. Evidence collected afterward establishes that this attempt never reached Devnet:
+
+- ADB recorded Phantom's Mobile Wallet Adapter failure for `sol_mwa_sign_transactions`: `Readable side is not in a state that permits enqueue`.
+- The C Market and Phantom MWA sessions then closed without a signed payload reaching the app.
+- The sender's official Devnet history contains no transaction after the previously confirmed 10:02 COT payment.
+- The public Devnet RPC returned healthy responses for `getHealth`, finalized slot, version, latest blockhash, and address history.
+
+The purchase screen had used the deprecated MWA 2.0 `signTransactions` path and then submitted the signed bytes itself with `sendRawTransaction`. The error classifier also treated the generic word `RPC` in Phantom's internal `RPC ROUTER` message as proof of a Solana RPC outage. This produced an inaccurate user-facing error.
+
+The implementation now uses the MWA 2.0 `signAndSendTransactions` path recommended by Solana Mobile. The wallet signs and submits the unchanged transaction, C Market still confirms the returned signature against the same Devnet blockhash window, and no automatic payment retry was added. Wallet-response failures now tell the user to check wallet activity before trying again. No transaction was initiated while validating this change.

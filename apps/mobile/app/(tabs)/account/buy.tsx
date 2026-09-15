@@ -33,6 +33,11 @@ const QUICK_AMOUNTS = [5, 10, 50]
 
 const PURCHASE_ERROR_MARKERS = {
   cancelled: ['cancel', 'declin', 'denied', 'reject', 'not signed', 'user abort'],
+  walletResponse: [
+    'readable side is not in a state that permits enqueue',
+    'sol_mwa_sign_transactions',
+    'sol_mwa_sign_and_send_transactions',
+  ],
   insufficientSol: [
     'insufficient funds for fee',
     'insufficient lamports',
@@ -46,9 +51,11 @@ const PURCHASE_ERROR_MARKERS = {
     '502',
     '503',
     'blockhash not found',
+    'failed to fetch',
     'fetch failed',
     'network request failed',
-    'rpc',
+    'service unavailable',
+    'solanajsonrpcerror',
     'timed out',
     'timeout',
   ],
@@ -85,6 +92,7 @@ function purchaseErrorKey(cause: unknown) {
   const includesMarker = (markers: readonly string[]) => markers.some((marker) => normalizedError.includes(marker))
 
   if (includesMarker(PURCHASE_ERROR_MARKERS.cancelled)) return 'buy.cancelled' as const
+  if (includesMarker(PURCHASE_ERROR_MARKERS.walletResponse)) return 'buy.walletResponseError' as const
   if (includesMarker(PURCHASE_ERROR_MARKERS.insufficientSol)) return 'buy.insufficientSol' as const
   if (includesMarker(PURCHASE_ERROR_MARKERS.networkMismatch)) return 'buy.networkMismatch' as const
   if (includesMarker(PURCHASE_ERROR_MARKERS.rpc)) return 'buy.rpcError' as const
@@ -94,7 +102,7 @@ function purchaseErrorKey(cause: unknown) {
 
 export default function BuyScreen() {
   const router = useRouter()
-  const { account, signTransactions } = useMobileWallet()
+  const { account, signAndSendTransactions } = useMobileWallet()
   const { getExplorerUrl } = useCluster()
   const { t } = useI18n()
 
@@ -234,17 +242,12 @@ export default function BuyScreen() {
         ),
       )
 
-      const latestBlockhash = await connection.getLatestBlockhash('confirmed')
+      const { context, value: latestBlockhash } = await connection.getLatestBlockhashAndContext('confirmed')
 
       transaction.feePayer = walletPublicKey
       transaction.recentBlockhash = latestBlockhash.blockhash
 
-      const signedTransaction = await signTransactions(transaction)
-
-      const signature = await connection.sendRawTransaction(signedTransaction.serialize(), {
-        skipPreflight: false,
-        maxRetries: 3,
-      })
+      const signature = await signAndSendTransactions(transaction, context.slot)
 
       await connection.confirmTransaction(
         {
