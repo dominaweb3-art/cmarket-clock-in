@@ -20,3 +20,6 @@ android/app/release/
 credentials.json
 *.p12
 *.mobileprovision
+/cmarket-brand-sheet.png
+/.brand-work/
+/apps/mobile/release-signing/

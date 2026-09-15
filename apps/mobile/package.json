@@ -15,6 +15,7 @@
     "lint": "expo lint --fix",
     "lint:check": "expo lint",
     "release:android:apk": "NODE_ENV=production npx --yes eas-cli@24.4.0 build --platform android --profile release-apk --local",
+    "release:android:apk:local": "./scripts/build-local-signed-apk.sh",
     "start": "expo start",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"

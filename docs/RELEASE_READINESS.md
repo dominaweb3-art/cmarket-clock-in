@@ -8,13 +8,14 @@
 - The Buy screen validates a 5 USDC minimum, prevents duplicate submission, requests wallet signing, submits the signed payment, waits for confirmation, and links to Solana Explorer.
 - English is the default and permanent fallback; English, Spanish, Simplified Chinese, and Brazilian Portuguese can be selected and persist across reloads.
 - The interface states that the prototype records a USDC treasury payment on Solana Devnet and that basket settlement has not occurred.
+- Approved C Market APP ICON and ICON ONLY assets are configured for the launcher, adaptive icon, splash screen, favicon, and sign-in brand area.
+- A locally signed standalone APK has been signature-verified, installed on Seeker, and launched without Metro.
 
 ## Known prototype limitations
 
 - C3 basket allocation and position tracking are not implemented.
 - Activity/history is not implemented or persistent.
 - C5, C10, C20, C50, and withdrawals are previews only.
-- The current icon is a generic placeholder and must be replaced with an approved C Market asset.
 - This prototype is Devnet-only and is not ready for mainnet funds or public financial use.
 
 ## Dependency audit
@@ -56,6 +57,14 @@ npm run release:android:apk
 
 Never reuse a personal signing key or commit the credentials file, keystore, aliases, or passwords. Record the SHA-256 of the final APK separately for submission verification.
 
+For an isolated local validation APK, run:
+
+```bash
+npm run release:android:apk:local
+```
+
+This command creates or reuses a dedicated keystore and password under the ignored `apps/mobile/release-signing` directory, regenerates the Android project, signs the release build, verifies its APK signature, and writes the standalone artifact under ignored `apps/mobile/dist/release`. Back up the signing materials securely before treating this key as the permanent update key.
+
 ## Seeker testing steps
 
 1. Enable USB debugging, connect the Seeker, and confirm it with `adb devices -l`.
@@ -69,9 +78,8 @@ Never reuse a personal signing key or commit the credentials file, keystore, ali
 
 ## Remaining blockers before final submission
 
-- Replace the generic placeholder icon and verify adaptive icon and splash rendering.
-- Create protected Android release signing credentials and produce the final signed APK.
-- Install and test that APK on Seeker without Metro or localhost.
+- Back up the dedicated local signing key and password securely, then formally designate whether it will be the permanent Android update key.
+- Preserve the verified standalone APK and its SHA-256 digest outside generated build directories before final submission.
 - Complete controlled failure-path tests; code-level messages exist, but every wallet/RPC failure must still be exercised on-device.
 - Review the currently reported npm vulnerabilities in a dedicated dependency-upgrade phase; do not apply npm's incompatible major downgrade suggestions blindly.
 - Complete the demo video, pitch deck, team roster, compliance confirmations, and final official-terms review.

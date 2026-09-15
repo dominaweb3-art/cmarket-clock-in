@@ -51,7 +51,7 @@ export default function SignIn() {
         <View />
         <View style={{ alignItems: 'center', gap: 16 }}>
           <AppText type="title">{AppConfig.name}</AppText>
-          <Image source={require('../assets/images/icon.png')} style={{ width: 128, height: 128 }} />
+          <Image source={require('../assets/images/splash-icon.png')} style={{ width: 128, height: 128 }} />
         </View>
         <View style={{ marginBottom: 16 }}>
           <AppButton

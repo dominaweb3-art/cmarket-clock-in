@@ -1,5 +1,9 @@
 # C Market
 
+<p align="center">
+  <img src="assets/brand/cmarket-wordmark.png" alt="C Market — Onchain indexes for a brighter tomorrow" width="760" />
+</p>
+
 > A mobile-first, on-chain basket experience for the Solana Mobile ecosystem.
 
 C Market is an experimental Android application designed for Seeker users who want a simple, transparent way to explore predefined crypto-asset baskets such as C3, C10, and future basket sizes.
