@@ -125,6 +125,31 @@ Must wait for implementation and evidence: automatic 50/30/20 allocation, JitoSO
 
 Keep the current payment path behind the existing Devnet configuration and feature flag. If settlement preflight, executor, or reconciliation fails, disable settlement only, preserve payment confirmation and Explorer receipt, label the result “USDC payment recorded; basket settlement not enabled,” and do not reverse or replay the payment automatically. Roll back the receipt/worker deployment independently of the mobile APK. The verified app remains usable and no user wallet action is required for rollback.
 
+## 11. Phase 5B read-only Devnet feasibility preflight
+
+Preflight tool: `apps/mobile/scripts/c3-devnet-feasibility-preflight.mjs`, run with `npm run c3:preflight` from `apps/mobile`. It performs only JSON-RPC reads and read-only Jupiter quote requests. It does not request wallet authorization, construct or serialize transactions, or submit anything. A machine-readable result is written under the ignored path `apps/mobile/dist/generated-results/`.
+
+Observed at `2026-09-15T22:54:27.734Z` (UTC), against `https://api.devnet.solana.com`:
+
+- RPC: `verified`. `getHealth` returned `ok`; version, epoch, and finalized account reads also resolved.
+- Configured Devnet USDC mint: `verified`. The account exists, is owned by the SPL Token Program, is initialized, and reports 6 decimals and non-zero supply.
+- JitoSOL Devnet mint: `verified`. The official Jito Devnet mint account exists, is owned by the SPL Token Program, is initialized, and reports 9 decimals and non-zero supply.
+- Jito deployment: `verified` for the official Devnet program and stake-pool accounts listed in Section 2. This confirms deployed accounts, not a liquid USDC conversion route.
+- Jupiter endpoint: `https://api.jup.ag/swap/v1/quote`. The preflight supplied no API key and never printed or persisted any credential. The API was queried only for quote responses.
+- Jupiter USDC -> SOL/WSOL: `unavailable` for the 5, 10, and 50 USDC purchase sizes. The observed response was `TOKEN_NOT_TRADABLE`; therefore no quote, price impact, route, or expiry can be truthfully reported.
+- Jupiter USDC -> JitoSOL: `unavailable` for 5 and 10 USDC; the observed response was `TOKEN_NOT_TRADABLE`. The 50 USDC request returned HTTP 429, which is `unavailable/uncertain` rather than evidence of a route. No quote, price impact, route, or expiry can be truthfully reported.
+- Leg amounts tested: SOL/WSOL at 2.50, 5.00, and 25.00 USDC; JitoSOL at 1.00, 2.00, and 10.00 USDC, corresponding to 50% and 20% of 5, 10, and 50 USDC. The remaining 30% USDC leg requires no swap.
+- Liquidity and slippage: `unavailable` because no valid Devnet Jupiter route was returned. The preflight does not substitute Mainnet data. ATA setup, transaction size, simulation, quote expiry, and execution fees remain pending until a real route exists.
+- Cluster restriction: `verified` as a safety rule. The configured app is Devnet-only; a Mainnet/Testnet quote or mint cannot establish Devnet feasibility.
+
+### Explicit decision: NO-GO
+
+The C3 basket cannot truthfully execute its real 50/30/20 allocation on Devnet based on this preflight. The Devnet USDC and JitoSOL accounts exist, but the required Jupiter routes are unavailable and one JitoSOL request was rate-limited. The tool exits non-zero for this mandatory-feasibility failure. This is not evidence that the routes can never exist; it is sufficient evidence that settlement must remain disabled until a later preflight verifies them.
+
+Jito’s direct Devnet path is `conditional`, not a GO: the official program, stake pool, and mint accounts are present, and Jito documents direct minting from SOL or conversion from stake accounts. That path does not convert the current USDC payment by itself, so it cannot satisfy the C3 20% USDC-to-JitoSOL leg without a separately verified USDC-to-SOL conversion path and additional operational controls.
+
+Smallest truthful hackathon alternative: preserve the verified USDC payment, expose the C3 weights as a planned methodology, and add only a read-only receipt state such as “payment recorded; basket settlement unavailable on Devnet.” Do not use simulated assets or present a simulated allocation as real. Re-run this preflight after any network, mint, or official-route change before implementing settlement.
+
 ## Sources
 
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/get-started/react-native/mobile-wallet-adapter
@@ -135,5 +160,7 @@ Keep the current payment path behind the existing Devnet configuration and featu
 - Solana SPL token basics and WSOL: https://solana.com/docs/tokens/basics
 - Solana payment address/ATA verification: https://solana.com/docs/payments/send-payments/verify-address
 - Jupiter developer Swap documentation: https://dev.jup.ag/docs/swap
+- Jupiter Swap API quote endpoint used by the read-only preflight: https://api.jup.ag/swap/v1/quote
 - Jito deployed programs and network-specific mints: https://www.jito.network/docs/jitosol/jitosol-liquid-staking/security/deployed-programs/
 - Jito buying or selling JitoSOL: https://www.jito.network/docs/jitosol/get-started/buying-or-selling-jitosol-flow/
+- Jito staking SOL for JitoSOL: https://www.jito.network/docs/jitosol/get-started/stake-sol-for-jitosol-flow/overview/

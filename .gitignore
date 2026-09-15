@@ -23,5 +23,6 @@ credentials.json
 /cmarket-brand-sheet.png
 /.brand-work/
 /apps/mobile/release-signing/
+/apps/mobile/dist/generated-results/
 /artifacts/releases/*.apk
 /apps/identity/.vercel/
