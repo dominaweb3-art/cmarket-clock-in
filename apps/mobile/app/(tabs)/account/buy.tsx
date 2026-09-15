@@ -6,19 +6,19 @@ import {
 } from '@solana/spl-token'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import { useRouter } from 'expo-router'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import Clipboard from '@react-native-clipboard/clipboard'
 
 import { AppText } from '@/components/app-text'
@@ -30,6 +30,29 @@ import { useI18n } from '@/components/i18n/i18n-provider'
 
 const MIN_PURCHASE_USDC = 5
 const QUICK_AMOUNTS = [5, 10, 50]
+
+const PURCHASE_ERROR_MARKERS = {
+  cancelled: ['cancel', 'declin', 'denied', 'reject', 'not signed', 'user abort'],
+  insufficientSol: [
+    'insufficient funds for fee',
+    'insufficient lamports',
+    'insufficient sol',
+    'fee payer',
+    'no record of a prior credit',
+  ],
+  networkMismatch: ['chain mismatch', 'network mismatch', 'unsupported chain', 'wrong network'],
+  rpc: [
+    '429',
+    '502',
+    '503',
+    'blockhash not found',
+    'fetch failed',
+    'network request failed',
+    'rpc',
+    'timed out',
+    'timeout',
+  ],
+} as const
 
 type ParsedTokenAccountData = {
   parsed?: {
@@ -48,6 +71,27 @@ function formatUsdc(value: number) {
   return Number.isInteger(value) ? `$${value.toFixed(0)}` : `$${value.toFixed(2)}`
 }
 
+function purchaseErrorKey(cause: unknown) {
+  const errorName = cause instanceof Error ? cause.name : ''
+  const errorMessage =
+    cause instanceof Error
+      ? cause.message
+      : cause && typeof cause === 'object' && 'message' in cause
+        ? String(cause.message)
+        : typeof cause === 'string'
+          ? cause
+          : ''
+  const normalizedError = `${errorName} ${errorMessage}`.toLowerCase()
+  const includesMarker = (markers: readonly string[]) => markers.some((marker) => normalizedError.includes(marker))
+
+  if (includesMarker(PURCHASE_ERROR_MARKERS.cancelled)) return 'buy.cancelled' as const
+  if (includesMarker(PURCHASE_ERROR_MARKERS.insufficientSol)) return 'buy.insufficientSol' as const
+  if (includesMarker(PURCHASE_ERROR_MARKERS.networkMismatch)) return 'buy.networkMismatch' as const
+  if (includesMarker(PURCHASE_ERROR_MARKERS.rpc)) return 'buy.rpcError' as const
+
+  return 'buy.sendFailed' as const
+}
+
 export default function BuyScreen() {
   const router = useRouter()
   const { account, signTransactions } = useMobileWallet()
@@ -58,6 +102,7 @@ export default function BuyScreen() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [signature, setSignature] = useState('')
+  const submissionLockRef = useRef(false)
 
   const connection = useMemo(() => new Connection(AppConfig.endpoint, 'confirmed'), [])
 
@@ -94,6 +139,10 @@ export default function BuyScreen() {
   }
 
   const handlePurchase = async () => {
+    if (submissionLockRef.current) {
+      return
+    }
+
     setError('')
 
     if (!account || !walletPublicKey) {
@@ -133,6 +182,7 @@ export default function BuyScreen() {
       return
     }
 
+    submissionLockRef.current = true
     setIsSubmitting(true)
 
     try {
@@ -154,10 +204,7 @@ export default function BuyScreen() {
         return
       }
 
-      const destinationTokenAccount = await getAssociatedTokenAddress(
-        AppConfig.usdcMint,
-        AppConfig.treasuryPublicKey,
-      )
+      const destinationTokenAccount = await getAssociatedTokenAddress(AppConfig.usdcMint, AppConfig.treasuryPublicKey)
 
       const transaction = new Transaction()
 
@@ -216,16 +263,9 @@ export default function BuyScreen() {
         t('buy.paymentSentMessage', { amount: formatUsdc(numericAmount), signature }),
       )
     } catch (cause) {
-      console.error('C3 purchase error', cause)
-
-      const message = cause instanceof Error ? cause.message : ''
-
-      if (message.toLowerCase().includes('reject') || message.toLowerCase().includes('cancel')) {
-        setError(t('buy.cancelled'))
-      } else {
-        setError(t('buy.sendFailed', { message: message || t('buy.tryAgain') }))
-      }
+      setError(t(purchaseErrorKey(cause)))
     } finally {
+      submissionLockRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -359,7 +399,7 @@ export default function BuyScreen() {
             <View style={styles.summaryRow}>
               <AppText style={styles.summaryLabel}>{t('buy.estimatedFee')}</AppText>
 
-              <AppText style={styles.summaryValue}>~$0.10 USDC</AppText>
+              <AppText style={styles.summaryValue}>{t('buy.estimatedFeeValue')}</AppText>
             </View>
 
             <View style={styles.infoBox}>

@@ -4,9 +4,9 @@
 
 C Market is organized around four layers:
 
-1. **Mobile experience** — basket discovery, purchase review, wallet state, confirmation, and activity.
+1. **Mobile experience** — basket discovery, purchase review, wallet state, confirmation, and transaction receipt.
 2. **Wallet layer** — Mobile Wallet Adapter and a compatible Solana mobile wallet.
-3. **Solana settlement layer** — Devnet transactions, token accounts, confirmations, and Explorer evidence.
+3. **Solana payment layer** — Devnet transactions, token accounts, confirmations, and Explorer evidence.
 4. **Methodology layer** — basket definitions, constituent rules, weights, caps, buffers, and rebalance policy.
 
 ## Current prototype flow

@@ -17,5 +17,6 @@ android/app/release/
 /apps/mobile/ios/
 *.jks
 *.keystore
+credentials.json
 *.p12
 *.mobileprovision

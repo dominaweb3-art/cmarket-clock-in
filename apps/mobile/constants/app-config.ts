@@ -40,6 +40,16 @@ function httpUrl(variableName: string, value: string): string {
   }
 }
 
+function httpsUrl(variableName: string, value: string): string {
+  const validatedUrl = httpUrl(variableName, value)
+
+  if (new URL(validatedUrl).protocol !== 'https:') {
+    throw configurationError(variableName, 'must use HTTPS for wallet identity verification')
+  }
+
+  return validatedUrl
+}
+
 function publicKey(variableName: string, value: string): PublicKey {
   try {
     return new PublicKey(value)
@@ -63,13 +73,11 @@ function tokenDecimals(variableName: string, value: string): number {
 }
 
 const name = requiredValue('EXPO_PUBLIC_APP_NAME', process.env.EXPO_PUBLIC_APP_NAME)
-const uri = httpUrl(
+const uri = httpsUrl(
   'EXPO_PUBLIC_APP_IDENTITY_URI',
   requiredValue('EXPO_PUBLIC_APP_IDENTITY_URI', process.env.EXPO_PUBLIC_APP_IDENTITY_URI),
 )
-const network = devnetCluster(
-  requiredValue('EXPO_PUBLIC_SOLANA_CLUSTER', process.env.EXPO_PUBLIC_SOLANA_CLUSTER),
-)
+const network = devnetCluster(requiredValue('EXPO_PUBLIC_SOLANA_CLUSTER', process.env.EXPO_PUBLIC_SOLANA_CLUSTER))
 const endpoint = httpUrl(
   'EXPO_PUBLIC_SOLANA_RPC_URL',
   requiredValue('EXPO_PUBLIC_SOLANA_RPC_URL', process.env.EXPO_PUBLIC_SOLANA_RPC_URL),

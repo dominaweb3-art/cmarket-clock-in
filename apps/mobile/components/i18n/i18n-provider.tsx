@@ -1,14 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
-import {
-  DEFAULT_LOCALE,
-  isLocale,
-  Locale,
-  translate,
-  TranslationKey,
-  TranslationParams,
-} from '@/locales'
+import { DEFAULT_LOCALE, isLocale, Locale, translate, TranslationKey, TranslationParams } from '@/locales'
 
 const LANGUAGE_STORAGE_KEY = 'cmarket.language'
 

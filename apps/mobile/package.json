@@ -3,6 +3,8 @@
   "scripts": {
     "android": "expo run:android",
     "android:build": "expo prebuild -p android",
+    "android:export": "NODE_ENV=production expo export --platform android --output-dir dist/release-check --clear",
+    "android:release:validate": "NODE_ENV=production expo prebuild --platform android --clean --no-install && cd android && NODE_ENV=production ./gradlew assembleRelease",
     "build": "tsc --noEmit && npm run android:build",
     "ci": "tsc --noEmit && npm run lint:check && npm run format:check && npm run android:build",
     "dev": "expo start",
@@ -12,7 +14,9 @@
     "ios": "expo run:ios",
     "lint": "expo lint --fix",
     "lint:check": "expo lint",
+    "release:android:apk": "NODE_ENV=production npx --yes eas-cli@24.4.0 build --platform android --profile release-apk --local",
     "start": "expo start",
+    "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },
   "displayName": "C Market",

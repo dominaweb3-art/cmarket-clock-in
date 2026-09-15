@@ -10,15 +10,10 @@ import { View } from 'react-native'
 import { AppProviders } from '@/components/app-providers'
 import { AppSplashController } from '@/components/app-splash-controller'
 import { useAuth } from '@/components/auth/auth-provider'
-import { useTrackLocations } from '@/hooks/use-track-locations'
 
 void SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
-  useTrackLocations((pathname, params) => {
-    console.log(`Track ${pathname}`, { params })
-  })
-
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   })

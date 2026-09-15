@@ -16,7 +16,7 @@ C Market turns a complex multi-asset purchase flow into a focused mobile experie
 4. The user reviews the amount and destination before signing.
 5. The user approves the transaction in the wallet.
 6. The app displays the confirmed signature and a Solana Explorer link.
-7. The user can return to the app to review activity and basket information.
+7. The user can return to the app to review the basket and transaction receipt.
 
 The product is designed around transparency, mobile-native approval, clear confirmations, and repeatable basket discovery.
 
@@ -25,12 +25,11 @@ The product is designed around transparency, mobile-native approval, clear confi
 The repository now contains an initial Expo/React Native mobile foundation with:
 
 - Android-first C Market screens.
-- C3 and C10 basket discovery.
+- A working C3 prototype with future basket sizes clearly marked as upcoming.
 - Mobile Wallet Adapter wallet connection.
 - Devnet USDC balance lookup.
 - C3 Devnet USDC purchase flow.
 - Transaction confirmation and Explorer links.
-- Session activity history.
 - Hackathon compliance, demo, security, and release documentation.
 
 The earlier local prototype also demonstrated the following flow on Solana Devnet:
@@ -69,12 +68,12 @@ C Market is designed specifically for a mobile wallet environment:
 
 ## CLOCK IN judging alignment
 
-| Criterion | C Market response |
-| --- | --- |
-| Stickiness and product-market fit | Repeatable basket discovery, simple purchase flow, visible transaction history, and a product designed for Solana Mobile users. |
-| User experience | Focused Android flow, wallet-native approval, clear summaries, strong error states, and Explorer verification. |
-| Innovation / X-Factor | A mobile-first basket layer that makes diversified on-chain exposure easier to understand and interact with. |
-| Presentation and demo | A short, verifiable demo: connect, review, approve, confirm, and inspect the transaction on Explorer. |
+| Criterion                         | C Market response                                                                                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stickiness and product-market fit | Repeatable basket discovery, simple purchase flow, transaction receipts with Explorer evidence, and a product designed for Solana Mobile users. |
+| User experience                   | Focused Android flow, wallet-native approval, clear summaries, strong error states, and Explorer verification.                                  |
+| Innovation / X-Factor             | A mobile-first basket layer that makes diversified on-chain exposure easier to understand and interact with.                                    |
+| Presentation and demo             | A short, verifiable demo: connect, review, approve, confirm, and inspect the transaction on Explorer.                                           |
 
 ## Repository structure
 
@@ -91,7 +90,7 @@ submission/                  Final submission material checklist
 ```bash
 cd apps/mobile
 cp ../../.env.example .env
-npm install
+npm ci
 npm run android
 ```
 
@@ -105,10 +104,10 @@ Never place a seed phrase, private key, wallet export, signing credential, or se
 
 ## Required work before submission
 
-- Reconcile the repository foundation with the Seeker-tested local implementation.
-- Add and verify the signed release APK that judges can install.
+- Replace the placeholder application icon with an approved C Market asset.
+- Add final local Android signing credentials and verify the signed APK that judges can install.
 - Complete the basket allocation logic or clearly limit the product claims to the functionality actually implemented.
-- Add persistent activity/history.
+- Add persistent activity/history in a later product phase; do not claim it exists yet.
 - Test rejected signatures, insufficient USDC, insufficient SOL, wrong network, RPC failures, duplicate taps, and interrupted sessions.
 - Produce the demo video.
 - Produce the pitch deck or brief presentation.

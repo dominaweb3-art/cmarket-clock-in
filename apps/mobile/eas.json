@@ -1,12 +1,10 @@
 {
   "cli": {
-    "version": ">= 16.9.0",
-    "appVersionSource": "remote"
+    "version": ">= 24.4.0",
+    "appVersionSource": "local"
   },
   "build": {
-    "base": {
-      "pnpm": "10.12.3"
-    },
+    "base": {},
     "development": {
       "extends": "base",
       "developmentClient": true,
@@ -14,11 +12,24 @@
     },
     "preview": {
       "extends": "base",
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "release-apk": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      }
     },
     "production": {
       "extends": "base",
-      "autoIncrement": true
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {

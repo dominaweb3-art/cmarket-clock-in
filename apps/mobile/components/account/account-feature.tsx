@@ -2,7 +2,8 @@ import { useMobileWallet } from '@wallet-ui/react-native-web3js'
 import { useRouter } from 'expo-router'
 import { PublicKey } from '@solana/web3.js'
 import { useCallback, useMemo, useState } from 'react'
-import { Alert, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native'
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { AppText } from '@/components/app-text'
 import { AccountUiBalance } from '@/components/account/account-ui-balance'
@@ -96,8 +97,6 @@ const INDEX_CONFIGS: Record<IndexKey, IndexConfig> = {
     assets: [],
   },
 }
-
-const CHART_BARS = [28, 34, 31, 44, 40, 52, 48, 61, 58, 69, 65, 78, 73, 84, 80, 94]
 
 export function AccountFeature() {
   const router = useRouter()
@@ -234,16 +233,7 @@ export function AccountFeature() {
                 </View>
               </View>
 
-              <View style={styles.valueHeader}>
-                <AppText style={styles.sectionLabel}>{t('account.connectedBalance')}</AppText>
-
-                <View style={styles.periodSelector}>
-                  <AppText style={styles.periodActive}>{t('account.periodDay')}</AppText>
-                  <AppText style={styles.periodText}>{t('account.periodWeek')}</AppText>
-                  <AppText style={styles.periodText}>{t('account.periodMonth')}</AppText>
-                  <AppText style={styles.periodText}>{t('account.periodAll')}</AppText>
-                </View>
-              </View>
+              <AppText style={styles.sectionLabel}>{t('account.connectedBalance')}</AppText>
 
               <View style={styles.balanceValue}>
                 <AccountUiBalance address={walletAddress} />
@@ -251,40 +241,6 @@ export function AccountFeature() {
               </View>
 
               <AppText style={styles.balanceNote}>{t('account.balanceNote')}</AppText>
-
-              <View style={styles.chart}>
-                <View style={styles.gridLineOne} />
-                <View style={styles.gridLineTwo} />
-                <View style={styles.gridLineThree} />
-
-                <View style={styles.chartBars}>
-                  {CHART_BARS.map((height, index) => (
-                    <View key={`${height}-${index}`} style={[styles.chartBar, { height }]} />
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.chartLabels}>
-                <AppText style={styles.chartLabel}>{t('account.chartStart')}</AppText>
-                <AppText style={styles.chartLabel}>{t('account.chartNow')}</AppText>
-              </View>
-
-              <View style={styles.statsRow}>
-                <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>{t('account.purchased')}</AppText>
-                  <AppText style={styles.statValue}>—</AppText>
-                </View>
-
-                <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>{t('account.gain')}</AppText>
-                  <AppText style={styles.statValue}>—</AppText>
-                </View>
-
-                <View style={styles.statCard}>
-                  <AppText style={styles.statLabel}>{t('account.performance')}</AppText>
-                  <AppText style={styles.statValue}>—</AppText>
-                </View>
-              </View>
             </View>
 
             <View style={styles.exposureCard}>
@@ -523,37 +479,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
   },
-  valueHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   sectionLabel: {
     color: '#526A84',
     fontSize: 13,
     fontWeight: '700',
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    padding: 3,
-    borderRadius: 999,
-    backgroundColor: '#F0F3F7',
-  },
-  periodActive: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    color: '#FFFFFF',
-    backgroundColor: '#087F5B',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  periodText: {
-    paddingHorizontal: 5,
-    color: '#718198',
-    fontSize: 10,
   },
   balanceValue: {
     marginTop: -4,
@@ -562,81 +491,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#73849A',
     fontSize: 11,
-  },
-  chart: {
-    position: 'relative',
-    height: 118,
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
-    borderRadius: 12,
-    backgroundColor: '#FBFDFC',
-  },
-  gridLineOne: {
-    position: 'absolute',
-    top: 26,
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderTopColor: '#E6EFEA',
-  },
-  gridLineTwo: {
-    position: 'absolute',
-    top: 58,
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderTopColor: '#E6EFEA',
-  },
-  gridLineThree: {
-    position: 'absolute',
-    top: 90,
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderTopColor: '#E6EFEA',
-  },
-  chartBars: {
-    height: 110,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingHorizontal: 10,
-  },
-  chartBar: {
-    width: 7,
-    borderRadius: 8,
-    backgroundColor: '#63D5AC',
-    opacity: 0.85,
-  },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  chartLabel: {
-    color: '#8291A4',
-    fontSize: 10,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E7ECF2',
-  },
-  statLabel: {
-    color: '#718198',
-    fontSize: 10,
-  },
-  statValue: {
-    marginTop: 4,
-    color: '#172D48',
-    fontSize: 18,
-    fontWeight: '800',
   },
   exposureCard: {
     padding: 18,
