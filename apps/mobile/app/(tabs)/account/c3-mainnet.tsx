@@ -10,7 +10,6 @@ import { LanguageSelector } from '@/components/i18n/language-selector'
 import { useI18n } from '@/components/i18n/i18n-provider'
 import { useCluster } from '@/components/cluster/cluster-provider'
 import { C3_CORE_MAINNET_CONFIG } from '@/constants/c3-core-mainnet'
-import { AppConfig } from '@/constants/app-config'
 import { assertC3MainnetExecution } from '@/services/c3-core-mainnet-core'
 import { C3CoreMainnetEngine, C3CoreMainnetReview } from '@/services/c3-core-mainnet-engine'
 import { C3CoreMainnetPurchaseIntent } from '@/services/c3-core-mainnet-state'
@@ -28,7 +27,7 @@ export default function C3MainnetScreen() {
 
   const guard = useMemo(() => {
     try {
-      assertC3MainnetExecution(selectedCluster.network, AppConfig.enableC3Mainnet)
+      assertC3MainnetExecution(selectedCluster.network)
       return true
     } catch {
       return false
@@ -40,7 +39,6 @@ export default function C3MainnetScreen() {
     return new C3CoreMainnetEngine({
       walletAddress: account.address.toBase58(),
       configuredCluster: selectedCluster.network,
-      enabled: AppConfig.enableC3Mainnet,
       connection: new Connection(C3_CORE_MAINNET_CONFIG.policy.rpcEndpoint, 'confirmed'),
       sendTransaction: (transaction, minContextSlot) => signAndSendTransactions(transaction, minContextSlot),
     })
@@ -68,7 +66,7 @@ export default function C3MainnetScreen() {
     setBusy(true)
     setError('')
     try {
-      const nextPurchase = purchase ?? (await engine.createPurchase(Number(amount.replace(',', '.'))))
+      const nextPurchase = purchase ?? (await engine.createPurchase(amount.replace(',', '.')))
       const nextReview = await engine.quoteNextLeg(nextPurchase.id)
       setPurchase((await engine.getPurchase(nextPurchase.id)) ?? nextPurchase)
       setReview(nextReview)

@@ -5,7 +5,6 @@ import path from 'node:path'
 import process from 'node:process'
 import bs58 from 'bs58'
 import {
-  AddressLookupTableAccount,
   Connection,
   PublicKey,
   TransactionInstruction,
@@ -30,6 +29,7 @@ const systemProgram = '11111111111111111111111111111111'
 const associatedTokenProgram = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'
 const computeBudgetProgram = 'ComputeBudget111111111111111111111111111111'
 const jupiterAggregatorV6 = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'
+const addressLookupTableProgram = 'AddressLookupTab1e1111111111111111111111111'
 const testAddress = process.env.C3_MAINNET_TEST_ADDRESS || 'DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej'
 const maxTransactionBytes = 1232
 const maxComputeUnits = 1_400_000
@@ -185,12 +185,18 @@ function createJupiterRequester(apiKey, httpEvidence) {
 }
 
 function toBaseUnits(usdc) {
-  return String(Math.round(usdc * 1_000_000))
+  if (!Number.isSafeInteger(usdc) || usdc < 0) throw new Error('USDC purchase size must be a non-negative integer')
+  return (BigInt(usdc) * 1_000_000n).toString()
 }
 
 function decodeBlockhash(value) {
   if (typeof value === 'string') return value
-  if (Array.isArray(value)) return bs58.encode(Buffer.from(value))
+  if (
+    Array.isArray(value) &&
+    value.length === 32 &&
+    value.every((item) => Number.isInteger(item) && item >= 0 && item <= 255)
+  )
+    return bs58.encode(Buffer.from(value))
   throw new Error('Jupiter returned an invalid blockhash format')
 }
 
@@ -229,40 +235,49 @@ function buildInstructionCounts(build) {
   }
 }
 
-function lookupTablesFromBuild(build) {
-  return Object.entries(build.addressesByLookupTableAddress || {}).map(
-    ([key, addresses]) =>
-      new AddressLookupTableAccount({
-        key: new PublicKey(key),
-        state: {
-          deactivationSlot: BigInt('18446744073709551615'),
-          lastExtendedSlot: 0,
-          lastExtendedSlotStartIndex: 0,
-          addresses: addresses.map((address) => new PublicKey(address)),
-        },
-      }),
-  )
+async function fetchLookupTablesFromBuild(builds, connection) {
+  const currentSlot = await connection.getSlot('confirmed')
+  const lookupTables = new Map()
+  for (const build of builds) {
+    for (const [address, expectedAddresses] of Object.entries(build.addressesByLookupTableAddress || {})) {
+      const key = new PublicKey(address)
+      const accountInfo = await connection.getAccountInfo(key, 'confirmed')
+      if (!accountInfo || !accountInfo.owner.equals(new PublicKey(addressLookupTableProgram))) {
+        throw new Error(`Jupiter lookup table failed ownership validation: ${address}`)
+      }
+      const response = await connection.getAddressLookupTable(key, { commitment: 'confirmed' })
+      const table = response.value
+      if (!table || !table.isActive() || table.state.lastExtendedSlot > currentSlot) {
+        throw new Error(`Jupiter lookup table is missing, inactive, or not current: ${address}`)
+      }
+      if (
+        table.state.addresses.length !== expectedAddresses.length ||
+        table.state.addresses.some((value, index) => value.toBase58() !== expectedAddresses[index])
+      ) {
+        throw new Error(`Jupiter lookup table contents do not match the build: ${address}`)
+      }
+      lookupTables.set(table.key.toBase58(), table)
+    }
+  }
+  return [...lookupTables.values()]
 }
 
-function compileUnsignedTransaction(builds, connection) {
+async function compileUnsignedTransaction(builds, connection) {
   const latest = builds.reduce((current, build) =>
     Number(build.blockhashWithMetadata.lastValidBlockHeight) >
     Number(current.blockhashWithMetadata.lastValidBlockHeight)
       ? build
       : current,
   )
-  const lookupTables = new Map()
-  for (const build of builds) {
-    for (const table of lookupTablesFromBuild(build)) lookupTables.set(table.key.toBase58(), table)
-  }
+  const lookupTables = await fetchLookupTablesFromBuild(builds, connection)
   const instructions = builds.flatMap(flattenBuildInstructions).map(toInstruction)
   const message = new TransactionMessage({
     payerKey: new PublicKey(testAddress),
     recentBlockhash: decodeBlockhash(latest.blockhashWithMetadata.blockhash),
     instructions,
-  }).compileToV0Message([...lookupTables.values()])
+  }).compileToV0Message(lookupTables)
   const transaction = new VersionedTransaction(message)
-  return { transaction, lookupTables: [...lookupTables.values()], instructions, connection }
+  return { transaction, lookupTables, instructions, connection }
 }
 
 function accountSummary(transaction) {
@@ -673,7 +688,7 @@ async function main() {
       for (const leg of legs) {
         try {
           const build = await fetchBuild(leg, jupiterRequest)
-          const { transaction, lookupTables } = compileUnsignedTransaction([build], connection)
+          const { transaction, lookupTables } = await compileUnsignedTransaction([build], connection)
           const structural = structuralChecks(build, transaction, leg, treasuryAddress)
           const simulation = await simulate(connection, transaction)
           const summary = buildLegSummary(build, transaction, leg, structural, simulation)
@@ -706,7 +721,7 @@ async function main() {
       }
       if (purchaseBuilds.length === 3) {
         try {
-          const combined = compileUnsignedTransaction(purchaseBuilds, connection)
+          const combined = await compileUnsignedTransaction(purchaseBuilds, connection)
           const estimatedBytes = estimateVersionedTransactionBytes(combined.transaction)
           const combinedAccounts = accountSummary(combined.transaction)
           const combinedSignerSafe =

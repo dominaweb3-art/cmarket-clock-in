@@ -15,6 +15,7 @@ export const C3_CORE_MAINNET_PROGRAMS = Object.freeze({
   associatedToken: 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
   computeBudget: 'ComputeBudget111111111111111111111111111111',
   jupiterSwapV6: 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
+  addressLookupTable: 'AddressLookupTab1e1111111111111111111111111',
 })
 
 export const C3_CORE_MAINNET_CONFIG = Object.freeze({

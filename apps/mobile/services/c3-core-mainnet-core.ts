@@ -22,6 +22,7 @@ export const C3_CORE_MAINNET_WEIGHTS = {
 
 export const C3_CORE_MAINNET_POLICY = {
   minimumPurchaseUsdc: 50,
+  maximumPurchaseUsdc: 500,
   maximumSlippageBps: 100,
   quoteEndpoint: 'https://api.jup.ag/swap/v2/build',
   programLabelsEndpoint: 'https://api.jup.ag/swap/v1/program-id-to-label',
@@ -64,12 +65,12 @@ const STATE_TRANSITIONS: Readonly<Record<C3CoreMainnetPurchaseState, readonly C3
   completed: [],
 }
 
-export function isC3MainnetEnabled(value: string | undefined = process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET): boolean {
-  return value === 'true'
+export function isC3MainnetEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET === 'true'
 }
 
-export function assertC3MainnetExecution(configuredCluster: string, enabled = isC3MainnetEnabled()): void {
-  if (!enabled) {
+export function assertC3MainnetExecution(configuredCluster: string): void {
+  if (!isC3MainnetEnabled()) {
     throw new Error('C3 Mainnet is disabled by EXPO_PUBLIC_ENABLE_C3_MAINNET.')
   }
 
@@ -78,14 +79,30 @@ export function assertC3MainnetExecution(configuredCluster: string, enabled = is
   }
 }
 
-export function allocateC3Core(totalUsdcBaseUnits: bigint): C3CoreMainnetAllocation {
-  if (totalUsdcBaseUnits < BigInt(C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc) * 10n ** 6n) {
-    throw new Error(`C3 Mainnet purchases require at least ${C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc} USDC.`)
+export function parseC3UsdcAmount(value: string): bigint {
+  if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(value)) {
+    throw new Error('C3 Mainnet amount must be a plain decimal with at most 6 fractional digits.')
   }
 
-  if (totalUsdcBaseUnits <= 0n) {
-    throw new Error('C3 Mainnet purchase amount must be positive.')
+  const [whole, fraction = ''] = value.split('.')
+  return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0') || '0')
+}
+
+export function assertC3PurchaseAmount(totalUsdcBaseUnits: bigint): void {
+  if (totalUsdcBaseUnits < 0n) throw new Error('C3 Mainnet purchase amount cannot be negative.')
+
+  const minimum = BigInt(C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc) * 1_000_000n
+  const maximum = BigInt(C3_CORE_MAINNET_POLICY.maximumPurchaseUsdc) * 1_000_000n
+  if (totalUsdcBaseUnits < minimum) {
+    throw new Error(`C3 Mainnet purchases require at least ${C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc} USDC.`)
   }
+  if (totalUsdcBaseUnits > maximum) {
+    throw new Error(`C3 Mainnet purchases are limited to ${C3_CORE_MAINNET_POLICY.maximumPurchaseUsdc} USDC.`)
+  }
+}
+
+export function allocateC3Core(totalUsdcBaseUnits: bigint): C3CoreMainnetAllocation {
+  assertC3PurchaseAmount(totalUsdcBaseUnits)
 
   const cbBTC = (totalUsdcBaseUnits * BigInt(C3_CORE_MAINNET_WEIGHTS.cbBTC)) / 100n
   const portalETH = (totalUsdcBaseUnits * BigInt(C3_CORE_MAINNET_WEIGHTS.portalETH)) / 100n

@@ -14,6 +14,7 @@ import {
   allocateC3Core,
   assertC3MainnetExecution,
   assertC3MainnetStateTransition,
+  parseC3UsdcAmount,
   C3CoreMainnetLegId,
   C3CoreMainnetPurchaseState,
   C3_CORE_MAINNET_POLICY,
@@ -21,8 +22,11 @@ import {
 import { C3CoreMainnetPurchaseIntent, C3CoreMainnetStore, deriveStateFromLegs } from '@/services/c3-core-mainnet-state'
 import {
   flattenC3BuildInstructions,
+  decodeC3Blockhash,
+  getC3JupiterSourceTokenAccount,
   JupiterBuildResponse,
   toC3TransactionInstruction,
+  validateC3AddressLookupTableRecord,
   validateC3CoreMainnetTransaction,
 } from '@/services/c3-core-mainnet-validation'
 
@@ -53,7 +57,6 @@ type PendingBuild = Readonly<{
 type MainnetEngineOptions = Readonly<{
   walletAddress: string
   configuredCluster: string
-  enabled?: boolean
   connection?: Connection
   store?: C3CoreMainnetStore
   sendTransaction: MainnetWalletSender
@@ -68,19 +71,15 @@ export class C3CoreMainnetEngine {
   private lastJupiterRequestAt = 0
 
   constructor(private readonly options: MainnetEngineOptions) {
-    assertC3MainnetExecution(options.configuredCluster, options.enabled)
+    assertC3MainnetExecution(options.configuredCluster)
     this.connection = options.connection ?? new Connection(C3_CORE_MAINNET_CONFIG.policy.rpcEndpoint, 'confirmed')
     this.store = options.store ?? new C3CoreMainnetStore()
     new PublicKey(options.walletAddress)
   }
 
-  async createPurchase(totalUsdc: number): Promise<C3CoreMainnetPurchaseIntent> {
+  async createPurchase(totalUsdc: string): Promise<C3CoreMainnetPurchaseIntent> {
     this.assertRuntimeGuard()
-    if (!Number.isFinite(totalUsdc) || totalUsdc < C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc) {
-      throw new Error(`C3 Mainnet purchases require at least ${C3_CORE_MAINNET_POLICY.minimumPurchaseUsdc} USDC.`)
-    }
-
-    const totalUsdcBaseUnits = BigInt(Math.round(totalUsdc * 10 ** C3_CORE_MAINNET_CONFIG.decimals.USDC))
+    const totalUsdcBaseUnits = parseC3UsdcAmount(totalUsdc)
     const allocation = allocateC3Core(totalUsdcBaseUnits)
     return this.store.create({
       walletAddress: this.options.walletAddress,
@@ -104,6 +103,8 @@ export class C3CoreMainnetEngine {
       if (currentBlockHeight > build.blockhashWithMetadata.lastValidBlockHeight) {
         throw new Error('Jupiter returned an expired blockhash. Request a fresh quote.')
       }
+
+      await this.assertSourceAndDestinationAccounts(build, leg)
 
       const validation = validateC3CoreMainnetTransaction({
         walletAddress: this.options.walletAddress,
@@ -181,7 +182,7 @@ export class C3CoreMainnetEngine {
       const confirmation = await this.connection.confirmTransaction(
         {
           signature,
-          blockhash: decodeBlockhash(pending.build.blockhashWithMetadata.blockhash),
+          blockhash: decodeC3Blockhash(pending.build.blockhashWithMetadata.blockhash),
           lastValidBlockHeight: pending.lastValidBlockHeight,
         },
         'finalized',
@@ -241,7 +242,7 @@ export class C3CoreMainnetEngine {
   }
 
   private assertRuntimeGuard() {
-    assertC3MainnetExecution(C3_CORE_MAINNET_CONFIG.cluster, this.options.enabled ?? C3_CORE_MAINNET_CONFIG.enabled)
+    assertC3MainnetExecution(this.options.configuredCluster)
   }
 
   private async requireIntent(purchaseId: string): Promise<C3CoreMainnetPurchaseIntent> {
@@ -263,6 +264,7 @@ export class C3CoreMainnetEngine {
     url.searchParams.set('outputMint', outputMint)
     url.searchParams.set('amount', inputAmountBaseUnits.toString())
     url.searchParams.set('taker', this.options.walletAddress)
+    url.searchParams.set('swapMode', 'ExactIn')
     url.searchParams.set('slippageBps', String(C3_CORE_MAINNET_POLICY.maximumSlippageBps))
     url.searchParams.set('maxAccounts', '64')
     url.searchParams.set('wrapAndUnwrapSol', 'true')
@@ -288,37 +290,35 @@ export class C3CoreMainnetEngine {
       )
       if (waitMs) await sleep(waitMs)
       this.lastJupiterRequestAt = Date.now()
-      const response = await fetch(url.toString())
-      const body = await response.json().catch(() => null)
-      if (response.status === 429 && attempt < C3_CORE_MAINNET_POLICY.maxRateLimitRetries) {
-        await sleep(
-          Math.max(
-            C3_CORE_MAINNET_POLICY.keylessRequestIntervalMs,
-            parseRetryAfter(response.headers.get('retry-after')),
-          ),
-        )
-        continue
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 30_000)
+      try {
+        const response = await fetch(url.toString(), { signal: controller.signal })
+        const body = await response.json().catch(() => null)
+        if (response.status === 429 && attempt < C3_CORE_MAINNET_POLICY.maxRateLimitRetries) {
+          await sleep(
+            Math.max(
+              C3_CORE_MAINNET_POLICY.keylessRequestIntervalMs,
+              parseRetryAfter(response.headers.get('retry-after')),
+            ),
+          )
+          continue
+        }
+        if (!response.ok) throw new Error(`Jupiter HTTP ${response.status}: ${sanitizeErrorBody(body)}`)
+        return body
+      } catch (error) {
+        if (isAbortError(error)) throw new Error('Jupiter request timed out.')
+        throw error
+      } finally {
+        clearTimeout(timeout)
       }
-      if (!response.ok) throw new Error(`Jupiter HTTP ${response.status}: ${sanitizeErrorBody(body)}`)
-      return body
     }
     throw new Error('Jupiter rate limit retry window exhausted.')
   }
 
   private async compileBuild(build: JupiterBuildResponse) {
-    const blockhash = decodeBlockhash(build.blockhashWithMetadata.blockhash)
-    const lookupTables = Object.entries(build.addressesByLookupTableAddress ?? {}).map(
-      ([address, addresses]) =>
-        new AddressLookupTableAccount({
-          key: new PublicKey(address),
-          state: {
-            deactivationSlot: BigInt('18446744073709551615'),
-            lastExtendedSlot: 0,
-            lastExtendedSlotStartIndex: 0,
-            addresses: addresses.map((value) => new PublicKey(value)),
-          },
-        }),
-    )
+    const blockhash = decodeC3Blockhash(build.blockhashWithMetadata.blockhash)
+    const lookupTables = await this.loadValidatedLookupTables(build.addressesByLookupTableAddress ?? {})
     const instructions = flattenC3BuildInstructions(build).map(toC3TransactionInstruction)
     const message = new TransactionMessage({
       payerKey: new PublicKey(this.options.walletAddress),
@@ -328,6 +328,70 @@ export class C3CoreMainnetEngine {
     return {
       transaction: new VersionedTransaction(message),
       minContextSlot: await this.connection.getSlot('confirmed'),
+    }
+  }
+
+  private async loadValidatedLookupTables(
+    addressesByLookupTableAddress: Record<string, string[]>,
+  ): Promise<AddressLookupTableAccount[]> {
+    const currentSlot = await this.connection.getSlot('confirmed')
+    const lookupTables: AddressLookupTableAccount[] = []
+    for (const [address, expectedAddresses] of Object.entries(addressesByLookupTableAddress)) {
+      const key = new PublicKey(address)
+      const accountInfo = await this.connection.getAccountInfo(key, 'confirmed')
+      if (
+        !accountInfo ||
+        !accountInfo.owner.equals(new PublicKey(C3_CORE_MAINNET_CONFIG.programs.addressLookupTable))
+      ) {
+        throw new Error(`Jupiter lookup table failed ownership validation: ${address}`)
+      }
+      const response = await this.connection.getAddressLookupTable(key, { commitment: 'confirmed' })
+      const table = response.value
+      if (!table) throw new Error(`Jupiter lookup table is missing: ${address}`)
+      const tableIssues = validateC3AddressLookupTableRecord(table, address, currentSlot)
+      if (tableIssues.length) throw new Error(`Jupiter lookup table failed validation: ${tableIssues.join(', ')}`)
+      if (
+        table.state.addresses.length !== expectedAddresses.length ||
+        table.state.addresses.some((value, index) => value.toBase58() !== expectedAddresses[index])
+      ) {
+        throw new Error(`Jupiter lookup table contents do not match the build: ${address}`)
+      }
+      lookupTables.push(table)
+    }
+    return lookupTables
+  }
+
+  private async assertSourceAndDestinationAccounts(build: JupiterBuildResponse, leg: C3CoreMainnetLegId) {
+    const sourceAddress = new PublicKey(getC3JupiterSourceTokenAccount(build))
+    const source = await this.connection.getParsedAccountInfo(sourceAddress, 'confirmed')
+    const sourceParsed = readParsedTokenAccount(source.value)
+    if (
+      !sourceParsed ||
+      source.value?.owner.toBase58() !== C3_CORE_MAINNET_CONFIG.programs.token ||
+      sourceParsed.mint !== C3_CORE_MAINNET_CONFIG.assets.input ||
+      sourceParsed.owner !== this.options.walletAddress
+    ) {
+      throw new Error('Jupiter source account is not a user-owned Mainnet USDC token account.')
+    }
+
+    if (leg !== 'SOL') {
+      const destination = getAssociatedTokenAddressSync(
+        leg === 'cbBTC' ? C3_CORE_MAINNET_CONFIG.cbBTCMint : C3_CORE_MAINNET_CONFIG.portalETHMint,
+        new PublicKey(this.options.walletAddress),
+      )
+      const destinationInfo = await this.connection.getParsedAccountInfo(destination, 'confirmed')
+      if (destinationInfo.value) {
+        const parsed = readParsedTokenAccount(destinationInfo.value)
+        if (
+          !parsed ||
+          destinationInfo.value.owner.toBase58() !== C3_CORE_MAINNET_CONFIG.programs.token ||
+          parsed.mint !==
+            (leg === 'cbBTC' ? C3_CORE_MAINNET_CONFIG.assets.cbBTC : C3_CORE_MAINNET_CONFIG.assets.portalETH) ||
+          parsed.owner !== this.options.walletAddress
+        ) {
+          throw new Error('Jupiter output token account is not owned by the connected wallet.')
+        }
+      }
     }
   }
 
@@ -402,11 +466,6 @@ function pendingBuildKey(purchaseId: string, leg: C3CoreMainnetLegId) {
   return `${purchaseId}:${leg}`
 }
 
-function decodeBlockhash(value: string | number[]): string {
-  if (typeof value === 'string') return value
-  throw new Error('Jupiter returned an unsupported blockhash format.')
-}
-
 function parseRetryAfter(value: string | null): number {
   if (!value) return C3_CORE_MAINNET_POLICY.keylessRequestIntervalMs
   const seconds = Number(value)
@@ -432,4 +491,22 @@ function sleep(milliseconds: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
 }
 
+function isAbortError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')
+}
+
 type C3CoreMainnetLegRecord = C3CoreMainnetPurchaseIntent['legs'][C3CoreMainnetLegId]
+
+function readParsedTokenAccount(value: unknown): { mint: string; owner: string } | null {
+  if (!value || typeof value !== 'object' || !('data' in value)) return null
+  const account = value as { data?: unknown }
+  if (!account.data || typeof account.data !== 'object' || !('parsed' in account.data)) return null
+  const parsed = account.data as { parsed?: unknown }
+  if (!parsed.parsed || typeof parsed.parsed !== 'object' || !('info' in parsed.parsed)) return null
+  const info = (parsed.parsed as { info?: unknown }).info
+  if (!info || typeof info !== 'object') return null
+  const tokenInfo = info as { mint?: unknown; owner?: unknown }
+  return typeof tokenInfo.mint === 'string' && typeof tokenInfo.owner === 'string'
+    ? { mint: tokenInfo.mint, owner: tokenInfo.owner }
+    : null
+}
