@@ -80,18 +80,22 @@ try {
 
 assert.equal(canTransitionC3MainnetState('draft', 'quoting'), true)
 assert.equal(canTransitionC3MainnetState('completed', 'quoting'), false)
-assert.equal(canTransitionC3MainnetState('confirmed', 'submitted'), false)
+assert.equal(canTransitionC3MainnetState('confirmed', 'submitted_unconfirmed'), false)
 assert.equal(nextC3MainnetPurchaseState({ confirmedLegs: 1, totalLegs: 3, failed: false }), 'partially_completed')
 assert.equal(nextC3MainnetPurchaseState({ confirmedLegs: 1, totalLegs: 3, failed: true }), 'partially_completed')
-assert.doesNotThrow(() => assertC3MainnetStateTransition('submitted', 'confirmed'))
-assert.throws(() => assertC3MainnetStateTransition('completed', 'submitted'))
+assert.doesNotThrow(() => assertC3MainnetStateTransition('submitted_unconfirmed', 'confirmed'))
+assert.throws(() => assertC3MainnetStateTransition('completed', 'submitted_unconfirmed'))
 
 const intentInput = {
   walletAddress: 'Wallet1111111111111111111111111111111111111',
   totalUsdcBaseUnits: fiftyUsdc,
   createdAtMs: 1,
 }
-assert.equal(deriveC3PurchaseIntentId(intentInput), deriveC3PurchaseIntentId(intentInput))
+const deterministicId = () => 'c3-core-mainnet-v1-' + 'a'.repeat(32)
+assert.equal(
+  deriveC3PurchaseIntentId(intentInput, deterministicId),
+  deriveC3PurchaseIntentId(intentInput, deterministicId),
+)
 assert.equal(decodeC3Blockhash(Array.from({ length: 32 }, () => 0)), '11111111111111111111111111111111')
 assert.throws(() => decodeC3Blockhash([1, 2, 3]))
 

@@ -45,23 +45,39 @@ export type C3CoreMainnetPurchaseState =
   | 'quoting'
   | 'ready_for_review'
   | 'awaiting_wallet'
-  | 'submitted'
+  | 'submitted_unconfirmed'
   | 'confirmed'
-  | 'failed'
-  | 'cancelled'
+  | 'failed_on_chain'
+  | 'cancelled_before_submission'
+  | 'submission_outcome_uncertain'
+  | 'reconciliation_required'
   | 'partially_completed'
   | 'completed'
 
 const STATE_TRANSITIONS: Readonly<Record<C3CoreMainnetPurchaseState, readonly C3CoreMainnetPurchaseState[]>> = {
-  draft: ['quoting', 'cancelled'],
-  quoting: ['ready_for_review', 'failed', 'cancelled'],
-  ready_for_review: ['awaiting_wallet', 'cancelled'],
-  awaiting_wallet: ['submitted', 'failed', 'cancelled'],
-  submitted: ['confirmed', 'failed'],
+  draft: ['quoting', 'cancelled_before_submission'],
+  quoting: ['ready_for_review', 'reconciliation_required', 'draft', 'cancelled_before_submission'],
+  ready_for_review: ['awaiting_wallet', 'cancelled_before_submission'],
+  awaiting_wallet: [
+    'submitted_unconfirmed',
+    'cancelled_before_submission',
+    'submission_outcome_uncertain',
+    'reconciliation_required',
+  ],
+  submitted_unconfirmed: [
+    'confirmed',
+    'failed_on_chain',
+    'submission_outcome_uncertain',
+    'reconciliation_required',
+    'partially_completed',
+    'completed',
+  ],
   confirmed: ['quoting', 'partially_completed', 'completed'],
-  failed: ['quoting', 'cancelled', 'partially_completed'],
-  cancelled: [],
-  partially_completed: ['quoting', 'cancelled', 'completed'],
+  failed_on_chain: ['quoting', 'cancelled_before_submission', 'partially_completed'],
+  cancelled_before_submission: ['quoting'],
+  submission_outcome_uncertain: ['reconciliation_required'],
+  reconciliation_required: ['quoting', 'cancelled_before_submission', 'partially_completed'],
+  partially_completed: ['quoting', 'cancelled_before_submission', 'completed'],
   completed: [],
 }
 
@@ -130,29 +146,41 @@ export function assertC3MainnetStateTransition(
   }
 }
 
-export function deriveC3PurchaseIntentId(input: {
-  walletAddress: string
-  totalUsdcBaseUnits: bigint
-  createdAtMs: number
-}): string {
-  const material = `${C3_CORE_MAINNET_VERSION}:${input.walletAddress}:${input.totalUsdcBaseUnits.toString()}:${input.createdAtMs}`
-  let hash = 2166136261
+export type C3PurchaseIntentIdGenerator = () => string
 
-  for (let index = 0; index < material.length; index += 1) {
-    hash ^= material.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
+export function generateC3PurchaseIntentId(generator: C3PurchaseIntentIdGenerator = defaultIntentIdGenerator): string {
+  const id = generator()
+  if (!/^c3-core-mainnet-v1-[a-f0-9]{32}$/.test(id)) {
+    throw new Error('C3 Mainnet intent ID generator returned an invalid identifier.')
   }
+  return id
+}
 
-  return `${C3_CORE_MAINNET_VERSION}-${(hash >>> 0).toString(16).padStart(8, '0')}`
+export function deriveC3PurchaseIntentId(
+  _input: { walletAddress: string; totalUsdcBaseUnits: bigint; createdAtMs: number },
+  generator: C3PurchaseIntentIdGenerator = defaultIntentIdGenerator,
+): string {
+  return generateC3PurchaseIntentId(generator)
 }
 
 export function nextC3MainnetPurchaseState(input: {
   confirmedLegs: number
   totalLegs: number
   failed: boolean
+  uncertain?: boolean
+  reconciliationRequired?: boolean
 }): C3CoreMainnetPurchaseState {
+  if (input.reconciliationRequired || input.uncertain) return 'reconciliation_required'
   if (input.failed && input.confirmedLegs > 0) return 'partially_completed'
-  if (input.failed) return 'failed'
+  if (input.failed) return 'failed_on_chain'
   if (input.confirmedLegs >= input.totalLegs) return 'completed'
   return input.confirmedLegs > 0 ? 'partially_completed' : 'draft'
+}
+
+function defaultIntentIdGenerator(): string {
+  const cryptoApi = (globalThis as { crypto?: { getRandomValues?: (array: Uint8Array) => Uint8Array } }).crypto
+  if (!cryptoApi?.getRandomValues) throw new Error('C3 Mainnet requires a cryptographically secure random source.')
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')
+  return `${C3_CORE_MAINNET_VERSION}-${hex}`
 }

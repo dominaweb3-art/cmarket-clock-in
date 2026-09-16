@@ -58,6 +58,12 @@ is finalized on Solana Devnet and is not present on Testnet. Official RPC data r
 
 The wallet cancellation/rejection path was also exercised without sending a transaction. C Market returned control to the Buy screen, displayed the localized cancellation/rejection message, and released the duplicate-submit lock.
 
+## Phase 5G.2 recovery and persistence hardening
+
+The disabled C3 Core Mainnet engine now uses a strict versioned AsyncStorage document with monotonic revisions, staged writes, duplicate-ID rejection, canonical 40/30/30 recomputation, and fail-closed diagnostics. It persists the current leg before any future wallet approval and distinguishes awaiting wallet, submitted-unconfirmed, confirmed, failed-on-chain, cancelled-before-submission, uncertain submission, and reconciliation-required states. Confirmed legs cannot be changed or resubmitted.
+
+After a future wallet signature, later RPC, UI, or storage failures preserve the submitted signature and block retries. Recovery is read-only and bounded: it can accept exactly one fully matching recent wallet transaction, while zero or multiple matches remain blocked for explicit review. Final confirmation requires agreement from two independently configured Mainnet providers and complete semantic evidence; a signature or `meta.err: null` alone is not a success claim. No production Mainnet providers are configured, Mainnet remains disabled, and no wallet action was performed for this hardening phase.
+
 ## Wallet identity trust
 
 The former wallet identity URI pointed to GitHub, which caused Phantom to identify the requester as `github.com`. The canonical identity URI is now `https://cmarket-identity.vercel.app`. The page identifies C Market as a Solana Devnet prototype and states that C3 basket settlement is not enabled.
@@ -85,7 +91,7 @@ The disabled C3 Core Mainnet engine is separate from the Devnet purchase screen.
 
 The engine prepares three sequential non-custodial legs: 40% cbBTC, 30% Wormhole Portal ETH, and 30% native SOL. It requests fresh keyless Jupiter builds, applies 100 bps maximum slippage, validates the transaction before any wallet request, and persists no transaction payloads. Each future leg will require its own review and wallet approval. The current Devnet app and verified Devnet payment remain unchanged.
 
-No Mainnet wallet authorization, signature, submission, transfer, or Seeker Mainnet test was performed in Phase 5E. The feature remains disabled and is not a release capability. Automated checks cover allocation rounding, minimum purchase, fail-closed flag and network guards, state transitions, deterministic intent IDs, duplicate submission locks, and transaction validation rules.
+No Mainnet wallet authorization, signature, submission, transfer, or Seeker Mainnet test was performed in Phase 5E. The feature remains disabled and is not a release capability. Automated checks cover allocation rounding, minimum purchase, fail-closed flag and network guards, state transitions, cryptographically random intent IDs, duplicate submission locks, and transaction validation rules.
 
 ## Phase 5G.1 independent security remediation
 
