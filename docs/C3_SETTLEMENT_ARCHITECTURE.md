@@ -226,32 +226,41 @@ A future rebalance must be user-authorized: read current holdings, compare them 
 
 Before Mainnet implementation, build and simulate every leg, measure v0 size and compute, test ATA creation and rent, verify output ownership, enforce mint/program/route allowlists, handle quote and blockhash expiry, rate-limit the Jupiter integration without putting a secret in Expo, and complete wallet, security, custody, bridge, legal, and product-copy review. Mainnet liquidity observations do not prove redemption or solvency. The Devnet app and verified Devnet payment must remain unchanged and independently releasable.
 
-## 13. Phase 5D — Mainnet build, inspection, and simulation harness
+## 13. Phase 5D.1 — Mainnet keyless build, inspection, and simulation harness
 
-Observed at `2026-09-16T03:14:56.610Z` UTC. This phase remained read-only: no wallet authorization, signing, transaction submission, transfer, Mainnet mobile configuration, or Devnet payment change occurred.
+Observed at `2026-09-16T03:30:36.064Z` UTC. This phase remained read-only: no wallet authorization, signing, transaction submission, transfer, Mainnet mobile configuration, or Devnet payment change occurred.
 
-The reusable harness is `apps/mobile/scripts/c3-core-mainnet-build-simulation.mjs`, invoked with `npm run c3:core:mainnet:build-simulate` from `apps/mobile`. It targets the current official Jupiter Swap API V2 Router endpoint `https://api.jup.ag/swap/v2/build` and the official Jupiter program-label endpoint. It keeps only summarized metadata and logs in the ignored file `apps/mobile/dist/generated-results/c3-core-mainnet-build-simulation.json`; it does not persist serialized unsigned transaction payloads.
+The reusable harness is `apps/mobile/scripts/c3-core-mainnet-build-simulation.mjs`, invoked with `npm run c3:core:mainnet:build-simulate` from `apps/mobile`. It targets the official Jupiter Swap API V2 Router endpoint `https://api.jup.ag/swap/v2/build` and program-label endpoint. It keeps only summarized metadata and simulation logs in the ignored file `apps/mobile/dist/generated-results/c3-core-mainnet-build-simulation.json`; it never persists serialized unsigned transaction payloads.
 
-### Explicit decision: BLOCKED
+### Explicit decision: READY_FOR_DISABLED_IMPLEMENTATION
 
-Jupiter’s current Swap API V2 documentation requires an `x-api-key` for `/swap/v2/build` and for the program-label endpoint. No `JUPITER_API_KEY` was available in the integration environment. The harness therefore failed closed before any build or simulation request:
+The earlier `BLOCKED` result was caused solely by a local environment-variable guard that returned before making a request when `JUPITER_API_KEY` was absent. It was not based on a Jupiter authentication response. After removing that premature guard, official keyless access succeeded:
 
-- Sequential builds: not attempted.
-- Combined v0 measurement: not attempted.
-- Program-label resolution: not attempted.
-- RPC simulation: not attempted.
-- Serialized size, signer, fee-payer, destination-account, setup/cleanup, compute-budget, and fee evidence: not available yet.
-- Transaction construction, signing, submission, and wallet authorization: not performed.
+- Nine sequential `/swap/v2/build` requests returned HTTP 200 on their first attempt.
+- The program-label request returned HTTP 200 on its first attempt.
+- No `x-api-key` header was sent, and no HTTP 401, 403, 429, or retry occurred.
+- Keyless requests ran sequentially with at least 2.5 seconds between request starts. Only HTTP 429 is eligible for at most two bounded retries, and `Retry-After` or available rate-limit reset headers are respected.
+- `JUPITER_API_KEY` remains optional. When supplied, its value is hidden and used only in the `x-api-key` header; it is never printed or persisted and must never enter Expo public configuration.
 
-This is an environment blocker, not evidence that the routes or transaction plan are structurally valid. The key must be supplied only as a server-side environment variable for the harness; it must never be added to Expo public configuration, the mobile bundle, source control, or a report.
+This verifies Jupiter authentication behavior for the read-only prototype harness. It does not authorize production mobile clients to embed an API key or imply that current routes will remain available.
 
-### Harness safety checks and intended measurements
+### Sequential build and security evidence
 
-When the required server-side key is available, the harness requests fresh exact-input builds for 20/15/15 USDC, 40/30/30 USDC, and 200/150/150 USDC legs using the fixed Mainnet mints. It uses 100 bps slippage, caps the route at 64 accounts, requests a 150-slot blockhash window, and enables Jupiter’s native SOL cleanup behavior. It compiles each response as an unsigned v0 transaction, measures the serialized bytes against 1,232 bytes, records static and lookup-table accounts, blockhash expiry height, instruction classes, compute-budget instructions, setup/cleanup instructions, priority/platform/tip fields, and route metadata.
+The harness obtained fresh exact-input builds for the 20/15/15 USDC, 40/30/30 USDC, and 200/150/150 USDC legs with 100 bps slippage, a 64-account route cap, a 150-slot blockhash window, and native SOL cleanup behavior. All nine independent v0 transactions were below the 1,232-byte limit:
 
-The harness validates that the only signer and fee payer are the public test address, that each build’s exact input equals its allocation leg, that the output destination is the same user-owned ATA or native SOL address, and that the configured Devnet treasury is absent. It rejects top-level unexpected SOL transfers and SPL Token approval, revoke, authority, or non-SOL close-account instructions. It resolves every instruction program ID through Jupiter’s official label endpoint plus the official Solana/SPL/Associated Token/Compute Budget allowlist; unresolved programs are blockers.
+- 50 USDC purchase: cbBTC 688 bytes, Portal ETH 877 bytes, SOL 756 bytes.
+- 100 USDC purchase: cbBTC 526 bytes, Portal ETH 490 bytes, SOL 966 bytes.
+- 500 USDC purchase: cbBTC 1,128 bytes, Portal ETH 526 bytes, SOL 1,136 bytes.
 
-It then attempts unsigned RPC simulation with signature verification disabled. A successful-looking result is never inferred from a missing balance: the public test address must have the required Mainnet USDC, SOL fee balance, and token-account state. Insufficient funds, missing accounts, or token-account failures are recorded as environmental failures; other failures remain structural or route blockers. The harness also measures a combined three-leg v0 transaction only for comparison and never prefers it automatically.
+Every build had the public test address as its only required signer and fee payer. Exact USDC inputs matched the allocation leg. cbBTC and Portal ETH outputs targeted the same user's associated token accounts; native SOL targeted the same user address. Each leg included expected associated-token-account setup where needed. No treasury destination, unexpected SOL transfer, token approval, delegate, authority change, or unsafe close-account instruction was found. No platform or tip fee was reported; compute-budget instructions were present.
+
+Program-label access succeeded. Top-level programs were limited to the Compute Budget Program, Associated Token Program, SPL Token Program, and Jupiter Swap Program v6. Jupiter's label response omitted these entries, so the harness used an official static allowlist; the Jupiter v6 address is verified by Jupiter's official Swap Program documentation. No program remained unknown.
+
+### Combined measurement and simulation evidence
+
+The three-leg combined v0 transaction was measured separately for each purchase and rejected before simulation because every result exceeded 1,232 bytes: 1,656 bytes for 50 USDC, 1,288 bytes for 100 USDC, and 1,893 bytes for 500 USDC. Sequential execution is therefore mandatory for the disabled implementation.
+
+All nine sequential transactions reached read-only RPC simulation with signature verification disabled and a replacement blockhash. None is reported as a successful execution. Each stopped with Jupiter custom error 6025 (`InvalidTokenAccount`) because the public test address had no Mainnet USDC token account. This is an environmental failure, not proof of a route defect or successful execution. Compute consumption and logs were captured in the ignored generated result. No transaction was signed or submitted.
 
 ### Safest sequential state machine
 
@@ -259,7 +268,7 @@ The recommended implementation remains three separate transactions: fresh quote 
 
 Every leg uses an idempotency key composed of `userPublicKey + purchaseId + basketVersion + legAsset + quoteRequestId`, plus an application-side state transition that rejects duplicate submissions. A confirmed leg is never automatically reversed. If a later leg fails, the remaining USDC stays in the user wallet, completed and pending legs remain visible separately, no automatic retry occurs, and resumption requires a fresh quote and explicit user approval for only the missing leg. A stale quote or blockhash is discarded rather than replayed.
 
-This phase does not change the verified Devnet payment flow or mobile transaction code. The next safe action is to run the harness with a scoped server-side Jupiter key, then inspect all three sizes, simulation logs, program labels, and combined-transaction measurements before any disabled implementation work.
+This phase does not change the verified Devnet payment flow or mobile transaction code. The next safe action is a disabled-by-default Mainnet implementation of the sequential state machine, followed by structural tests and a supervised simulation with a purpose-built funded test wallet before Mainnet can be exposed in the UI.
 
 ## Sources
 
@@ -286,3 +295,4 @@ This phase does not change the verified Devnet payment flow or mobile transactio
 - Jupiter Swap API overview: https://developers.jup.ag/docs/swap
 - Jupiter current Router build API: https://developers.jup.ag/docs/swap/build
 - Jupiter Portal setup and API-key handling: https://developers.jup.ag/docs/portal/setup
+- Jupiter Swap Program v6 ID and errors: https://developers.jup.ag/docs/swap/v1/common-errors

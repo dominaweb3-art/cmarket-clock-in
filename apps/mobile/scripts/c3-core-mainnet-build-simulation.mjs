@@ -29,11 +29,15 @@ const token2022Program = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
 const systemProgram = '11111111111111111111111111111111'
 const associatedTokenProgram = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL'
 const computeBudgetProgram = 'ComputeBudget111111111111111111111111111111'
+const jupiterAggregatorV6 = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'
 const testAddress = process.env.C3_MAINNET_TEST_ADDRESS || 'DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej'
 const maxTransactionBytes = 1232
 const maxComputeUnits = 1_400_000
 const slippageBps = 100
 const blockhashSlotsToExpiry = 150
+const keylessRequestIntervalMs = 2500
+const maxRateLimitRetries = 2
+const maxRateLimitWaitMs = 60_000
 
 const purchases = [
   { totalUsdc: 50, cbBtcUsdc: 20, portalEthUsdc: 15, solUsdc: 15 },
@@ -47,6 +51,7 @@ const knownProgramLabels = {
   [token2022Program]: 'SPL Token-2022 Program',
   [associatedTokenProgram]: 'Associated Token Program',
   [computeBudgetProgram]: 'Compute Budget Program',
+  [jupiterAggregatorV6]: 'Jupiter Swap Program v6',
 }
 
 function parseEnvLine(line) {
@@ -77,6 +82,106 @@ async function loadValueByName(name) {
 
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+class JupiterRequestError extends Error {
+  constructor(message, { endpoint, status, sanitizedResponse, authenticationFailure = false }) {
+    super(message)
+    this.name = 'JupiterRequestError'
+    this.endpoint = endpoint
+    this.status = status
+    this.sanitizedResponse = sanitizedResponse
+    this.authenticationFailure = authenticationFailure
+  }
+}
+
+function sanitizeResponseBody(body) {
+  if (!body) return 'empty response'
+  const candidate =
+    typeof body === 'string' ? body : body.error || body.message || body.errorMessage || JSON.stringify(body)
+  return String(candidate)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 500)
+}
+
+function rateLimitHeaders(response) {
+  return {
+    retryAfter: response.headers.get('retry-after'),
+    rateLimitReset: response.headers.get('ratelimit-reset') || response.headers.get('x-ratelimit-reset'),
+    rateLimitResetAfter: response.headers.get('x-ratelimit-reset-after'),
+    rateLimitRemaining: response.headers.get('ratelimit-remaining') || response.headers.get('x-ratelimit-remaining'),
+  }
+}
+
+function parseRateLimitWaitMs(headers) {
+  const candidates = []
+  if (headers.retryAfter) {
+    const seconds = Number(headers.retryAfter)
+    if (Number.isFinite(seconds)) candidates.push(seconds * 1000)
+    else {
+      const dateMs = Date.parse(headers.retryAfter)
+      if (Number.isFinite(dateMs)) candidates.push(Math.max(0, dateMs - Date.now()))
+    }
+  }
+  if (headers.rateLimitResetAfter) {
+    const seconds = Number(headers.rateLimitResetAfter)
+    if (Number.isFinite(seconds)) candidates.push(seconds * 1000)
+  }
+  if (headers.rateLimitReset) {
+    const value = Number(headers.rateLimitReset)
+    if (Number.isFinite(value)) {
+      candidates.push(value > 1_000_000_000 ? Math.max(0, value * 1000 - Date.now()) : value * 1000)
+    }
+  }
+  return candidates.length ? Math.max(...candidates) : keylessRequestIntervalMs
+}
+
+function createJupiterRequester(apiKey, httpEvidence) {
+  let lastRequestStartedAt = 0
+  return async function jupiterRequest(url) {
+    for (let attempt = 1; attempt <= maxRateLimitRetries + 1; attempt += 1) {
+      if (!apiKey) {
+        const waitMs = Math.max(0, keylessRequestIntervalMs - (Date.now() - lastRequestStartedAt))
+        if (waitMs) await sleep(waitMs)
+      }
+      lastRequestStartedAt = Date.now()
+      const headers = apiKey ? { 'x-api-key': apiKey } : {}
+      const { response, body } = await requestJson(url, { headers })
+      const rateLimits = rateLimitHeaders(response)
+      const evidence = {
+        endpoint: new URL(url).origin + new URL(url).pathname,
+        status: response.status,
+        attempt,
+        authentication: apiKey ? 'x-api-key value hidden' : 'keyless; no x-api-key header sent',
+        rateLimitHeaders: rateLimits,
+      }
+      if (!response.ok) evidence.sanitizedResponse = sanitizeResponseBody(body)
+      httpEvidence.push(evidence)
+
+      if (response.status === 401 || response.status === 403) {
+        throw new JupiterRequestError(`Jupiter authentication response ${response.status}`, {
+          endpoint: evidence.endpoint,
+          status: response.status,
+          sanitizedResponse: evidence.sanitizedResponse,
+          authenticationFailure: true,
+        })
+      }
+      if (response.status !== 429) return { response, body }
+      if (attempt > maxRateLimitRetries) return { response, body }
+
+      const waitMs = Math.max(keylessRequestIntervalMs, parseRateLimitWaitMs(rateLimits))
+      if (waitMs > maxRateLimitWaitMs) {
+        throw new JupiterRequestError('Jupiter rate-limit wait exceeded the bounded retry window', {
+          endpoint: evidence.endpoint,
+          status: response.status,
+          sanitizedResponse: evidence.sanitizedResponse,
+        })
+      }
+      await sleep(waitMs)
+    }
+    throw new Error('Unreachable Jupiter request state')
+  }
 }
 
 function toBaseUnits(usdc) {
@@ -195,6 +300,52 @@ function instructionSummary(build, expectedLeg) {
 
 function unique(values) {
   return [...new Set(values)]
+}
+
+function shortVectorPrefixLength(value) {
+  let remaining = value
+  let bytes = 0
+  do {
+    remaining >>= 7
+    bytes += 1
+  } while (remaining > 0)
+  return bytes
+}
+
+function estimateVersionedTransactionBytes(transaction) {
+  const message = transaction.message
+  const instructionBytes = message.compiledInstructions.reduce(
+    (total, instruction) =>
+      total +
+      1 +
+      shortVectorPrefixLength(instruction.accountKeyIndexes.length) +
+      instruction.accountKeyIndexes.length +
+      shortVectorPrefixLength(instruction.data.length) +
+      instruction.data.length,
+    0,
+  )
+  const lookupBytes = message.addressTableLookups.reduce(
+    (total, lookup) =>
+      total +
+      32 +
+      shortVectorPrefixLength(lookup.writableIndexes.length) +
+      lookup.writableIndexes.length +
+      shortVectorPrefixLength(lookup.readonlyIndexes.length) +
+      lookup.readonlyIndexes.length,
+    0,
+  )
+  const messageBytes =
+    1 +
+    3 +
+    shortVectorPrefixLength(message.staticAccountKeys.length) +
+    message.staticAccountKeys.length * 32 +
+    32 +
+    shortVectorPrefixLength(message.compiledInstructions.length) +
+    instructionBytes +
+    shortVectorPrefixLength(message.addressTableLookups.length) +
+    lookupBytes
+  const signatureCount = message.header.numRequiredSignatures
+  return shortVectorPrefixLength(signatureCount) + signatureCount * 64 + messageBytes
 }
 
 function decodeU32(data) {
@@ -321,7 +472,7 @@ async function rpcCall(method, params = []) {
   return body.result
 }
 
-async function fetchBuild(leg, apiKey) {
+async function fetchBuild(leg, jupiterRequest) {
   const url = new URL(buildUrl)
   url.searchParams.set('inputMint', mainnetUsdcMint)
   url.searchParams.set('outputMint', leg.outputMint)
@@ -333,7 +484,7 @@ async function fetchBuild(leg, apiKey) {
   url.searchParams.set('blockhashSlotsToExpiry', String(blockhashSlotsToExpiry))
   url.searchParams.set('computeUnitPricePercentile', 'medium')
   if (leg.asset === 'SOL') url.searchParams.set('nativeDestinationAccount', testAddress)
-  const { response, body } = await requestJson(url, { headers: { 'x-api-key': apiKey } })
+  const { response, body } = await jupiterRequest(url)
   if (!response.ok || body?.error)
     throw new Error(`Jupiter /build ${response.status}: ${body?.error || body?.message || 'request failed'}`)
   if (!body.blockhashWithMetadata || !body.swapInstruction)
@@ -341,15 +492,21 @@ async function fetchBuild(leg, apiKey) {
   return { ...body, requestUrl: url.toString() }
 }
 
-async function fetchProgramLabels(apiKey, programIds) {
-  const { response, body } = await requestJson(programLabelsUrl, { headers: { 'x-api-key': apiKey } })
+async function fetchProgramLabels(jupiterRequest, programIds) {
+  const { response, body } = await jupiterRequest(programLabelsUrl)
   if (!response.ok || !body || typeof body !== 'object')
     throw new Error(`Jupiter program label endpoint ${response.status}`)
   const resolved = {}
   const unknown = []
   for (const programId of programIds) {
-    const label = knownProgramLabels[programId] || body[programId] || null
-    resolved[programId] = label
+    const endpointLabel = body[programId] || null
+    const allowlistLabel = knownProgramLabels[programId] || null
+    const label = endpointLabel || allowlistLabel
+    resolved[programId] = {
+      label,
+      source: endpointLabel ? 'Jupiter program-label endpoint' : allowlistLabel ? 'official static allowlist' : null,
+      endpointLabel,
+    }
     if (!label) unknown.push(programId)
   }
   return { endpoint: programLabelsUrl, resolved, unknown }
@@ -425,6 +582,8 @@ async function main() {
   const treasuryAddress = await loadValueByName('EXPO_PUBLIC_DEVNET_TREASURY_PUBLIC_KEY')
   const observedAt = new Date().toISOString()
   const connection = new Connection(rpcUrl, 'processed')
+  const httpEvidence = []
+  const jupiterRequest = createJupiterRequester(apiKey, httpEvidence)
   const result = {
     observedAt,
     cluster: 'mainnet-beta',
@@ -433,7 +592,11 @@ async function main() {
       programLabelsEndpoint: programLabelsUrl,
       apiKeyProvided: Boolean(apiKey),
       apiKeyValuePersisted: false,
+      keylessRequestIntervalMs: apiKey ? null : keylessRequestIntervalMs,
+      maxRateLimitRetries,
+      xApiKeyHeaderSent: Boolean(apiKey),
     },
+    httpEvidence,
     publicTestAddress: testAddress,
     inputMint: mainnetUsdcMint,
     outputMints: { cbBTC: cbBtcMint, portalEth: portalEthMint, nativeSol: wrappedSolMint },
@@ -461,6 +624,7 @@ async function main() {
     },
     decision: 'BLOCKED',
     blockers: [],
+    warnings: [],
     unsignedPayloadPersisted: false,
   }
 
@@ -468,19 +632,11 @@ async function main() {
   console.log(`Observed at: ${observedAt}`)
   console.log(`RPC: ${rpcUrl}`)
   console.log(`Jupiter Swap API v2 build: ${buildUrl}`)
-  console.log(`Jupiter API key: ${apiKey ? 'provided (value hidden)' : 'missing'}`)
+  console.log(
+    `Jupiter authentication: ${apiKey ? 'x-api-key provided (value hidden)' : 'keyless; no x-api-key header'}`,
+  )
+  console.log(`Jupiter request pacing: ${apiKey ? 'API-key mode' : `one request every ${keylessRequestIntervalMs}ms`}`)
   console.log('Wallet authorization/signing/submission: not performed')
-
-  if (!apiKey) {
-    result.blockers.push(
-      'Jupiter Swap API v2 and the official program-label endpoint require JUPITER_API_KEY; no key was available.',
-    )
-    console.log('Decision: BLOCKED — missing JUPITER_API_KEY; no build or simulation was attempted.')
-    await fs.mkdir(generatedResultsDir, { recursive: true })
-    await fs.writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`)
-    process.exitCode = 1
-    return
-  }
 
   try {
     const [health, version, testBalance, usdcAccounts] = await Promise.all([
@@ -504,9 +660,11 @@ async function main() {
   }
 
   const builtLegs = []
+  let authenticationFailure = null
   if (!result.blockers.length) {
-    for (const purchase of purchases) {
+    purchaseLoop: for (const purchase of purchases) {
       const purchaseResult = { totalUsdc: purchase.totalUsdc, sequential: [], combined: null }
+      const purchaseBuilds = []
       const legs = [
         { asset: 'cbBTC', outputMint: cbBtcMint, inputAmountUsdc: purchase.cbBtcUsdc },
         { asset: 'Portal ETH', outputMint: portalEthMint, inputAmountUsdc: purchase.portalEthUsdc },
@@ -514,14 +672,14 @@ async function main() {
       ].map((leg) => ({ ...leg, inputAmountBaseUnits: toBaseUnits(leg.inputAmountUsdc) }))
       for (const leg of legs) {
         try {
-          const build = await fetchBuild(leg, apiKey)
-          await sleep(2200)
+          const build = await fetchBuild(leg, jupiterRequest)
           const { transaction, lookupTables } = compileUnsignedTransaction([build], connection)
           const structural = structuralChecks(build, transaction, leg, treasuryAddress)
           const simulation = await simulate(connection, transaction)
           const summary = buildLegSummary(build, transaction, leg, structural, simulation)
           purchaseResult.sequential.push(summary)
           builtLegs.push({ purchase: purchase.totalUsdc, build, leg, transaction, lookupTables })
+          purchaseBuilds.push(build)
           console.log(
             `${purchase.totalUsdc} USDC ${leg.asset}: ${summary.serializedBytes} bytes; simulation=${simulation.status}`,
           )
@@ -534,6 +692,57 @@ async function main() {
         } catch (error) {
           purchaseResult.sequential.push({ asset: leg.asset, status: 'build_failed', error: error.message })
           result.blockers.push(`${purchase.totalUsdc} USDC ${leg.asset}: ${error.message}`)
+          if (error instanceof JupiterRequestError && error.authenticationFailure) {
+            authenticationFailure = {
+              endpoint: error.endpoint,
+              status: error.status,
+              sanitizedResponse: error.sanitizedResponse,
+            }
+            result.authenticationFailure = authenticationFailure
+            result.purchases.push(purchaseResult)
+            break purchaseLoop
+          }
+        }
+      }
+      if (purchaseBuilds.length === 3) {
+        try {
+          const combined = compileUnsignedTransaction(purchaseBuilds, connection)
+          const estimatedBytes = estimateVersionedTransactionBytes(combined.transaction)
+          const combinedAccounts = accountSummary(combined.transaction)
+          const combinedSignerSafe =
+            combinedAccounts.requiredSigners.length === 1 && combinedAccounts.requiredSigners[0] === testAddress
+          if (estimatedBytes > maxTransactionBytes) {
+            purchaseResult.combined = {
+              status: 'rejected_size',
+              serializedBytes: estimatedBytes,
+              under1232Bytes: false,
+              transactionAccounts: combinedAccounts,
+              requiredSigners: combinedAccounts.requiredSigners,
+              feePayer: combinedAccounts.feePayer,
+              simulation: { status: 'not_attempted_oversize' },
+            }
+            result.warnings.push(
+              `${purchase.totalUsdc} USDC combined transaction measured ${estimatedBytes} bytes and was rejected before simulation`,
+            )
+          } else {
+            const actualBytes = combined.transaction.serialize().length
+            purchaseResult.combined = {
+              status: 'measured',
+              serializedBytes: actualBytes,
+              estimatedBytes,
+              under1232Bytes: actualBytes <= maxTransactionBytes,
+              transactionAccounts: combinedAccounts,
+              requiredSigners: combinedAccounts.requiredSigners,
+              feePayer: combinedAccounts.feePayer,
+              simulation: await simulate(connection, combined.transaction),
+            }
+          }
+          if (!combinedSignerSafe || combinedAccounts.feePayer !== testAddress) {
+            result.blockers.push(`${purchase.totalUsdc} USDC combined transaction is not user-only signed and paid`)
+          }
+        } catch (error) {
+          purchaseResult.combined = { status: 'build_failed', error: error.message }
+          result.blockers.push(`${purchase.totalUsdc} USDC combined transaction measurement failed: ${error.message}`)
         }
       }
       result.purchases.push(purchaseResult)
@@ -545,7 +754,7 @@ async function main() {
       builtLegs.flatMap(({ build }) => flattenBuildInstructions(build).map((instruction) => instruction.programId)),
     )
     try {
-      const labels = await fetchProgramLabels(apiKey, programIds)
+      const labels = await fetchProgramLabels(jupiterRequest, programIds)
       result.programValidation = labels.unknown.length
         ? { status: 'blocked_unknown_programs', ...labels }
         : { status: 'verified', ...labels }
@@ -553,40 +762,30 @@ async function main() {
     } catch (error) {
       result.programValidation = { status: 'unavailable', error: error.message, unknown: programIds }
       result.blockers.push(`Jupiter program-label resolution failed: ${error.message}`)
+      if (error instanceof JupiterRequestError && error.authenticationFailure) {
+        authenticationFailure = {
+          endpoint: error.endpoint,
+          status: error.status,
+          sanitizedResponse: error.sanitizedResponse,
+        }
+        result.authenticationFailure = authenticationFailure
+      }
     }
   }
 
-  if (builtLegs.length === purchases.length * 3) {
-    try {
-      const combined = compileUnsignedTransaction(
-        builtLegs.map(({ build }) => build),
-        connection,
-      )
-      const combinedStructural = {
-        requiredSigners: accountSummary(combined.transaction).requiredSigners,
-        feePayer: accountSummary(combined.transaction).feePayer,
-        under1232Bytes: combined.transaction.serialize().length <= maxTransactionBytes,
-      }
-      const combinedSimulation = await simulate(connection, combined.transaction)
-      result.combined = {
-        status: combinedStructural.under1232Bytes ? 'measured' : 'rejected_size',
-        serializedBytes: combined.transaction.serialize().length,
-        under1232Bytes: combinedStructural.under1232Bytes,
-        transactionAccounts: accountSummary(combined.transaction),
-        requiredSigners: combinedStructural.requiredSigners,
-        feePayer: combinedStructural.feePayer,
-        simulation: combinedSimulation,
-        transactionCountCombined: 3,
-      }
-      if (!combinedStructural.under1232Bytes)
-        result.blockers.push('Combined three-leg transaction exceeds the 1232-byte limit')
-    } catch (error) {
-      result.combined = { status: 'build_failed', error: error.message }
-      result.blockers.push(`Combined transaction measurement failed: ${error.message}`)
+  if (!authenticationFailure) {
+    result.combined = {
+      status: result.purchases.every((purchase) => purchase.combined) ? 'measured_per_purchase' : 'incomplete',
+      measurements: result.purchases.map((purchase) => ({
+        totalUsdc: purchase.totalUsdc,
+        ...purchase.combined,
+      })),
     }
   }
 
-  if (result.blockers.length) {
+  if (authenticationFailure) {
+    result.decision = 'API_KEY_CONFIRMED_REQUIRED'
+  } else if (result.blockers.length) {
     result.decision = result.purchases.some((purchase) =>
       purchase.sequential.some((leg) => leg.serializedBytes && leg.structural?.passed),
     )
