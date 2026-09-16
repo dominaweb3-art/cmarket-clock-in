@@ -226,6 +226,41 @@ A future rebalance must be user-authorized: read current holdings, compare them 
 
 Before Mainnet implementation, build and simulate every leg, measure v0 size and compute, test ATA creation and rent, verify output ownership, enforce mint/program/route allowlists, handle quote and blockhash expiry, rate-limit the Jupiter integration without putting a secret in Expo, and complete wallet, security, custody, bridge, legal, and product-copy review. Mainnet liquidity observations do not prove redemption or solvency. The Devnet app and verified Devnet payment must remain unchanged and independently releasable.
 
+## 13. Phase 5D — Mainnet build, inspection, and simulation harness
+
+Observed at `2026-09-16T03:14:56.610Z` UTC. This phase remained read-only: no wallet authorization, signing, transaction submission, transfer, Mainnet mobile configuration, or Devnet payment change occurred.
+
+The reusable harness is `apps/mobile/scripts/c3-core-mainnet-build-simulation.mjs`, invoked with `npm run c3:core:mainnet:build-simulate` from `apps/mobile`. It targets the current official Jupiter Swap API V2 Router endpoint `https://api.jup.ag/swap/v2/build` and the official Jupiter program-label endpoint. It keeps only summarized metadata and logs in the ignored file `apps/mobile/dist/generated-results/c3-core-mainnet-build-simulation.json`; it does not persist serialized unsigned transaction payloads.
+
+### Explicit decision: BLOCKED
+
+Jupiter’s current Swap API V2 documentation requires an `x-api-key` for `/swap/v2/build` and for the program-label endpoint. No `JUPITER_API_KEY` was available in the integration environment. The harness therefore failed closed before any build or simulation request:
+
+- Sequential builds: not attempted.
+- Combined v0 measurement: not attempted.
+- Program-label resolution: not attempted.
+- RPC simulation: not attempted.
+- Serialized size, signer, fee-payer, destination-account, setup/cleanup, compute-budget, and fee evidence: not available yet.
+- Transaction construction, signing, submission, and wallet authorization: not performed.
+
+This is an environment blocker, not evidence that the routes or transaction plan are structurally valid. The key must be supplied only as a server-side environment variable for the harness; it must never be added to Expo public configuration, the mobile bundle, source control, or a report.
+
+### Harness safety checks and intended measurements
+
+When the required server-side key is available, the harness requests fresh exact-input builds for 20/15/15 USDC, 40/30/30 USDC, and 200/150/150 USDC legs using the fixed Mainnet mints. It uses 100 bps slippage, caps the route at 64 accounts, requests a 150-slot blockhash window, and enables Jupiter’s native SOL cleanup behavior. It compiles each response as an unsigned v0 transaction, measures the serialized bytes against 1,232 bytes, records static and lookup-table accounts, blockhash expiry height, instruction classes, compute-budget instructions, setup/cleanup instructions, priority/platform/tip fields, and route metadata.
+
+The harness validates that the only signer and fee payer are the public test address, that each build’s exact input equals its allocation leg, that the output destination is the same user-owned ATA or native SOL address, and that the configured Devnet treasury is absent. It rejects top-level unexpected SOL transfers and SPL Token approval, revoke, authority, or non-SOL close-account instructions. It resolves every instruction program ID through Jupiter’s official label endpoint plus the official Solana/SPL/Associated Token/Compute Budget allowlist; unresolved programs are blockers.
+
+It then attempts unsigned RPC simulation with signature verification disabled. A successful-looking result is never inferred from a missing balance: the public test address must have the required Mainnet USDC, SOL fee balance, and token-account state. Insufficient funds, missing accounts, or token-account failures are recorded as environmental failures; other failures remain structural or route blockers. The harness also measures a combined three-leg v0 transaction only for comparison and never prefers it automatically.
+
+### Safest sequential state machine
+
+The recommended implementation remains three separate transactions: fresh quote -> user review -> MWA approval for one leg -> confirmation -> immutable receipt -> continue. The cbBTC leg uses 40%, Portal ETH 30%, and native SOL 30%. Each request must show the exact input, minimum output, route, fees, network, destination, and expiry information before `signAndSendTransactions` is called. No approval for a later leg is requested before the prior leg is finalized.
+
+Every leg uses an idempotency key composed of `userPublicKey + purchaseId + basketVersion + legAsset + quoteRequestId`, plus an application-side state transition that rejects duplicate submissions. A confirmed leg is never automatically reversed. If a later leg fails, the remaining USDC stays in the user wallet, completed and pending legs remain visible separately, no automatic retry occurs, and resumption requires a fresh quote and explicit user approval for only the missing leg. A stale quote or blockhash is discarded rather than replayed.
+
+This phase does not change the verified Devnet payment flow or mobile transaction code. The next safe action is to run the harness with a scoped server-side Jupiter key, then inspect all three sizes, simulation logs, program labels, and combined-transaction measurements before any disabled implementation work.
+
 ## Sources
 
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/get-started/react-native/mobile-wallet-adapter
@@ -248,3 +283,6 @@ Before Mainnet implementation, build and simulate every leg, measure v0 size and
 - Wormhole Wrapped Token Transfers: https://wormhole.com/docs/products/token-transfers/wrapped-token-transfers/overview/
 - Wormhole Connect supported token configuration: https://wormhole.com/docs/products/connect/configuration/configuration-v0/
 - Solana token verification guidance: https://solana.com/docs/tokens/how-to-verify-a-token
+- Jupiter Swap API overview: https://developers.jup.ag/docs/swap
+- Jupiter current Router build API: https://developers.jup.ag/docs/swap/build
+- Jupiter Portal setup and API-key handling: https://developers.jup.ag/docs/portal/setup
