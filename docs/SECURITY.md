@@ -46,3 +46,11 @@ Do not publish a vulnerability with exploitable details in a public issue. Conta
 - Suggested mitigation, if available.
 
 This repository is a hackathon project and has no guarantee of production security. A production deployment would require a substantially deeper security review.
+
+## Guarded C3 Core Mainnet engine
+
+The C3 Core Mainnet engine is implemented separately from the verified Devnet payment flow and is disabled unless `EXPO_PUBLIC_ENABLE_C3_MAINNET` is exactly `true`. Runtime execution also requires the configured cluster to be `mainnet-beta`; missing, malformed, or ambiguous values fail closed. The tracked and local release configuration keeps the flag disabled.
+
+The engine uses sequential Jupiter builds for 40% cbBTC, 30% Portal ETH, and 30% native SOL. It never embeds a Jupiter API key, requests fresh keyless builds immediately before each leg, caps slippage at 100 bps, validates mints, exact inputs, destinations, signers, fee payer, programs, and prohibited authority instructions, and rejects stale blockhashes or transactions over 1,232 bytes.
+
+Only the connected wallet may sign and pay. C Market does not custody the purchased assets. Unsigned or signed transaction payloads are not persisted. Persistence contains only purchase metadata, leg states, public signatures, timestamps, and confirmed output amounts when available. A confirmed leg cannot be submitted again; failures are not automatically retried or reversed, and resumption requires a fresh quote and explicit approval.

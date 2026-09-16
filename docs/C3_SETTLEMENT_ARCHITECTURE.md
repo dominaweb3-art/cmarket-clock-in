@@ -270,6 +270,18 @@ Every leg uses an idempotency key composed of `userPublicKey + purchaseId + bask
 
 This phase does not change the verified Devnet payment flow or mobile transaction code. The next safe action is a disabled-by-default Mainnet implementation of the sequential state machine, followed by structural tests and a supervised simulation with a purpose-built funded test wallet before Mainnet can be exposed in the UI.
 
+## 14. Phase 5E — Disabled non-custodial engine
+
+The first production-oriented engine is implemented behind the public flag `EXPO_PUBLIC_ENABLE_C3_MAINNET`. The flag is fail-closed: only the exact string `true` enables it, and execution is refused unless the configured cluster is `mainnet-beta`. The current `.env.example` keeps the flag `false`; the Devnet app continues to use its existing configuration and purchase implementation.
+
+The engine is isolated under `services/c3-core-mainnet-*` and `constants/c3-core-mainnet.ts`. It centralizes the verified Mainnet mints, decimals, 40/30/30 weights, 100-basis-point slippage cap, Jupiter keyless endpoints, program allowlist, 1,232-byte limit, and blockhash policy. Integer USDC allocation assigns 40% to cbBTC and 30% to Portal ETH; native SOL receives the remainder so all legs sum exactly to the requested amount. Purchases below 50 USDC are rejected on Mainnet only.
+
+Only sequential execution is supported: fresh quote and build -> structural review -> explicit MWA approval -> finalized confirmation -> public receipt -> next leg. A quote is held only in memory and is discarded on restart, expiry, validation failure, cancellation, or completion. The engine rejects stale blockhashes, wrong cluster, wrong mints or amounts, wrong taker, non-user signers or fee payers, treasury destinations, unknown programs, unexpected SOL transfers, delegates, approvals, permanent authorities, unsafe closes, and oversized transactions. It never embeds or reads a Jupiter API key.
+
+Purchase persistence is limited to a deterministic intent ID, wallet address, total and leg allocation metadata, state, timestamps, public signatures, and confirmed output amounts when the finalized transaction exposes them. No unsigned or signed transaction payload is persisted. Confirmed legs cannot be submitted again; a failed or cancelled leg is never automatically retried or reversed. Remaining USDC stays in the user's wallet, completed and pending legs remain distinguishable, and resumption requires a fresh quote plus explicit approval.
+
+The guarded route is registered only for deep-link and future integration testing; the normal account UI does not navigate to it while disabled. It displays the C3 Core weights, estimated and minimum outputs, price impact, slippage, fees, token-account setup disclosure, custody/issuer disclosures, partial-completion risk, Explorer receipts, and localized progress states in all four supported locales. No Mainnet wallet action was requested in Phase 5E. The engine remains disabled until funded-wallet simulation, runtime Seeker verification of the hidden route, and security/legal review are complete.
+
 ## Sources
 
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/get-started/react-native/mobile-wallet-adapter

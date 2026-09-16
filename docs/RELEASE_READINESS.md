@@ -32,6 +32,7 @@ The Phase 3A `npm audit --omit=dev` review reported no critical vulnerabilities,
 - `EXPO_PUBLIC_DEVNET_TREASURY_PUBLIC_KEY`
 - `EXPO_PUBLIC_APP_NAME`
 - `EXPO_PUBLIC_APP_IDENTITY_URI`
+- `EXPO_PUBLIC_ENABLE_C3_MAINNET` (must remain `false` for the current release)
 
 Copy the repository `.env.example` to `apps/mobile/.env`. Keep `.env`, `credentials.json`, keystores, passwords, private keys, seed phrases, and tokens untracked. The wallet identity URI must use HTTPS.
 
@@ -84,3 +85,7 @@ This command creates or reuses a dedicated keystore and password under the ignor
 - Review the currently reported npm vulnerabilities in a dedicated dependency-upgrade phase; do not apply npm's incompatible major downgrade suggestions blindly.
 - Complete the demo video, pitch deck, team roster, compliance confirmations, and final official-terms review.
 - Either implement and verify basket settlement later or continue presenting C Market strictly as a Devnet USDC payment prototype.
+
+## Disabled Mainnet engine
+
+The C3 Core Mainnet engine is not part of the current release path. It is guarded by `EXPO_PUBLIC_ENABLE_C3_MAINNET=false`, requires Mainnet at runtime, and is not reachable from normal navigation while disabled. Do not enable it in a release APK until funded-wallet simulation, wallet review, security review, and supervised Mainnet QA are complete.

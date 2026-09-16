@@ -45,22 +45,22 @@ const INDEX_CONFIGS: Record<IndexKey, IndexConfig> = {
     active: true,
     assets: [
       {
+        symbol: 'cbBTC',
+        name: 'Coinbase Bitcoin',
+        percent: 40,
+        color: '#F7931A',
+      },
+      {
+        symbol: 'ETH',
+        name: 'Portal ETH',
+        percent: 30,
+        color: '#627EEA',
+      },
+      {
         symbol: 'SOL',
         name: 'Solana',
-        percent: 50,
-        color: '#9945FF',
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin',
         percent: 30,
-        color: '#2775CA',
-      },
-      {
-        symbol: 'JitoSOL',
-        name: 'Liquid staking',
-        percent: 20,
-        color: '#61D6A4',
+        color: '#9945FF',
       },
     ],
   },

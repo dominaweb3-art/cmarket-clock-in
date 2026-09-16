@@ -78,3 +78,11 @@ At approximately 15:02 COT on 2026-09-15, Phantom displayed the new C Market ide
 The purchase screen had used the deprecated MWA 2.0 `signTransactions` path and then submitted the signed bytes itself with `sendRawTransaction`. The error classifier also treated the generic word `RPC` in Phantom's internal `RPC ROUTER` message as proof of a Solana RPC outage. This produced an inaccurate user-facing error.
 
 The implementation now uses the MWA 2.0 `signAndSendTransactions` path recommended by Solana Mobile. The wallet signs and submits the unchanged transaction, C Market still confirms the returned signature against the same Devnet blockhash window, and no automatic payment retry was added. Wallet-response failures now tell the user to check wallet activity before trying again. No transaction was initiated while validating this change.
+
+## Phase 5E guarded Mainnet engine
+
+The disabled C3 Core Mainnet engine is separate from the Devnet purchase screen. `EXPO_PUBLIC_ENABLE_C3_MAINNET` defaults to `false`, is required to be exactly `true`, and still cannot execute unless the configured cluster is `mainnet-beta`. The normal mobile UI does not expose navigation to the Mainnet route while the guard is false; a direct route attempt shows the disabled state.
+
+The engine prepares three sequential non-custodial legs: 40% cbBTC, 30% Wormhole Portal ETH, and 30% native SOL. It requests fresh keyless Jupiter builds, applies 100 bps maximum slippage, validates the transaction before any wallet request, and persists no transaction payloads. Each future leg will require its own review and wallet approval. The current Devnet app and verified Devnet payment remain unchanged.
+
+No Mainnet wallet authorization, signature, submission, transfer, or Seeker Mainnet test was performed in Phase 5E. The feature remains disabled and is not a release capability. Automated checks cover allocation rounding, minimum purchase, fail-closed flag and network guards, state transitions, deterministic intent IDs, duplicate submission locks, and transaction validation rules.
