@@ -1,9 +1,4 @@
 import { useMobileWallet } from '@wallet-ui/react-native-web3js'
-import {
-  createAssociatedTokenAccountInstruction,
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddress,
-} from '@solana/spl-token'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import { useRouter } from 'expo-router'
 import { useMemo, useRef, useState } from 'react'
@@ -27,6 +22,11 @@ import { ellipsify } from '@/utils/ellipsify'
 import { useCluster } from '@/components/cluster/cluster-provider'
 import { AppConfig } from '@/constants/app-config'
 import { useI18n } from '@/components/i18n/i18n-provider'
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+} from '@/utils/spl-token-compatible'
 
 const MIN_PURCHASE_USDC = 5
 const QUICK_AMOUNTS = [5, 10, 50]

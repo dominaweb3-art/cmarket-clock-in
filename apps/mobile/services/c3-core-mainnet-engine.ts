@@ -1,4 +1,3 @@
-import { getAssociatedTokenAddressSync } from '@solana/spl-token'
 import {
   AddressLookupTableAccount,
   Connection,
@@ -8,7 +7,7 @@ import {
 } from '@solana/web3.js'
 import { toUint8Array } from 'js-base64'
 
-import { C3_CORE_MAINNET_CONFIG } from '@/constants/c3-core-mainnet'
+import { C3_CORE_MAINNET_CONFIG } from '../constants/c3-core-mainnet.ts'
 import {
   C3_CORE_MAINNET_ASSETS,
   allocateC3Core,
@@ -18,15 +17,15 @@ import {
   C3CoreMainnetLegId,
   C3CoreMainnetPurchaseState,
   C3_CORE_MAINNET_POLICY,
-} from '@/services/c3-core-mainnet-core'
-import { C3CoreMainnetPurchaseIntent, C3CoreMainnetStore, deriveStateFromLegs } from '@/services/c3-core-mainnet-state'
-import { C3PersistenceError } from '@/services/c3-core-mainnet-state'
+} from './c3-core-mainnet-core.ts'
+import { C3CoreMainnetPurchaseIntent, C3CoreMainnetStore, deriveStateFromLegs } from './c3-core-mainnet-state.ts'
+import { C3PersistenceError } from './c3-core-mainnet-state.ts'
 import {
   C3MainnetConfirmationProvider,
   C3MainnetLegExpectation,
   recoverC3MainnetSignature,
   reconcileC3MainnetSignature,
-} from '@/services/c3-core-mainnet-reconciliation'
+} from './c3-core-mainnet-reconciliation.ts'
 import {
   flattenC3BuildInstructions,
   decodeC3Blockhash,
@@ -38,7 +37,8 @@ import {
   C3_MAINNET_ROUTE_ACCOUNT_LIMITS,
   validateC3AddressLookupTableRecord,
   validateC3CoreMainnetTransaction,
-} from '@/services/c3-core-mainnet-validation'
+} from './c3-core-mainnet-validation.ts'
+import { getAssociatedTokenAddressSync } from '../utils/spl-token-compatible.ts'
 
 type MainnetWalletSender = (transaction: VersionedTransaction, minContextSlot: number) => Promise<string>
 

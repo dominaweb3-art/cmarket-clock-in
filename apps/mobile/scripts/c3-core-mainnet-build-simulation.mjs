@@ -11,7 +11,8 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js'
-import { getAssociatedTokenAddressSync } from '@solana/spl-token'
+
+import { getAssociatedTokenAddressSync } from '../utils/spl-token-compatible.ts'
 
 const mobileDir = path.resolve(new URL('.', import.meta.url).pathname, '..')
 const generatedResultsDir = path.join(mobileDir, 'dist', 'generated-results')

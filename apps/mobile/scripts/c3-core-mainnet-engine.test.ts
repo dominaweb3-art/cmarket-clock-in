@@ -1,4 +1,3 @@
-import { getAssociatedTokenAddressSync } from '@solana/spl-token'
 import { fromUint8Array } from 'js-base64'
 import {
   AddressLookupTableAccount,
@@ -27,6 +26,7 @@ import {
   type JupiterBuildResponse,
   type JupiterInstructionPayload,
 } from '../services/c3-core-mainnet-validation.ts'
+import { getAssociatedTokenAddressSync } from '../utils/spl-token-compatible.ts'
 
 const assert = {
   equal(actual: unknown, expected: unknown) {

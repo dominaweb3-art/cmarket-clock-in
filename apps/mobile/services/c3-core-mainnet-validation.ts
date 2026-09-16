@@ -1,9 +1,9 @@
-import { getAssociatedTokenAddressSync } from '@solana/spl-token'
 import { AddressLookupTableAccount, PublicKey, TransactionInstruction, VersionedTransaction } from '@solana/web3.js'
 import { toUint8Array } from 'js-base64'
 
 import { C3_CORE_MAINNET_CONFIG } from '../constants/c3-core-mainnet.ts'
 import type { C3CoreMainnetLegId } from './c3-core-mainnet-core.ts'
+import { getAssociatedTokenAddressSync } from '../utils/spl-token-compatible.ts'
 
 export type JupiterInstructionPayload = Readonly<{
   programId: string
