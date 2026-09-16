@@ -1,18 +1,20 @@
 # C3 Settlement Architecture
 
-Status: Phase 5A design only. This document does not enable settlement, change the mobile transaction, or authorize wallet activity.
+Status: Phase 5C Mainnet feasibility design only. This document does not enable settlement, change the mobile transaction, or authorize wallet activity.
 
 ## 1. Current truth and design decision
 
-The verified C Market flow is a Devnet USDC payment from the buyer wallet to the configured C3 treasury. It does not currently acquire or distribute SOL, USDC, or JitoSOL. Until on-chain evidence exists, the product must describe the basket as planned and must not claim that a 50/30/20 allocation occurred.
+The verified C Market flow is a Devnet USDC payment from the buyer wallet to the configured C3 treasury. It does not currently acquire or distribute basket assets. The former C3 target of SOL 50% / USDC 30% / JitoSOL 20% is superseded by C3 Core: Bitcoin exposure 40% / Ethereum exposure 30% / Solana exposure 30%. Until on-chain evidence exists, the product must describe the basket as planned and must not claim that an allocation occurred.
+
+The Devnet payment release remains fully functional and separate from the future Mainnet C3 Core design. No Mainnet values are copied into the mobile app or its public configuration by this document-only phase.
 
 ### Options considered
 
-| Option | Strengths | Risks and delivery cost | Decision |
-| --- | --- | --- | --- |
-| Non-custodial basket settlement into the buyer wallet | Best custody posture; the buyer receives the assets directly; a single atomic transaction can be inspected in Explorer; compatible with Mobile Wallet Adapter because the buyer signs the transaction. | Requires a settlement contract or carefully composed instruction set, live liquidity for every leg, quote expiry/slippage controls, ATA handling, transaction-size/compute management, and a safe way to source the payment while delivering outputs. Devnet liquidity is not a safe assumption. | Canonical production target, after audited implementation and Mainnet liquidity verification. |
-| Treasury-managed settlement with verifiable accounting | Closest to the current payment model; can support asynchronous execution and reconciliation; easier to demonstrate with an indexed receipt and explicit status. | Custody and operational-key risk; an off-chain ledger alone is not proof of allocation; partial execution, insolvency, and legal/product-claim risk are material. It is not acceptable to call a payment “settled” before every leg is proven. | Recommended hackathon architecture: a narrowly scoped, transparent settlement service and on-chain receipt/escrow design, initially disabled on Devnet when real routes are unavailable. |
-| Tokenized vault or receipt token | Composable position and transferability; on-chain ownership can be easy to query. | Requires a vault/share-price/redemption design, token authority controls, NAV/oracle policy, audits, accounting, and stronger legal disclosure. A receipt token can itself look like an investment product. | Defer; not an MVP or a safe shortcut. |
+| Option                                                 | Strengths                                                                                                                                                                                              | Risks and delivery cost                                                                                                                                                                                                                                                                          | Decision                                                                                                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Non-custodial basket settlement into the buyer wallet  | Best custody posture; the buyer receives the assets directly; a single atomic transaction can be inspected in Explorer; compatible with Mobile Wallet Adapter because the buyer signs the transaction. | Requires a settlement contract or carefully composed instruction set, live liquidity for every leg, quote expiry/slippage controls, ATA handling, transaction-size/compute management, and a safe way to source the payment while delivering outputs. Devnet liquidity is not a safe assumption. | Canonical production target, after audited implementation and Mainnet liquidity verification.                                                                                            |
+| Treasury-managed settlement with verifiable accounting | Closest to the current payment model; can support asynchronous execution and reconciliation; easier to demonstrate with an indexed receipt and explicit status.                                        | Custody and operational-key risk; an off-chain ledger alone is not proof of allocation; partial execution, insolvency, and legal/product-claim risk are material. It is not acceptable to call a payment “settled” before every leg is proven.                                                   | Recommended hackathon architecture: a narrowly scoped, transparent settlement service and on-chain receipt/escrow design, initially disabled on Devnet when real routes are unavailable. |
+| Tokenized vault or receipt token                       | Composable position and transferability; on-chain ownership can be easy to query.                                                                                                                      | Requires a vault/share-price/redemption design, token authority controls, NAV/oracle policy, audits, accounting, and stronger legal disclosure. A receipt token can itself look like an investment product.                                                                                      | Defer; not an MVP or a safe shortcut.                                                                                                                                                    |
 
 ### Recommendation
 
@@ -150,6 +152,80 @@ Jito’s direct Devnet path is `conditional`, not a GO: the official program, st
 
 Smallest truthful hackathon alternative: preserve the verified USDC payment, expose the C3 weights as a planned methodology, and add only a read-only receipt state such as “payment recorded; basket settlement unavailable on Devnet.” Do not use simulated assets or present a simulated allocation as real. Re-run this preflight after any network, mint, or official-route change before implementing settlement.
 
+## 12. Phase 5C — C3 Core Mainnet feasibility preflight
+
+Observed at `2026-09-16T01:36:21.594Z` UTC using read-only Mainnet RPC and Jupiter quote requests. This section is evidence and design guidance only; it does not switch the mobile app to Mainnet and does not authorize or build a transaction.
+
+### Canonical target and asset selection
+
+The fixed C3 Core target is:
+
+- Bitcoin exposure: 40%, represented by cbBTC.
+- Ethereum exposure: 30%, represented by Wormhole Portal ETH.
+- Solana exposure: 30%, represented by native SOL. WSOL may be used only as an internal swap-route asset and must be unwrapped before presenting the final balance when the route requires it.
+
+The old SOL 50% / USDC 30% / JitoSOL 20% composition is superseded and must not be used in new Mainnet materials or implementation plans.
+
+Input USDC was verified on Mainnet as mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, owned by the SPL Token Program, initialized, with 6 decimals. The read-only script also checks its finalized supply before quoting.
+
+Preferred Bitcoin representation: cbBTC mint `cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij`. Finalized RPC data reported SPL Token Program ownership, 8 decimals, and supply `3385.24163108` cbBTC. Jupiter’s token directory marked it verified, with approximately `$28.28M` liquidity, approximately `$53.90M` 24-hour buy volume, approximately `$50.24M` 24-hour sell volume, and approximately 73,151 holders at observation time. Coinbase states that cbBTC is backed 1:1 by BTC held in Coinbase custody. This creates centralized issuer, custody, redemption, jurisdiction, and potential depeg risks; a Jupiter verification badge is not a solvency or redemption guarantee.
+
+Ethereum candidates compared:
+
+| Candidate           | Mainnet mint and observed facts                                                                                                                                                                                                                                                                                                                           | Decision and risks                                                                                                                                                                                                                                                                                                                  |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wormhole Portal ETH | `7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs`; finalized RPC reported SPL Token Program ownership, 8 decimals, and supply `41538.62044554`. Jupiter marked it verified/major/strict, with approximately `$21.66M` liquidity, approximately `$19.42M` 24-hour buy volume, approximately `$19.64M` 24-hour sell volume, and approximately 127,552 holders. | Selected. The representation has the strongest observed combination of current verification, liquidity, volume, and routing. Wormhole’s wrapped-token model depends on source-chain custody/locking, Guardian-attested messages, destination minting, and later redemption; bridge, custodian, depeg, and operational risks remain. |
+| Sollet soETH        | `2FPyTwcZLUg1MDrwsyoP4D6s1tM7hAkHYRjkNb5w6Pxk`; finalized RPC reported SPL Token Program ownership, 6 decimals, and supply `483499.577393`. Jupiter marked it verified/strict/community, but observed liquidity was approximately `$34.6K`, 24-hour buy and sell volume approximately `$7.3K` each, with organic score 0.                                 | Rejected for the target basket. Current primary issuer, backing, bridge, and redemption documentation was not established; low liquidity and legacy operational risk make it unsuitable for a 30% strategic allocation.                                                                                                             |
+| Wormhole wstETH     | Jupiter search returned `ZScHuTtqZukUrtZS43teTKGs2VqkKL8k4QCouR2n6Uo`.                                                                                                                                                                                                                                                                                    | Not selected: it is staked-Ethereum exposure rather than plain ETH exposure, and the observed liquidity was approximately `$10`; its additional staking, bridge, redemption, and depeg risks do not fit this fixed ETH sleeve.                                                                                                      |
+
+The selection is therefore based on verified mint identity, observed liquidity and volume, current route quality, and a documented bridge model—not on the ETH symbol alone.
+
+### Read-only Jupiter quote results
+
+The reusable script is `apps/mobile/scripts/c3-core-mainnet-feasibility-preflight.mjs`, invoked with `npm run c3:core:mainnet-preflight` from `apps/mobile`. It calls the current `/swap/v1/quote` endpoint with Mainnet USDC and 100 bps slippage. It never requests wallet authorization, builds or serializes a transaction, or submits one. Keyless requests are rate-limited; the script spaces requests and uses the official lite-api endpoint only as a read-only fallback after a 429. No API-key value is printed or persisted.
+
+| Purchase | Leg                    |  Expected output |   Minimum output |   Price impact (Jupiter value) | Route / DEXes                                         |
+| -------- | ---------------------- | ---------------: | ---------------: | -----------------------------: | ----------------------------------------------------- |
+| 50 USDC  | 20 USDC -> cbBTC       | 0.00026460 cbBTC | 0.00026196 cbBTC | 0.0001057728026860619440170314 | HumidiFi                                              |
+| 50 USDC  | 15 USDC -> Portal ETH  |   0.00625950 ETH |   0.00619691 ETH |                              0 | HumidiFi                                              |
+| 50 USDC  | 15 USDC -> native SOL  |  0.155059132 SOL |  0.153508541 SOL |                              0 | Byreal -> Byreal; lite-api fallback after primary 429 |
+| 100 USDC | 40 USDC -> cbBTC       | 0.00052928 cbBTC | 0.00052399 cbBTC |                              0 | GoonFi V2                                             |
+| 100 USDC | 30 USDC -> Portal ETH  |   0.01251858 ETH |   0.01239340 ETH | 0.0000724052805505810284905958 | HumidiFi                                              |
+| 100 USDC | 30 USDC -> native SOL  |  0.310057430 SOL |  0.306956856 SOL |                              0 | HumidiFi                                              |
+| 500 USDC | 200 USDC -> cbBTC      | 0.00264623 cbBTC | 0.00261977 cbBTC | 0.0000576708230303945726965002 | TesseraV                                              |
+| 500 USDC | 150 USDC -> Portal ETH |   0.06259774 ETH |   0.06197177 ETH |                              0 | TesseraV                                              |
+| 500 USDC | 150 USDC -> native SOL |  1.550402603 SOL |  1.534898577 SOL |                              0 | BisonFi                                               |
+
+The quote response exposes net output, route plans, DEX labels, `otherAmountThreshold`, price impact, and context slot. These quote-only responses did not return explicit fee fields; the `fees` result is therefore recorded as “not returned by the quote response; reflected only in the net output amount,” not as zero. The 165-byte SPL token-account rent estimate was `1,488,440` lamports. Exact setup/cleanup costs are route- and account-dependent and were not built. cbBTC and Portal ETH may require user-owned associated token accounts; native SOL has no final token account; internal WSOL setup is route-dependent.
+
+The quote payload did not provide a transaction expiry. A future implementation must rebuild quotes immediately before signing, then build with a fresh recent blockhash and retain `lastValidBlockHeight`. The recorded timestamp and context slot are evidence of the read-only quote, not a guarantee that the quote remains executable.
+
+### Decision: CONDITIONAL_GO
+
+The requested Mainnet routes were available for all 50, 100, and 500 USDC purchase sizes at the observation timestamp, so a production proof-of-concept is feasible. This is not a release approval. The decision remains conditional on transaction-build and simulation evidence, account setup, v0 transaction sizing/compute measurements, scoped API rate control, wallet UX, security review, custody/bridge risk disclosures, and legal/product review.
+
+### Transaction packaging and recovery recommendation
+
+A single versioned transaction was not proven because the read-only phase intentionally did not call a build endpoint, serialize instructions, or simulate. Three swaps plus ATA creation, possible WSOL wrap/unwrap, compute-budget instructions, and address tables may exceed safe size or compute margins. The safest MVP is three explicit sequential swap transactions:
+
+1. Quote USDC -> cbBTC for 40%, show route, price impact, minimum output, programs, and fees, and request one MWA approval.
+2. After finality, quote USDC -> Portal ETH for 30%, show the same details, and request a second MWA approval.
+3. After finality, quote USDC -> native SOL for 30% (using WSOL only internally if required), show the same details, and request a third MWA approval.
+
+Each route must send output directly to the same buyer wallet. A leg failure stops the sequence, reconciles confirmed signatures and balances, marks the basket partial/recoverable, and never claims the target allocation. The app must not auto-retry a failed or expired swap; the user may explicitly retry only the missing leg with a fresh quote and fresh MWA approval. If the first leg succeeds and a later leg fails, no duplicate credit or silent treasury custody is created.
+
+MWA should present Mainnet as a separate, explicit future release context and use `signAndSendTransactions` for each approved swap. The wallet must show the exact input mint/amount, destination wallet, output mint/route, minimum output, network, and Explorer link. No background or automatic signing is permitted.
+
+### Non-custodial production flow and future rebalance
+
+The user selects C3 Core and sees fixed 40/30/30 weights. C Market reads balances and obtains fresh quotes. USDC leaves the user wallet only through the user-approved Jupiter swaps. cbBTC, Portal ETH, and native SOL return directly to that same user wallet. C Market never receives or controls a private key, and the existing Devnet treasury payment remains a separate prototype path.
+
+A future rebalance must be user-authorized: read current holdings, compare them with target weights, calculate deltas, obtain fresh bounded quotes, show all fees/slippage/minimums, and request explicit MWA approvals. There is no automatic rebalancing, custody, yield, or guaranteed-return claim.
+
+### Required future evidence and remaining blockers
+
+Before Mainnet implementation, build and simulate every leg, measure v0 size and compute, test ATA creation and rent, verify output ownership, enforce mint/program/route allowlists, handle quote and blockhash expiry, rate-limit the Jupiter integration without putting a secret in Expo, and complete wallet, security, custody, bridge, legal, and product-copy review. Mainnet liquidity observations do not prove redemption or solvency. The Devnet app and verified Devnet payment must remain unchanged and independently releasable.
+
 ## Sources
 
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/get-started/react-native/mobile-wallet-adapter
@@ -164,3 +240,11 @@ Smallest truthful hackathon alternative: preserve the verified USDC payment, exp
 - Jito deployed programs and network-specific mints: https://www.jito.network/docs/jitosol/jitosol-liquid-staking/security/deployed-programs/
 - Jito buying or selling JitoSOL: https://www.jito.network/docs/jitosol/get-started/buying-or-selling-jitosol-flow/
 - Jito staking SOL for JitoSOL: https://www.jito.network/docs/jitosol/get-started/stake-sol-for-jitosol-flow/overview/
+- Coinbase cbBTC overview and Solana mint: https://www.coinbase.com/cbbtc
+- Coinbase cbBTC proof of reserves: https://www.coinbase.com/en-it/cbbtc/proof-of-reserves
+- Jupiter current quote API documentation: https://dev.jup.ag/docs/swap/v1/get-quote
+- Jupiter token search documentation: https://dev.jup.ag/docs/tokens/v2/search
+- Jupiter API rate limits: https://dev.jup.ag/docs/portal/rate-limits
+- Wormhole Wrapped Token Transfers: https://wormhole.com/docs/products/token-transfers/wrapped-token-transfers/overview/
+- Wormhole Connect supported token configuration: https://wormhole.com/docs/products/connect/configuration/configuration-v0/
+- Solana token verification guidance: https://solana.com/docs/tokens/how-to-verify-a-token

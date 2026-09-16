@@ -6,6 +6,7 @@
     "android:export": "NODE_ENV=production expo export --platform android --output-dir dist/release-check --clear",
     "android:release:validate": "NODE_ENV=production expo prebuild --platform android --clean --no-install && cd android && NODE_ENV=production ./gradlew assembleRelease",
     "build": "tsc --noEmit && npm run android:build",
+    "c3:core:mainnet-preflight": "node ./scripts/c3-core-mainnet-feasibility-preflight.mjs",
     "c3:preflight": "node ./scripts/c3-devnet-feasibility-preflight.mjs",
     "ci": "tsc --noEmit && npm run lint:check && npm run format:check && npm run android:build",
     "dev": "expo start",
