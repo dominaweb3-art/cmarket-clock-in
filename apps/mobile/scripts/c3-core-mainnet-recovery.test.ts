@@ -12,9 +12,16 @@ import {
   verifyC3MainnetTransactionEvidence,
 } from '../services/c3-core-mainnet-reconciliation.ts'
 import type { C3MainnetTransactionEvidence } from '../services/c3-core-mainnet-reconciliation.ts'
+import {
+  REALISTIC_FIXTURE_CBBTC_DESTINATION,
+  REALISTIC_FIXTURE_ROUTE_PROGRAM,
+  REALISTIC_FIXTURE_SIGNATURE,
+  REALISTIC_FIXTURE_WALLET,
+  realisticC3Evidence,
+} from './fixtures/c3-core-mainnet-realistic-fixtures.ts'
 
-const wallet = 'DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej'
-const signature = '99eUso3aSbE9tqGSTXzo3TLfKb9RkMTURrHKQ1K7Zh3BbeqPevr5E1iCbpTjqHuTFLtfxTTD5ekfVuZFzQyEQf8'
+const wallet = REALISTIC_FIXTURE_WALLET
+const signature = REALISTIC_FIXTURE_SIGNATURE
 const secondSignature = 'AKAh9LUoWFG2sxAMotzmLNpKwPTCiG6Q4YTwAinZMnkvYKPAKVPwYSfoQDp8XLKWzpbCNx66XB1BrcD1ZUPqU39'
 const minOutput = '26000'
 const jupiter = C3_CORE_MAINNET_CONFIG.programs.jupiterSwapV6
@@ -68,35 +75,17 @@ function expectation(overrides: Partial<Parameters<typeof verifyC3MainnetTransac
     inputMint: C3_CORE_MAINNET_CONFIG.assets.input,
     inputAmountBaseUnits: '20000000',
     outputMint: C3_CORE_MAINNET_CONFIG.assets.cbBTC,
-    destination: 'EXPP2i58cX56m1A5cAvENJsSAmb2DL1PjEqqrnH83Z2Q',
+    destination: REALISTIC_FIXTURE_CBBTC_DESTINATION,
     minimumOutputBaseUnits: minOutput,
     jupiterProgramId: jupiter,
+    approvedRouteProgramIds: [REALISTIC_FIXTURE_ROUTE_PROGRAM],
     ...overrides,
   }
 }
 
 function evidence(overrides: Partial<C3MainnetTransactionEvidence> = {}): C3MainnetTransactionEvidence {
   return {
-    signature,
-    cluster: 'mainnet-beta',
-    slot: 100,
-    blockTimeMs: 10_000,
-    finalized: true,
-    metaErr: null,
-    feePayer: wallet,
-    signerAddresses: [wallet],
-    jupiterProgramIds: [jupiter],
-    input: { owner: wallet, mint: C3_CORE_MAINNET_CONFIG.assets.input, amountBaseUnits: '20000000' },
-    output: {
-      owner: wallet,
-      mint: C3_CORE_MAINNET_CONFIG.assets.cbBTC,
-      amountBaseUnits: '26474',
-      destination: expectation().destination,
-    },
-    treasuryAddresses: [],
-    lookupTablesValidated: true,
-    effectsComplete: true,
-    sol: { outputLamports: '0', feeLamports: '5000', userLamportsReturned: '0' },
+    ...realisticC3Evidence('cbBTC'),
     ...overrides,
   }
 }
@@ -124,7 +113,17 @@ for (const [name, override] of [
       },
     },
   ],
-  ['missing output', { output: undefined }],
+  [
+    'missing output',
+    {
+      output: undefined,
+      raw: {
+        ...evidence().raw,
+        preTokenBalances: evidence().raw.preTokenBalances.slice(0, 1),
+        postTokenBalances: evidence().raw.postTokenBalances.slice(0, 1),
+      },
+    },
+  ],
   ['missing effects', { effectsComplete: false }],
   ['unknown program', { unknownProgramIds: ['BadProgram11111111111111111111111111111111111'] }],
   ['undefined meta error', { metaErr: undefined }],
@@ -144,7 +143,8 @@ assert(
 )
 
 const provider = (name: string, item: C3MainnetTransactionEvidence, recent = false) => ({
-  name,
+  providerId: name,
+  endpoint: `https://${name}.example.invalid/rpc`,
   cluster: 'mainnet-beta' as const,
   async getFinalizedTransaction() {
     return item
@@ -192,7 +192,7 @@ const malformedProvider = await reconcileC3MainnetSignature(
   expected,
 )
 assert(malformedProvider.status === 'reconciliation_required', 'malformed provider response must block')
-const recovered = await recoverC3MainnetSignature(provider('history', evidence(), true), {
+const recovered = await recoverC3MainnetSignature(provider('history', evidence({ blockTimeMs: 10_000 }), true), {
   ...expected,
   createdAtMs: 5_000,
   nowMs: 20_000,
@@ -208,7 +208,7 @@ const ambiguous = await recoverC3MainnetSignature(
   {
     ...provider('history', evidence(), true),
     async getRecentTransactions() {
-      return [evidence(), evidence({ signature: secondSignature })]
+      return [evidence({ blockTimeMs: 10_000 }), evidence({ signature: secondSignature, blockTimeMs: 10_000 })]
     },
   },
   { ...expected, createdAtMs: 5_000, nowMs: 20_000 },

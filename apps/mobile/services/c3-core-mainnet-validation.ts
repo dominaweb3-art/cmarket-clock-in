@@ -73,6 +73,87 @@ export type C3CoreMainnetValidationResult = Readonly<{
   issues: string[]
 }>
 
+export class C3TransactionSizeError extends Error {
+  readonly code = 'c3_route_too_large' as const
+  readonly estimatedBytes: number
+  readonly serializationOverflow: boolean
+
+  constructor(estimatedBytes: number, serializationOverflow = false) {
+    super(`C3 Mainnet route exceeds the ${C3_CORE_MAINNET_CONFIG.policy.maxTransactionBytes}-byte packet limit.`)
+    this.name = 'C3TransactionSizeError'
+    this.estimatedBytes = estimatedBytes
+    this.serializationOverflow = serializationOverflow
+  }
+}
+
+export const C3_MAINNET_ROUTE_ACCOUNT_LIMITS = [64, 48, 32] as const
+
+export function estimateC3VersionedTransactionBytes(transaction: VersionedTransaction): number {
+  const message = transaction.message
+  if (message.version !== 0) throw new Error('C3 Mainnet transactions must use versioned message v0.')
+  const shortVectorBytes = (value: number) => {
+    let remaining = value
+    let bytes = 0
+    do {
+      remaining >>= 7
+      bytes += 1
+    } while (remaining > 0)
+    return bytes
+  }
+  const instructionBytes = message.compiledInstructions.reduce(
+    (total, instruction) =>
+      total +
+      1 +
+      shortVectorBytes(instruction.accountKeyIndexes.length) +
+      instruction.accountKeyIndexes.length +
+      shortVectorBytes(instruction.data.length) +
+      instruction.data.length,
+    0,
+  )
+  const lookupBytes = message.addressTableLookups.reduce(
+    (total, lookup) =>
+      total +
+      32 +
+      shortVectorBytes(lookup.writableIndexes.length) +
+      lookup.writableIndexes.length +
+      shortVectorBytes(lookup.readonlyIndexes.length) +
+      lookup.readonlyIndexes.length,
+    0,
+  )
+  const messageBytes =
+    1 +
+    3 +
+    shortVectorBytes(message.staticAccountKeys.length) +
+    message.staticAccountKeys.length * 32 +
+    32 +
+    shortVectorBytes(message.compiledInstructions.length) +
+    instructionBytes +
+    shortVectorBytes(message.addressTableLookups.length) +
+    lookupBytes
+  const signatureCount = transaction.signatures.length
+  return shortVectorBytes(signatureCount) + signatureCount * 64 + messageBytes
+}
+
+export function assertC3VersionedTransactionFits(transaction: VersionedTransaction): number {
+  const estimatedBytes = estimateC3VersionedTransactionBytes(transaction)
+  if (estimatedBytes > C3_CORE_MAINNET_CONFIG.policy.maxTransactionBytes) {
+    throw new C3TransactionSizeError(estimatedBytes)
+  }
+  try {
+    const serializedBytes = transaction.serialize().length
+    if (serializedBytes > C3_CORE_MAINNET_CONFIG.policy.maxTransactionBytes) {
+      throw new C3TransactionSizeError(serializedBytes)
+    }
+    return serializedBytes
+  } catch (error) {
+    if (error instanceof C3TransactionSizeError) throw error
+    if (error instanceof Error && /encoding overruns Uint8Array|encoding overruns/i.test(error.message)) {
+      throw new C3TransactionSizeError(estimatedBytes, true)
+    }
+    throw error
+  }
+}
+
 const JUPITER_ROUTE_V2_DISCRIMINATOR = [187, 100, 250, 204, 49, 196, 175, 20]
 const JUPITER_SHARED_ACCOUNTS_ROUTE_V2_DISCRIMINATOR = [209, 152, 83, 147, 124, 254, 216, 233]
 const JUPITER_EVENT_AUTHORITY = 'D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf'

@@ -24,7 +24,6 @@ import { C3PersistenceError } from '@/services/c3-core-mainnet-state'
 import {
   C3MainnetConfirmationProvider,
   C3MainnetLegExpectation,
-  createConnectionConfirmationProvider,
   recoverC3MainnetSignature,
   reconcileC3MainnetSignature,
 } from '@/services/c3-core-mainnet-reconciliation'
@@ -34,6 +33,9 @@ import {
   getC3JupiterSourceTokenAccount,
   JupiterBuildResponse,
   toC3TransactionInstruction,
+  assertC3VersionedTransactionFits,
+  C3TransactionSizeError,
+  C3_MAINNET_ROUTE_ACCOUNT_LIMITS,
   validateC3AddressLookupTableRecord,
   validateC3CoreMainnetTransaction,
 } from '@/services/c3-core-mainnet-validation'
@@ -85,9 +87,10 @@ export class C3CoreMainnetEngine {
     assertC3MainnetExecution(options.configuredCluster)
     this.connection = options.connection ?? new Connection(C3_CORE_MAINNET_CONFIG.policy.rpcEndpoint, 'confirmed')
     this.store = options.store ?? new C3CoreMainnetStore()
-    this.confirmationProviders = options.confirmationProviders ?? [
-      createConnectionConfirmationProvider('engine-rpc', this.connection),
-    ]
+    this.confirmationProviders = options.confirmationProviders ?? []
+    if (this.confirmationProviders.length < 2) {
+      throw new Error('C3 Mainnet requires two explicitly configured independent confirmation providers.')
+    }
     new PublicKey(options.walletAddress)
   }
 
@@ -111,29 +114,7 @@ export class C3CoreMainnetEngine {
     const quotingIntent = await this.updatePurchaseState(intent, 'quoting')
     try {
       const inputAmountBaseUnits = BigInt(intent.legs[leg].allocationUsdcBaseUnits)
-      const build = await this.fetchBuild(leg, inputAmountBaseUnits)
-      const transactionData = await this.compileBuild(build)
-      const currentBlockHeight = await this.connection.getBlockHeight('confirmed')
-      if (currentBlockHeight > build.blockhashWithMetadata.lastValidBlockHeight) {
-        throw new Error('Jupiter returned an expired blockhash. Request a fresh quote.')
-      }
-
-      await this.assertSourceAndDestinationAccounts(build, leg)
-
-      const validation = validateC3CoreMainnetTransaction({
-        walletAddress: this.options.walletAddress,
-        leg,
-        inputAmountBaseUnits,
-        build,
-        transaction: transactionData.transaction,
-        treasuryAddress: this.options.treasuryAddress,
-      })
-      if (!validation.passed) throw new Error(`Transaction validation failed: ${validation.issues.join('; ')}`)
-
-      const serializedBytes = transactionData.transaction.serialize().length
-      if (serializedBytes > C3_CORE_MAINNET_POLICY.maxTransactionBytes) {
-        throw new Error(`Transaction exceeds the ${C3_CORE_MAINNET_POLICY.maxTransactionBytes}-byte limit.`)
-      }
+      const { build, transactionData } = await this.prepareBuild(leg, inputAmountBaseUnits)
 
       const review: C3CoreMainnetReview = {
         purchaseId,
@@ -321,7 +302,47 @@ export class C3CoreMainnetEngine {
     return intent
   }
 
-  private async fetchBuild(leg: C3CoreMainnetLegId, inputAmountBaseUnits: bigint): Promise<JupiterBuildResponse> {
+  private async prepareBuild(leg: C3CoreMainnetLegId, inputAmountBaseUnits: bigint) {
+    let lastSizeError: C3TransactionSizeError | undefined
+    for (const maxAccounts of C3_MAINNET_ROUTE_ACCOUNT_LIMITS) {
+      try {
+        const build = await this.fetchBuild(leg, inputAmountBaseUnits, maxAccounts)
+        const transactionData = await this.compileBuild(build)
+        const currentBlockHeight = await this.connection.getBlockHeight('confirmed')
+        if (currentBlockHeight > build.blockhashWithMetadata.lastValidBlockHeight) {
+          throw new Error('Jupiter returned an expired blockhash. Request a fresh quote.')
+        }
+        await this.assertSourceAndDestinationAccounts(build, leg)
+        const validation = validateC3CoreMainnetTransaction({
+          walletAddress: this.options.walletAddress,
+          leg,
+          inputAmountBaseUnits,
+          build,
+          transaction: transactionData.transaction,
+          treasuryAddress: this.options.treasuryAddress,
+        })
+        if (!validation.passed) throw new Error(`Transaction validation failed: ${validation.issues.join('; ')}`)
+        return { build, transactionData }
+      } catch (error) {
+        if (error instanceof C3TransactionSizeError) {
+          lastSizeError = error
+          continue
+        }
+        throw error
+      }
+    }
+    throw new Error(
+      `No compliant Jupiter route fits the ${C3_CORE_MAINNET_POLICY.maxTransactionBytes}-byte packet limit${
+        lastSizeError ? ` (estimated ${lastSizeError.estimatedBytes} bytes)` : ''
+      }. The leg is unavailable until a fresh smaller route is available.`,
+    )
+  }
+
+  private async fetchBuild(
+    leg: C3CoreMainnetLegId,
+    inputAmountBaseUnits: bigint,
+    maxAccounts: number,
+  ): Promise<JupiterBuildResponse> {
     const outputMint =
       leg === 'cbBTC'
         ? C3_CORE_MAINNET_ASSETS.cbBTC
@@ -335,7 +356,7 @@ export class C3CoreMainnetEngine {
     url.searchParams.set('taker', this.options.walletAddress)
     url.searchParams.set('swapMode', 'ExactIn')
     url.searchParams.set('slippageBps', String(C3_CORE_MAINNET_POLICY.maximumSlippageBps))
-    url.searchParams.set('maxAccounts', '64')
+    url.searchParams.set('maxAccounts', String(maxAccounts))
     url.searchParams.set('wrapAndUnwrapSol', 'true')
     url.searchParams.set('blockhashSlotsToExpiry', String(C3_CORE_MAINNET_POLICY.blockhashSlotsToExpiry))
     url.searchParams.set('computeUnitPricePercentile', 'medium')
@@ -394,10 +415,9 @@ export class C3CoreMainnetEngine {
       recentBlockhash: blockhash,
       instructions,
     }).compileToV0Message(lookupTables)
-    return {
-      transaction: new VersionedTransaction(message),
-      minContextSlot: await this.connection.getSlot('confirmed'),
-    }
+    const transaction = new VersionedTransaction(message)
+    const serializedBytes = assertC3VersionedTransactionFits(transaction)
+    return { transaction, serializedBytes, minContextSlot: await this.connection.getSlot('confirmed') }
   }
 
   private async loadValidatedLookupTables(

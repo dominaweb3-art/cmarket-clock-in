@@ -314,10 +314,39 @@ Confirmation is an injectable trust boundary. Future execution requires two inde
 
 The focused regression suite covers malformed and unknown persisted schemas, wallet/amount/mint/allocation/destination tampering, invalid signatures, duplicate IDs, stale and concurrent writes, staged-storage failures, restart visibility of submitted state, confirmed-leg immutability, RPC agreement/disagreement/timeout/malformed evidence, wrong sender or mint, excessive debit, output below minimum, missing effects, finalized on-chain errors, and zero/one/multiple history recovery matches. These tests use sanitized evidence only; they never request a wallet, sign, submit, or transfer.
 
+## Phase 5I.1 — reconciliation evidence, provider quorum, and route sizing hardening
+
+This phase keeps Mainnet disabled and leaves the verified Devnet payment flow unchanged. It hardens the disabled Mainnet engine and its read-only security harness; it does not request a wallet, sign, submit, or transfer funds.
+
+### Finalized transaction evidence
+
+`services/c3-core-mainnet-reconciliation.ts` now requires raw finalized v0 evidence obtained with `maxSupportedTransactionVersion: 0`. The evidence includes static and loaded account keys, every outer and inner instruction with decoded program/account references and base64 data, pre/post SPL token balances, pre/post lamport balances, fees, logs, slot, block time, finality, and independently resolved address lookup tables. Lookup tables are fetched from RPC, checked against the official ALT owner, activity/current-slot rules, referenced indexes, and loaded addresses. Missing or malformed fields fail closed.
+
+Reconciliation validates the connected wallet as the only signer and fee payer, the exact approved USDC debit, user-owned output accounts, expected mints and minimum output, native SOL/temporary WSOL accounting, allowed route programs, token/system/ATA/compute instruction semantics, and prohibited authority, approval, delegate, treasury, arbitrary transfer, and unsafe-close effects. A finalized transaction with an RPC error is reported as `failed_on_chain` only after the same complete evidence checks; incomplete or conflicting evidence remains `reconciliation_required`.
+
+### Independent RPC quorum and evidence fingerprints
+
+Production confirmation now requires at least two explicitly configured Mainnet providers. Each provider must have a non-empty distinct identity and a distinct normalized endpoint; duplicate IDs, duplicate endpoints, invalid endpoints, missing responses, timeouts, malformed evidence, or semantic disagreement fail closed. Semantic quorum includes transaction signature, cluster, slot, block time, finality, error, signer/fee payer, program IDs, balances, instructions, logs, and ALT evidence. Diagnostic fingerprints additionally include provider identity and block time so evidence cannot be confused across providers or time.
+
+The mobile app intentionally does not configure these providers while Mainnet is disabled. Any future release must inject two independent providers explicitly; one shared RPC endpoint is not sufficient.
+
+### Portal ETH v0 serialization boundary
+
+The previously observed `encoding overruns Uint8Array` failure is a route-size failure at v0 serialization, not a wallet or authorization failure. A deterministic estimator now measures the complete serialized v0 envelope, including signatures, static keys, compiled instructions, and lookup-table references, before calling the web3 serializer. The 1,232-byte packet limit is enforced and serialization overflow is classified as `c3_route_too_large`.
+
+The engine requests fresh routes sequentially with bounded `maxAccounts` candidates of 64, 48, and 32. It retries only after a size-classified route failure, never invokes the wallet for an oversized route, and reports the leg unavailable when no compliant candidate remains. This is a bounded route-shaping fallback, not a guarantee that Portal ETH is always routable or that three legs are atomic.
+
+### Realistic adversarial fixtures and regression coverage
+
+`scripts/fixtures/c3-core-mainnet-realistic-fixtures.ts` contains sanitized v0-shaped evidence with a loaded ALT, nested route CPI, token balance deltas, lamport balances, logs, and a deterministic oversized Portal ETH transaction. `c3-core-mainnet-reconciliation-security.test.ts` covers valid cbBTC, Portal ETH, and SOL evidence; malicious inner destinations; wrong ALT ownership; missing inner evidence; wrong output destinations; treasury references; duplicate provider IDs/endpoints; quorum disagreement; provider-aware fingerprints; the 1,232-byte boundary; and the no-wallet-callback size-failure boundary. Existing engine and recovery suites continue to cover allocation, route validation, persistence, restart, duplicate prevention, and partial-completion recovery.
+
+These are deterministic structural tests, not proof of live Mainnet liquidity or successful execution. The Phase 5H dependency finding remains intentionally outside this phase; no dependency upgrade or audit-force change was made. Before enabling Mainnet, configure two genuinely independent providers, run funded-wallet read-only/supervised validation, and resolve any live Portal ETH route or liquidity blocker separately.
+
 ## Sources
 
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/get-started/react-native/mobile-wallet-adapter
 - Solana Mobile MWA diagrams: https://docs.solanamobile.com/mobile-wallet-adapter/diagrams
+
 - Solana core concepts and transaction limits: https://solana.com/docs/core
 - Solana versioned transactions and ALTs: https://solana.com/es/docs/core/transactions/versioned-transactions
 - Solana confirmation and blockhash expiry: https://solana.com/developers/cookbook/transactions/confirmation

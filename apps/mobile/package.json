@@ -9,6 +9,7 @@
     "c3:core:mainnet:build-simulate": "node ./scripts/c3-core-mainnet-build-simulation.mjs",
     "c3:core:mainnet-preflight": "node ./scripts/c3-core-mainnet-feasibility-preflight.mjs",
     "test:c3-core-mainnet": "node --experimental-strip-types ./scripts/c3-core-mainnet-engine.test.ts",
+    "test:c3-core-mainnet-security": "node --experimental-strip-types ./scripts/c3-core-mainnet-reconciliation-security.test.ts",
     "test:c3-core-mainnet-recovery": "node --experimental-strip-types ./scripts/c3-core-mainnet-recovery.test.ts",
     "c3:preflight": "node ./scripts/c3-devnet-feasibility-preflight.mjs",
     "ci": "tsc --noEmit && npm run lint:check && npm run format:check && npm run android:build",
