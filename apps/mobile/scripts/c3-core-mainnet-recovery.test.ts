@@ -2,7 +2,9 @@ import { C3_CORE_MAINNET_CONFIG } from '../constants/c3-core-mainnet.ts'
 import {
   C3CoreMainnetStore,
   C3PersistenceError,
+  migrateC3PersistedPurchaseIntent,
   C3_CORE_MAINNET_STORAGE_KEY,
+  C3_CORE_MAINNET_STAGING_KEY,
   type C3AsyncStorage,
   validateC3PersistedPurchaseIntent,
 } from '../services/c3-core-mainnet-state.ts'
@@ -290,6 +292,10 @@ storage.failWrites = false
 
 const quoted = await store.get(intent.id)
 assert(quoted, 'quoted intent must remain readable')
+await expectAsyncThrow(
+  () => store.save({ ...quoted, walletAddress: '11111111111111111111111111111111' }),
+  'immutable wallet identity must be protected at save time',
+)
 const ready = await store.save({
   ...quoted,
   state: 'ready_for_review',
@@ -344,17 +350,30 @@ await expectAsyncThrow(
   () => new C3CoreMainnetStore(malformedStorage).list(),
   'malformed persisted JSON must be rejected',
 )
+const stagedStorage = new MemoryStorage()
+stagedStorage.values.set(C3_CORE_MAINNET_STAGING_KEY, JSON.stringify({ schemaVersion: 3, revision: 1, intents: [] }))
+await expectAsyncThrow(
+  () => new C3CoreMainnetStore(stagedStorage).list(),
+  'interrupted staged write must require reconciliation',
+)
 const confirmedStorage = new MemoryStorage()
 const confirmedLegs = Object.fromEntries(
   Object.entries(intent.legs).map(([id, leg]) => [
     id,
-    { ...leg, state: 'confirmed', signature, minimumOutputBaseUnits: minOutput, confirmedOutputBaseUnits: minOutput },
+    {
+      ...leg,
+      state: 'confirmed',
+      signature,
+      minimumOutputBaseUnits: minOutput,
+      confirmedOutputBaseUnits: minOutput,
+      finalizedEvidence: { status: 'finalized', verifiedAt: 10_010, fingerprint: 'fixture-finalized-evidence' },
+    },
   ]),
 )
 const completed = validateC3PersistedPurchaseIntent({ ...intent, state: 'completed', legs: confirmedLegs })
 confirmedStorage.values.set(
   C3_CORE_MAINNET_STORAGE_KEY,
-  JSON.stringify({ schemaVersion: 2, revision: 1, intents: [completed] }),
+  JSON.stringify({ schemaVersion: 3, revision: 1, intents: [completed] }),
 )
 await expectAsyncThrow(
   () =>
@@ -363,6 +382,70 @@ await expectAsyncThrow(
       legs: { ...completed.legs, cbBTC: { ...completed.legs.cbBTC, confirmedOutputBaseUnits: '26001' } },
     }),
   'confirmed legs must be immutable',
+)
+
+const safeLegacyDraft = JSON.parse(JSON.stringify(intent)) as Record<string, unknown>
+safeLegacyDraft.schemaVersion = 2
+const migratedDraft = migrateC3PersistedPurchaseIntent(safeLegacyDraft)
+assert(migratedDraft.schemaVersion === 3 && migratedDraft.state === 'draft', 'safe v2 draft must migrate to v3')
+await expectAsyncThrow(
+  () => Promise.resolve(migrateC3PersistedPurchaseIntent({ ...safeLegacyDraft, state: 'completed' })),
+  'legacy completed purchase without finalized evidence must be quarantined',
+)
+
+const impossiblePartial = {
+  ...intent,
+  state: 'partially_completed' as const,
+  legs: { ...intent.legs, cbBTC: { ...intent.legs.cbBTC, state: 'confirmed' as const } },
+}
+await expectAsyncThrow(
+  () => Promise.resolve(validateC3PersistedPurchaseIntent(impossiblePartial)),
+  'partial purchase without finalized evidence must be rejected',
+)
+await expectAsyncThrow(
+  () =>
+    Promise.resolve(
+      validateC3PersistedPurchaseIntent({
+        ...intent,
+        legs: {
+          ...intent.legs,
+          cbBTC: {
+            ...intent.legs.cbBTC,
+            recovery: {
+              kind: 'bounded_review',
+              reason: 'wallet_interrupted',
+              createdAt: 10_020,
+              expiresAt: 10_020 + 60_000,
+              attempts: 0,
+              maxAttempts: 3,
+            },
+          },
+        },
+      }),
+    ),
+  'pending leg recovery evidence must be rejected',
+)
+await expectAsyncThrow(
+  () =>
+    Promise.resolve(
+      validateC3PersistedPurchaseIntent({
+        ...intent,
+        legs: {
+          ...intent.legs,
+          cbBTC: {
+            ...intent.legs.cbBTC,
+            state: 'submitted_unconfirmed',
+            signature,
+            finalizedEvidence: {
+              status: 'finalized',
+              verifiedAt: 10_020,
+              fingerprint: 'invalid-premature-finalized-evidence',
+            },
+          },
+        },
+      }),
+    ),
+  'finalized evidence outside confirmed state must be rejected',
 )
 
 console.log('C3 Mainnet recovery, persistence, quorum, and duplicate-prevention tests passed.')

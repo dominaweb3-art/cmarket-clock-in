@@ -17,9 +17,11 @@ import type {
   C3PurchaseIntentIdGenerator,
 } from './c3-core-mainnet-core.ts'
 
-export const C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION = 2 as const
-export const C3_CORE_MAINNET_STORAGE_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v2'
-export const C3_CORE_MAINNET_STAGING_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v2.staging'
+export const C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION = 3 as const
+export const C3_CORE_MAINNET_STORAGE_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v3'
+export const C3_CORE_MAINNET_STAGING_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v3.staging'
+export const C3_CORE_MAINNET_LEGACY_STORAGE_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v2'
+export const C3_CORE_MAINNET_LEGACY_STAGING_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v2.staging'
 
 export type C3CoreMainnetLegState =
   | 'pending'
@@ -30,6 +32,21 @@ export type C3CoreMainnetLegState =
   | 'cancelled_before_submission'
   | 'submission_outcome_uncertain'
   | 'reconciliation_required'
+
+export type C3CoreMainnetRecoveryRecord = Readonly<{
+  kind: 'bounded_review'
+  reason: 'wallet_interrupted' | 'missing_signature' | 'storage_conflict' | 'reconciliation_required'
+  createdAt: number
+  expiresAt: number
+  attempts: number
+  maxAttempts: number
+}>
+
+export type C3CoreMainnetFinalizedEvidence = Readonly<{
+  status: 'finalized'
+  verifiedAt: number
+  fingerprint: string
+}>
 
 export type C3CoreMainnetLegRecord = Readonly<{
   id: C3CoreMainnetLegId
@@ -42,6 +59,8 @@ export type C3CoreMainnetLegRecord = Readonly<{
   signature?: string
   minimumOutputBaseUnits?: string
   confirmedOutputBaseUnits?: string
+  finalizedEvidence?: C3CoreMainnetFinalizedEvidence
+  recovery?: C3CoreMainnetRecoveryRecord
   updatedAt: number
   errorCode?: string
 }>
@@ -164,6 +183,28 @@ const LEG_TRANSITIONS: Readonly<Record<C3CoreMainnetLegState, readonly C3CoreMai
   reconciliation_required: ['reconciliation_required', 'awaiting_approval', 'cancelled_before_submission'],
 }
 
+export const C3_STATE_INVARIANT_MATRIX = Object.freeze({
+  draft: 'all legs pending; no confirmation or recovery evidence',
+  quoting: 'no blocked leg; at least one leg remains unresolved',
+  ready_for_review: 'at least one leg awaits approval; no blocked leg',
+  awaiting_wallet: 'at least one leg awaits wallet approval; no blocked leg',
+  submitted_unconfirmed: 'at least one leg has a preserved signature or bounded recovery record',
+  confirmed: 'all legs are finalized and carry validated evidence',
+  failed_on_chain: 'at least one on-chain failure and no unresolved submitted signature',
+  cancelled_before_submission: 'at least one cancelled leg and no confirmed or submitted leg',
+  submission_outcome_uncertain: 'at least one uncertain leg with preserved signature or bounded recovery record',
+  reconciliation_required: 'at least one blocked leg with preserved signature or bounded recovery record',
+  partially_completed: 'at least one confirmed leg and at least one unresolved or failed leg',
+  completed: 'every leg is confirmed with finalized evidence',
+} as const)
+
+const RECOVERY_REASONS = new Set([
+  'wallet_interrupted',
+  'missing_signature',
+  'storage_conflict',
+  'reconciliation_required',
+])
+
 export function validateC3PersistedPurchaseIntent(value: unknown): C3CoreMainnetPurchaseIntent {
   if (!isRecord(value)) throw corrupt('persisted purchase is not an object')
   assertExactKeys(
@@ -227,6 +268,30 @@ export function validateC3PersistedPurchaseIntent(value: unknown): C3CoreMainnet
   return result
 }
 
+/**
+ * Migrate only safe v2 records. Records that cannot prove the new finalized
+ * evidence and recovery invariants are quarantined by the validator instead of
+ * being silently normalized.
+ */
+export function migrateC3PersistedPurchaseIntent(value: unknown): C3CoreMainnetPurchaseIntent {
+  if (!isRecord(value) || value.schemaVersion !== 2) throw unsupportedSchema()
+  return validateC3PersistedPurchaseIntent({ ...value, schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION })
+}
+
+export function createC3BoundedRecoveryRecord(
+  reason: C3CoreMainnetRecoveryRecord['reason'],
+  now = Date.now(),
+): C3CoreMainnetRecoveryRecord {
+  return {
+    kind: 'bounded_review',
+    reason,
+    createdAt: now,
+    expiresAt: now + 24 * 60 * 60 * 1000,
+    attempts: 0,
+    maxAttempts: 3,
+  }
+}
+
 export class C3CoreMainnetStore {
   private readonly storage: C3AsyncStorage
 
@@ -253,6 +318,7 @@ export class C3CoreMainnetStore {
       if (existing.revision !== expectedRevision || intent.revision !== expectedRevision) {
         throw new C3PersistenceError('storage_conflict', 'The C3 purchase has a newer revision.')
       }
+      assertImmutableIntentFields(existing, intent)
       if (existing.state === 'confirmed' && intent.state !== 'confirmed') {
         throw new C3PersistenceError('storage_conflict', 'A confirmed C3 purchase is immutable.')
       }
@@ -260,11 +326,14 @@ export class C3CoreMainnetStore {
       validateLegTransitions(existing, intent)
       const next = validateC3PersistedPurchaseIntent({ ...intent, revision: document.revision + 1 })
       const intents = document.intents.map((candidate) => (candidate.id === intent.id ? next : candidate))
-      await this.writeDocument({
-        schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION,
-        revision: document.revision + 1,
-        intents,
-      })
+      await this.writeDocument(
+        {
+          schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION,
+          revision: document.revision + 1,
+          intents,
+        },
+        document.revision,
+      )
       return next
     })
   }
@@ -302,11 +371,14 @@ export class C3CoreMainnetStore {
         revision,
         legs: makeInitialLegs(walletAddress, allocation.legs, now),
       })
-      await this.writeDocument({
-        schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION,
-        revision,
-        intents: [intent, ...document.intents].slice(0, 20),
-      })
+      await this.writeDocument(
+        {
+          schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION,
+          revision,
+          intents: [intent, ...document.intents].slice(0, 20),
+        },
+        document.revision,
+      )
       return intent
     })
   }
@@ -314,6 +386,8 @@ export class C3CoreMainnetStore {
   private async readDocument(): Promise<PersistedDocument> {
     const raw = await this.storage.getItem(C3_CORE_MAINNET_STORAGE_KEY)
     const stagedRaw = await this.storage.getItem(C3_CORE_MAINNET_STAGING_KEY)
+    const legacyRaw = await this.storage.getItem(C3_CORE_MAINNET_LEGACY_STORAGE_KEY)
+    const legacyStagedRaw = await this.storage.getItem(C3_CORE_MAINNET_LEGACY_STAGING_KEY)
     const document = parseDocument(raw)
     if (stagedRaw) {
       const staged = parseDocument(stagedRaw)
@@ -326,10 +400,18 @@ export class C3CoreMainnetStore {
         throw new C3PersistenceError('reconciliation_required', 'A staged C3 state write requires reconciliation.')
       }
     }
-    return document ?? emptyDocument()
+    if (document) return document
+    if (legacyStagedRaw) {
+      throw new C3PersistenceError('reconciliation_required', 'A legacy staged C3 state write requires reconciliation.')
+    }
+    return parseLegacyDocument(legacyRaw) ?? emptyDocument()
   }
 
-  private async writeDocument(document: PersistedDocument): Promise<void> {
+  private async writeDocument(document: PersistedDocument, expectedPreviousRevision: number): Promise<void> {
+    const currentRevision = await this.readCurrentRevision()
+    if (currentRevision !== expectedPreviousRevision) {
+      throw new C3PersistenceError('storage_conflict', 'The C3 storage revision changed before the write.')
+    }
     const payload = JSON.stringify(document)
     try {
       await this.storage.setItem(C3_CORE_MAINNET_STAGING_KEY, payload)
@@ -337,14 +419,22 @@ export class C3CoreMainnetStore {
         throw new Error('staging verification failed')
       await this.storage.setItem(C3_CORE_MAINNET_STORAGE_KEY, payload)
       if ((await this.storage.getItem(C3_CORE_MAINNET_STORAGE_KEY)) !== payload)
-        throw new Error('revision verification failed')
+        throw new C3PersistenceError('storage_conflict', 'C3 storage changed during the write.')
       await this.storage.removeItem(C3_CORE_MAINNET_STAGING_KEY)
     } catch (error) {
+      if (error instanceof C3PersistenceError) throw error
       throw new C3PersistenceError(
         'storage_write_failed',
         error instanceof Error ? error.message : 'storage write failed',
       )
     }
+  }
+
+  private async readCurrentRevision(): Promise<number> {
+    const raw = await this.storage.getItem(C3_CORE_MAINNET_STORAGE_KEY)
+    if (raw) return parseDocument(raw)?.revision ?? 0
+    const legacyRaw = await this.storage.getItem(C3_CORE_MAINNET_LEGACY_STORAGE_KEY)
+    return parseLegacyDocument(legacyRaw)?.revision ?? 0
   }
 }
 
@@ -393,7 +483,7 @@ function validateC3PersistedLeg(
   assertExactKeys(
     value,
     ['id', 'order', 'inputMint', 'outputMint', 'destination', 'allocationUsdcBaseUnits', 'state', 'updatedAt'],
-    ['signature', 'minimumOutputBaseUnits', 'confirmedOutputBaseUnits', 'errorCode'],
+    ['signature', 'minimumOutputBaseUnits', 'confirmedOutputBaseUnits', 'finalizedEvidence', 'recovery', 'errorCode'],
   )
   if (value.id !== id || value.order !== order) throw corrupt(`leg ${id} order or identifier changed`)
   if (value.inputMint !== C3_CORE_MAINNET_ASSETS.input) throw corrupt(`leg ${id} input mint changed`)
@@ -420,22 +510,55 @@ function validateC3PersistedLeg(
     expectBaseUnits(value.minimumOutputBaseUnits, `leg ${id} minimum output`)
   if (value.confirmedOutputBaseUnits !== undefined)
     expectBaseUnits(value.confirmedOutputBaseUnits, `leg ${id} confirmed output`)
+  if (value.finalizedEvidence !== undefined)
+    validateFinalizedEvidence(value.finalizedEvidence, `leg ${id} finalized evidence`)
+  if (value.recovery !== undefined) validateRecoveryRecord(value.recovery, `leg ${id} recovery`)
   if (value.errorCode !== undefined) {
     const errorCode = expectString(value.errorCode, `leg ${id} error code`)
     if (!ERROR_CODES.has(errorCode)) throw corrupt(`leg ${id} error code is not an approved diagnostic`)
   }
+  const requiresRecoveryEvidence = ['submitted_unconfirmed', 'submission_outcome_uncertain', 'reconciliation_required']
   if (
-    ['submitted_unconfirmed', 'confirmed', 'failed_on_chain'].includes(value.state as string) &&
-    value.signature === undefined
-  ) {
-    throw corrupt(`leg ${id} submitted state has no signature`)
-  }
+    requiresRecoveryEvidence.includes(value.state as string) &&
+    value.signature === undefined &&
+    value.recovery === undefined
+  )
+    throw corrupt(`leg ${id} blocked state has no signature or bounded recovery record`)
+  if (value.state === 'failed_on_chain' && value.signature === undefined)
+    throw corrupt(`leg ${id} failed state has no preserved signature`)
+  if (value.finalizedEvidence !== undefined && value.state !== 'confirmed')
+    throw corrupt(`leg ${id} finalized evidence is outside confirmed state`)
+  if (value.confirmedOutputBaseUnits !== undefined && value.state !== 'confirmed')
+    throw corrupt(`leg ${id} confirmed output is outside confirmed state`)
+  if (
+    value.recovery !== undefined &&
+    !['submitted_unconfirmed', 'submission_outcome_uncertain', 'reconciliation_required'].includes(
+      value.state as string,
+    )
+  )
+    throw corrupt(`leg ${id} recovery record is outside a recoverable state`)
   if (
     value.state === 'confirmed' &&
-    (value.minimumOutputBaseUnits === undefined || value.confirmedOutputBaseUnits === undefined)
+    (value.minimumOutputBaseUnits === undefined ||
+      value.confirmedOutputBaseUnits === undefined ||
+      value.finalizedEvidence === undefined ||
+      value.signature === undefined)
   ) {
-    throw corrupt(`leg ${id} confirmed state lacks output evidence`)
+    throw corrupt(`leg ${id} confirmed state lacks finalized output evidence`)
   }
+  if (value.state === 'confirmed') {
+    if (value.errorCode !== undefined) throw corrupt(`leg ${id} confirmed state has an error diagnostic`)
+    if (BigInt(value.confirmedOutputBaseUnits as string) < BigInt(value.minimumOutputBaseUnits as string))
+      throw corrupt(`leg ${id} confirmed output is below its approved minimum`)
+  }
+  if (
+    ['failed_on_chain', 'cancelled_before_submission'].includes(value.state as string) &&
+    (value.finalizedEvidence !== undefined || value.confirmedOutputBaseUnits !== undefined)
+  ) {
+    throw corrupt(`leg ${id} failed or cancelled state contains confirmed evidence`)
+  }
+  if (value.state === 'awaiting_approval' && value.minimumOutputBaseUnits === undefined)
+    throw corrupt(`leg ${id} awaiting approval has no approved minimum output`)
   if (
     ['pending', 'awaiting_approval', 'cancelled_before_submission'].includes(value.state as string) &&
     value.signature !== undefined
@@ -447,24 +570,55 @@ function validateC3PersistedLeg(
 
 function validatePurchaseStateAgainstLegs(intent: C3CoreMainnetPurchaseIntent) {
   const states = Object.values(intent.legs).map((leg) => leg.state)
+  const confirmed = states.filter((state) => state === 'confirmed').length
   const blocked = states.some(
     (state) => state === 'submission_outcome_uncertain' || state === 'reconciliation_required',
   )
-  if (blocked && ['draft', 'quoting', 'ready_for_review', 'awaiting_wallet'].includes(intent.state)) {
-    throw corrupt('blocked leg cannot become executable without reconciliation')
+  const submitted = states.some((state) => state === 'submitted_unconfirmed')
+  const failed = states.some((state) => state === 'failed_on_chain')
+  const cancelled = states.some((state) => state === 'cancelled_before_submission')
+  const awaiting = states.some((state) => state === 'awaiting_approval')
+  const unresolvedOrFailed = states.some((state) => state !== 'confirmed')
+
+  switch (intent.state) {
+    case 'draft':
+      if (states.some((state) => state !== 'pending')) throw corrupt('draft purchase has non-pending legs')
+      break
+    case 'quoting':
+      if (blocked || confirmed === states.length) throw corrupt('quoting purchase has blocked or completed legs')
+      break
+    case 'ready_for_review':
+    case 'awaiting_wallet':
+      if (blocked || !awaiting) throw corrupt('review purchase has no approvable leg or contains a blocked leg')
+      break
+    case 'submitted_unconfirmed':
+      if (blocked || !submitted) throw corrupt('submitted purchase has no submitted leg or contains a blocked leg')
+      break
+    case 'confirmed':
+      if (confirmed !== states.length) throw corrupt('confirmed purchase has unconfirmed legs')
+      break
+    case 'failed_on_chain':
+      if (!failed || submitted || blocked || confirmed > 0)
+        throw corrupt('failed purchase has unresolved or confirmed legs')
+      break
+    case 'cancelled_before_submission':
+      if (!cancelled || confirmed > 0 || submitted || blocked)
+        throw corrupt('cancelled purchase has submitted or confirmed legs')
+      break
+    case 'submission_outcome_uncertain':
+      if (!states.includes('submission_outcome_uncertain') || states.includes('reconciliation_required'))
+        throw corrupt('uncertain purchase has an invalid leg matrix')
+      break
+    case 'reconciliation_required':
+      if (!blocked) throw corrupt('reconciliation purchase has no blocked leg')
+      break
+    case 'partially_completed':
+      if (confirmed === 0 || !unresolvedOrFailed) throw corrupt('partial purchase lacks confirmed and unresolved legs')
+      break
+    case 'completed':
+      if (confirmed !== states.length) throw corrupt('completed purchase has unconfirmed legs')
+      break
   }
-  if (intent.state === 'completed' && states.some((state) => state !== 'confirmed'))
-    throw corrupt('completed purchase has unconfirmed legs')
-  if (
-    intent.state === 'submission_outcome_uncertain' &&
-    !states.some((state) => state === 'submission_outcome_uncertain')
-  )
-    throw corrupt('uncertain purchase has no uncertain leg')
-  if (
-    intent.state === 'reconciliation_required' &&
-    !states.some((state) => state === 'reconciliation_required' || state === 'submission_outcome_uncertain')
-  )
-    throw corrupt('reconciliation state has no blocked leg')
 }
 
 function validateLegTransitions(previous: C3CoreMainnetPurchaseIntent, next: C3CoreMainnetPurchaseIntent) {
@@ -476,6 +630,57 @@ function validateLegTransitions(previous: C3CoreMainnetPurchaseIntent, next: C3C
     if (from === 'confirmed' && JSON.stringify(previous.legs[id]) !== JSON.stringify(next.legs[id]))
       throw new C3PersistenceError('storage_conflict', 'A confirmed leg is immutable.')
   }
+}
+
+function assertImmutableIntentFields(previous: C3CoreMainnetPurchaseIntent, next: C3CoreMainnetPurchaseIntent) {
+  if (
+    previous.id !== next.id ||
+    previous.walletAddress !== next.walletAddress ||
+    previous.cluster !== next.cluster ||
+    previous.totalUsdcBaseUnits !== next.totalUsdcBaseUnits ||
+    previous.basketVersion !== next.basketVersion ||
+    previous.createdAt !== next.createdAt
+  ) {
+    throw new C3PersistenceError('storage_conflict', 'C3 purchase intent fields are immutable.')
+  }
+  for (const id of LEG_IDS) {
+    const before = previous.legs[id]
+    const after = next.legs[id]
+    if (
+      before.id !== after.id ||
+      before.order !== after.order ||
+      before.inputMint !== after.inputMint ||
+      before.outputMint !== after.outputMint ||
+      before.destination !== after.destination ||
+      before.allocationUsdcBaseUnits !== after.allocationUsdcBaseUnits
+    ) {
+      throw new C3PersistenceError('storage_conflict', `C3 ${id} leg intent fields are immutable.`)
+    }
+  }
+}
+
+function validateRecoveryRecord(value: unknown, label: string): asserts value is C3CoreMainnetRecoveryRecord {
+  if (!isRecord(value)) throw corrupt(`${label} is invalid`)
+  assertExactKeys(value, ['kind', 'reason', 'createdAt', 'expiresAt', 'attempts', 'maxAttempts'])
+  if (value.kind !== 'bounded_review' || !RECOVERY_REASONS.has(value.reason as string))
+    throw corrupt(`${label} is invalid`)
+  const createdAt = expectTimestamp(value.createdAt, `${label} createdAt`)
+  const expiresAt = expectTimestamp(value.expiresAt, `${label} expiresAt`)
+  const attempts = expectInteger(value.attempts, `${label} attempts`)
+  const maxAttempts = expectInteger(value.maxAttempts, `${label} maxAttempts`)
+  if (expiresAt < createdAt || expiresAt - createdAt > 24 * 60 * 60 * 1000)
+    throw corrupt(`${label} has an unbounded expiry window`)
+  if (maxAttempts < 1 || maxAttempts > 3 || attempts < 0 || attempts > maxAttempts)
+    throw corrupt(`${label} has an invalid retry budget`)
+}
+
+function validateFinalizedEvidence(value: unknown, label: string): asserts value is C3CoreMainnetFinalizedEvidence {
+  if (!isRecord(value)) throw corrupt(`${label} is invalid`)
+  assertExactKeys(value, ['status', 'verifiedAt', 'fingerprint'])
+  if (value.status !== 'finalized') throw corrupt(`${label} is not finalized evidence`)
+  expectTimestamp(value.verifiedAt, `${label} verifiedAt`)
+  const fingerprint = expectString(value.fingerprint, `${label} fingerprint`)
+  if (fingerprint.length > 4096) throw corrupt(`${label} fingerprint is too large`)
 }
 
 function parseDocument(raw: string | null): PersistedDocument | null {
@@ -498,6 +703,29 @@ function parseDocument(raw: string | null): PersistedDocument | null {
     if (ids.has(intent.id)) throw corrupt('duplicate persisted intent identifier')
     ids.add(intent.id)
     if (intent.revision > revision) throw corrupt('intent revision exceeds document revision')
+  }
+  return { schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION, revision, intents }
+}
+
+function parseLegacyDocument(raw: string | null): PersistedDocument | null {
+  if (!raw) return null
+  let value: unknown
+  try {
+    value = JSON.parse(raw) as unknown
+  } catch {
+    throw corrupt('legacy persisted C3 JSON is malformed')
+  }
+  if (!isRecord(value)) throw corrupt('legacy persisted C3 document is not an object')
+  assertExactKeys(value, ['schemaVersion', 'revision', 'intents'])
+  if (value.schemaVersion !== 2) throw unsupportedSchema()
+  const revision = expectInteger(value.revision, 'legacy document revision')
+  if (revision < 0 || !Array.isArray(value.intents)) throw corrupt('legacy persisted C3 document is invalid')
+  const intents = value.intents.map(migrateC3PersistedPurchaseIntent)
+  const ids = new Set<string>()
+  for (const intent of intents) {
+    if (ids.has(intent.id)) throw corrupt('duplicate legacy persisted intent identifier')
+    ids.add(intent.id)
+    if (intent.revision > revision) throw corrupt('legacy intent revision exceeds document revision')
   }
   return { schemaVersion: C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION, revision, intents }
 }
@@ -579,7 +807,7 @@ function validateSignature(value: unknown, label: string) {
 }
 
 function corrupt(message: string): C3PersistenceError {
-  return new C3PersistenceError('corrupt_state', message)
+  return new C3PersistenceError('corrupt_state', `Quarantined C3 state; review required: ${message}`)
 }
 
 function unsupportedSchema(): C3PersistenceError {

@@ -383,3 +383,39 @@ The selected remediation is a small, locally auditable compatibility module at `
 Verification after remediation: `npm ls --all @solana/spl-token @solana/buffer-layout-utils bigint-buffer` is empty; `npm explain bigint-buffer` finds no dependency; the production Android export contains no `bigint-buffer`, `toBigIntLE`, `toBufferLE`, or `buffer-layout-utils` markers. `npm audit --omit=dev` reports 0 high and 0 critical vulnerabilities after the change (20 moderate findings remain in unrelated Expo, web3, router, and build-tool paths). Before remediation it reported 3 high findings among 25 total, including this advisory. No dependency version was upgraded, Mainnet remains disabled, and the verified Devnet transaction semantics are unchanged.
 
 The read-only C3 Core Mainnet build harness also completed with keyless Jupiter access on 2026-09-16. It built all nine fresh measurements for 50, 100, and 500 USDC across cbBTC, Portal ETH, and SOL, and recorded environmental simulation failures only because the public inspection address is not funded on Mainnet. It made no wallet request and produced no transaction submission. The existing C3 fixture, engine, recovery, reconciliation, and compatibility suites passed. Export warnings remain limited to known `rpc-websockets` and `@noble/hashes` package-export fallbacks; Expo Doctor passed all 21 checks.
+
+## Phase 5I.3 — build capability, persisted-state invariants, and Devnet isolation
+
+The shipped Android artifact is a Devnet-only build. `constants/c3-mainnet-build-capability.ts` contains the source-controlled capability constant `false`; Mainnet capability is not read from `process.env`, constructor options, AsyncStorage, deep links, or route parameters. `assertC3MainnetExecution` remains a second exact-cluster gate, but it cannot be reached successfully while this artifact capability is false. Creating a future Mainnet-capable artifact requires a reviewed source change, a separate release commit, and the complete Mainnet security checklist. The current release never enables Mainnet.
+
+The guarded Mainnet implementation remains preserved under `apps/mobile/disabled/` for review and future controlled work, but its Expo Router screen is no longer registered under `app/`. The Devnet bundle isolation check scans the production Android export for the Mainnet RPC endpoint, Jupiter build/label endpoints, Mainnet C3 mints, and the Jupiter v6 program marker. The current Devnet export must contain none of those values; the guarded implementation is not deleted or silently altered.
+
+Persisted C3 state uses schema version 3. Every read validates an explicit invariant matrix before returning an intent:
+
+| Purchase state                         | Required persisted evidence                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------------------- |
+| `draft`                                | Every leg is `pending`; no signature, confirmation, or recovery evidence.              |
+| `quoting`                              | No blocked leg and the purchase is not complete.                                       |
+| `ready_for_review` / `awaiting_wallet` | An approvable `awaiting_approval` leg exists and no leg is blocked.                    |
+| `submitted_unconfirmed`                | A submitted leg has a preserved signature or bounded recovery record.                  |
+| `confirmed` / `completed`              | Every leg has a signature, approved minimum, confirmed output, and finalized evidence. |
+| `failed_on_chain`                      | A failed leg preserves its signature; no submitted, blocked, or confirmed leg remains. |
+| `cancelled_before_submission`          | A cancelled leg exists and no leg is confirmed, submitted, or blocked.                 |
+| `submission_outcome_uncertain`         | An uncertain leg has a signature or bounded recovery record.                           |
+| `reconciliation_required`              | A blocked leg has a signature or bounded recovery record.                              |
+| `partially_completed`                  | At least one leg is confirmed and at least one leg remains unresolved or failed.       |
+
+Confirmed legs require finalized evidence and are immutable. Allocations, wallet, cluster, mints, destinations, order, basket version, total amount, intent identifier, and creation time are immutable after intent creation; allocations are recomputed from the original bigint total rather than trusted from persisted input. A corrupted or impossible document is quarantined with a review-required persistence error. It is never normalized into an executable state. Safe v2 draft records can migrate to v3; legacy records that cannot prove the v3 evidence requirements are quarantined.
+
+The Android app has one application process: the manifest contains no additional process, service, or worker for C3 persistence. AsyncStorage mutations are serialized by an in-process single-writer mutex and protected by document revisions, staging writes, read-back verification, and a second revision check immediately before the write. A stale writer or an interrupted staging record fails closed as `storage_conflict` or `reconciliation_required`. Tests cover stale writers, restart visibility, interrupted writes, duplicate IDs, immutable intent fields, migration, corrupted records, and impossible state combinations. This is intentionally not presented as cross-process locking; a future multi-process design must replace AsyncStorage with a transactional store before enabling Mainnet.
+
+Recovery records are bounded to a 24-hour review window and three attempts. A returned signature is persisted before confirmation; missing or uncertain outcomes preserve either the signature or a bounded recovery record and cannot be automatically retried. Restart recovery uses read-only reconciliation and explicit user review. The implementation never treats three sequential legs as atomic and never represents partial completion as full settlement.
+
+### Phase 5I.3 acceptance checks
+
+- `npm run test:c3-core-mainnet-capability` proves environment, direct-guard, and route-registration bypasses remain closed.
+- `npm run test:c3-core-mainnet-recovery` proves the v3 matrix, safe migration, quarantine, immutable fields, staged writes, restart, and conflict behavior.
+- `npm run test:devnet-bundle-isolation` scans the fresh production Android export for guarded Mainnet endpoints, mints, and program markers.
+- The signed APK remains the Devnet release and is validated with its existing package identity and cold-launch procedure. No wallet approval or transaction is part of this phase.
+
+The verified Devnet USDC payment flow is unchanged. Mainnet source remains disabled and excluded from the normal Expo Router graph; this phase does not claim Mainnet settlement capability.

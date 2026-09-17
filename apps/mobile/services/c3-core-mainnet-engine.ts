@@ -18,7 +18,12 @@ import {
   C3CoreMainnetPurchaseState,
   C3_CORE_MAINNET_POLICY,
 } from './c3-core-mainnet-core.ts'
-import { C3CoreMainnetPurchaseIntent, C3CoreMainnetStore, deriveStateFromLegs } from './c3-core-mainnet-state.ts'
+import {
+  C3CoreMainnetPurchaseIntent,
+  C3CoreMainnetStore,
+  createC3BoundedRecoveryRecord,
+  deriveStateFromLegs,
+} from './c3-core-mainnet-state.ts'
 import { C3PersistenceError } from './c3-core-mainnet-state.ts'
 import {
   C3MainnetConfirmationProvider,
@@ -140,7 +145,9 @@ export class C3CoreMainnetEngine {
         lastValidBlockHeight: build.blockhashWithMetadata.lastValidBlockHeight,
         minContextSlot: transactionData.minContextSlot,
       })
-      const awaitingReview = await this.updateLeg(quotingIntent, leg, 'awaiting_approval')
+      const awaitingReview = await this.updateLeg(quotingIntent, leg, 'awaiting_approval', {
+        minimumOutputBaseUnits: review.minimumOutputBaseUnits,
+      })
       await this.updatePurchaseState(awaitingReview, 'ready_for_review')
       return review
     } catch (error) {
@@ -223,7 +230,10 @@ export class C3CoreMainnetEngine {
             intent,
             leg.id,
             'reconciliation_required',
-            { errorCode: 'missing_minimum_output' },
+            {
+              errorCode: 'missing_minimum_output',
+              recovery: createC3BoundedRecoveryRecord('missing_signature'),
+            },
             'reconciliation_required',
           )
           continue
@@ -246,7 +256,10 @@ export class C3CoreMainnetEngine {
             intent,
             leg.id,
             'reconciliation_required',
-            { errorCode: recovery.status === 'none' ? 'history_no_match' : 'history_ambiguous' },
+            {
+              errorCode: recovery.status === 'none' ? 'history_no_match' : 'history_ambiguous',
+              recovery: createC3BoundedRecoveryRecord('reconciliation_required'),
+            },
             'reconciliation_required',
           )
         }
@@ -570,7 +583,10 @@ export class C3CoreMainnetEngine {
         intent,
         leg,
         state,
-        { errorCode: cancelled ? 'wallet_cancelled' : 'wallet_submission_uncertain' },
+        {
+          errorCode: cancelled ? 'wallet_cancelled' : 'wallet_submission_uncertain',
+          ...(cancelled ? {} : { recovery: createC3BoundedRecoveryRecord('wallet_interrupted') }),
+        },
         purchaseState,
       )
     } catch {
@@ -584,6 +600,7 @@ export class C3CoreMainnetEngine {
             ...intent.legs[leg],
             state: 'submission_outcome_uncertain',
             errorCode: 'wallet_submission_uncertain',
+            recovery: createC3BoundedRecoveryRecord('wallet_interrupted'),
             updatedAt: Date.now(),
           },
         },
@@ -616,6 +633,11 @@ export class C3CoreMainnetEngine {
         signature,
         minimumOutputBaseUnits: minimum,
         confirmedOutputBaseUnits: result.outputAmountBaseUnits ?? minimum,
+        finalizedEvidence: {
+          status: 'finalized',
+          verifiedAt: Date.now(),
+          fingerprint: result.evidenceFingerprints?.join('|') || 'finalized-provider-quorum',
+        },
       })
       this.pendingBuilds.delete(pendingBuildKey(intent.id, leg))
       return confirmed

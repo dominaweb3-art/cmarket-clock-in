@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js'
 import { Cluster } from '@/components/cluster/cluster'
 import { ClusterNetwork } from '@/components/cluster/cluster-network'
-import { isC3MainnetEnabled } from '@/services/c3-core-mainnet-core'
+import { C3_MAINNET_BUILD_CAPABILITY } from './c3-mainnet-build-capability'
 
 function configurationError(variableName: string, requirement: string): Error {
   return new Error(
@@ -104,7 +104,7 @@ export class AppConfig {
   static readonly usdcMint = usdcMint
   static readonly usdcDecimals = usdcDecimals
   static readonly treasuryPublicKey = treasuryPublicKey
-  static readonly enableC3Mainnet = isC3MainnetEnabled()
+  static readonly enableC3Mainnet = C3_MAINNET_BUILD_CAPABILITY
   static readonly identity = Object.freeze({ name, uri })
   static clusters: Cluster[] = [
     {

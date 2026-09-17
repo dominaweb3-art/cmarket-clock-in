@@ -69,9 +69,11 @@ try {
   assert.equal(isC3MainnetEnabled(), false)
   assert.throws(() => assertC3MainnetExecution('mainnet-beta'))
   process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET = 'TRUE'
+  assert.equal(isC3MainnetEnabled(), false)
   assert.throws(() => assertC3MainnetExecution('mainnet-beta'))
   process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET = 'true'
-  assert.doesNotThrow(() => assertC3MainnetExecution('mainnet-beta'))
+  assert.equal(isC3MainnetEnabled(), false)
+  assert.throws(() => assertC3MainnetExecution('mainnet-beta'))
   assert.throws(() => assertC3MainnetExecution('devnet'))
 } finally {
   if (previousFlag === undefined) delete process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET

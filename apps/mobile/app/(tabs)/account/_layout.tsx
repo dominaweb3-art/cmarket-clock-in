@@ -5,7 +5,6 @@ export default function AccountLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="buy" />
-      <Stack.Screen name="c3-mainnet" />
     </Stack>
   )
 }

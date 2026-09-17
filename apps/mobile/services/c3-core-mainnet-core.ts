@@ -1,3 +1,5 @@
+import { C3_MAINNET_BUILD_CAPABILITY } from '../constants/c3-mainnet-build-capability.ts'
+
 export const C3_CORE_MAINNET_VERSION = 'c3-core-mainnet-v1' as const
 
 export const C3_CORE_MAINNET_ASSETS = {
@@ -82,12 +84,12 @@ const STATE_TRANSITIONS: Readonly<Record<C3CoreMainnetPurchaseState, readonly C3
 }
 
 export function isC3MainnetEnabled(): boolean {
-  return process.env.EXPO_PUBLIC_ENABLE_C3_MAINNET === 'true'
+  return C3_MAINNET_BUILD_CAPABILITY
 }
 
 export function assertC3MainnetExecution(configuredCluster: string): void {
   if (!isC3MainnetEnabled()) {
-    throw new Error('C3 Mainnet is disabled by EXPO_PUBLIC_ENABLE_C3_MAINNET.')
+    throw new Error('C3 Mainnet is disabled in this build artifact.')
   }
 
   if (configuredCluster !== 'mainnet-beta') {
