@@ -8,6 +8,8 @@
 - The Buy screen validates a 5 USDC minimum, prevents duplicate submission, requests wallet signing, submits the signed payment, waits for confirmation, and links to Solana Explorer.
 - English is the default and permanent fallback; English, Spanish, Simplified Chinese, and Brazilian Portuguese can be selected and persist across reloads.
 - The interface states that the prototype records a USDC treasury payment on Solana Devnet and that basket settlement has not occurred.
+- A read-only activity screen persists only confirmed Devnet payment receipts with deduplication and safe public fields.
+- The reusable C3 overview states the planned Bitcoin 40% / Ethereum 30% / Solana 30% methodology and distinguishes it from current holdings.
 - Approved C Market APP ICON and ICON ONLY assets are configured for the launcher, adaptive icon, splash screen, favicon, and sign-in brand area.
 - A locally signed standalone APK has been signature-verified, installed on Seeker, and launched without Metro.
 - The release APK is preserved locally at `artifacts/releases/c-market-0.1.0-release.apk`; its committed SHA-256 record is under `submission/releases`.
@@ -15,7 +17,7 @@
 ## Known prototype limitations
 
 - C3 basket allocation and position tracking are not implemented.
-- Activity/history is not implemented or persistent.
+- Activity is limited to confirmed Devnet payment receipts; it is not a portfolio or settlement ledger.
 - C5, C10, C20, C50, and withdrawals are previews only.
 - This prototype is Devnet-only and is not ready for mainnet funds or public financial use.
 

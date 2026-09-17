@@ -72,6 +72,7 @@ Show:
 - Network.
 - Explorer button or link.
 - The transaction on Solana Explorer.
+- The Activity screen, showing the confirmed payment receipt and its Devnet-only limitation.
 
 Reference prototype transaction:
 
@@ -82,6 +83,8 @@ https://explorer.solana.com/tx/4GNY8qQT6gPVKx1JHZUekfxyxjXHnWskeaBUy2RoRgvUvuH5j
 Use precise wording:
 
 “The current Devnet prototype verifies the wallet approval, payment routing, confirmation, and public transaction evidence. The production-grade basket allocation and settlement module is the next release gate.”
+
+If showing the C3 overview, describe Bitcoin 40% / Ethereum 30% / Solana 30% as the target methodology, not as assets held by the wallet.
 
 Do not say that a basket allocation has occurred unless the transaction and code prove it.
 

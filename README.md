@@ -34,6 +34,8 @@ The repository now contains an initial Expo/React Native mobile foundation with:
 - Devnet USDC balance lookup.
 - C3 Devnet USDC purchase flow.
 - Transaction confirmation and Explorer links.
+- A read-only activity screen with deduplicated confirmed payment receipts.
+- A reusable C3 Core overview showing the planned Bitcoin 40% / Ethereum 30% / Solana 30% methodology.
 - Hackathon compliance, demo, security, and release documentation.
 
 The earlier local prototype also demonstrated the following flow on Solana Devnet:
@@ -111,7 +113,7 @@ Never place a seed phrase, private key, wallet export, signing credential, or se
 - Replace the placeholder application icon with an approved C Market asset.
 - Add final local Android signing credentials and verify the signed APK that judges can install.
 - Complete the basket allocation logic or clearly limit the product claims to the functionality actually implemented.
-- Add persistent activity/history in a later product phase; do not claim it exists yet.
+- Keep activity limited to confirmed Devnet payment receipts; it does not represent basket holdings or settlement.
 - Test rejected signatures, insufficient USDC, insufficient SOL, wrong network, RPC failures, duplicate taps, and interrupted sessions.
 - Produce the demo video.
 - Produce the pitch deck or brief presentation.

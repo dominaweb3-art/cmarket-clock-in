@@ -41,11 +41,11 @@ The current canonical app remains Solana Devnet with the repository’s existing
 
 Jupiter support must be treated as a runtime capability, not inferred from a Mainnet quote. Before enabling a Devnet settlement leg, a read-only preflight must prove that the exact input/output mints, amount, route, setup instructions, quote expiry, and transaction simulation work on Devnet. If the official Jupiter endpoint does not return a valid Devnet route, settlement is disabled with a truthful “not available on Devnet” state.
 
-JitoSOL is technically deployed on Devnet according to Jito’s official address page, but that does not prove sufficient supply, faucet access, exchange liquidity, or a Jupiter route for the required amount. The Devnet JitoSOL mint must therefore be discovered from the active Jito deployment and never replaced by the Mainnet mint. A demo may show the verified payment and a pending/planned settlement state; it may not show 50/30/20 as completed without three verifiable legs.
+JitoSOL is technically deployed on Devnet according to Jito’s official address page, but that does not prove sufficient supply, faucet access, exchange liquidity, or a Jupiter route for the required amount. The earlier JitoSOL composition is historical feasibility context only and is not the C3 Core product target. A demo may show the verified payment and a pending/planned settlement state; it may not show 40/30/30 as completed without three verifiable legs.
 
 ## 4. Recommended user journey
 
-1. The user selects C3 and sees the versioned target weights: SOL 50%, USDC 30%, JitoSOL 20%.
+1. The user selects C3 and sees the versioned target weights: Bitcoin 40%, Ethereum 30%, Solana 30%.
 2. The review screen states the cluster, payment asset, treasury destination, minimum amount, fees, slippage policy, and that the current Devnet prototype may record payment without settlement.
 3. MWA opens the compatible wallet. The buyer signs only the payment transaction currently supported by the app.
 4. The app confirms the payment signature at the required commitment and stores the signature as the idempotency key.
@@ -121,7 +121,7 @@ Acceptance requires: every receipt is idempotent; every completed leg has a fina
 
 Truthfully demonstrable on Devnet today: C Market identity, MWA wallet connection, Devnet USDC balance, a user-approved USDC payment to the C3 treasury, finalized signature verification, Explorer evidence, and a clearly labeled planned/pending settlement architecture.
 
-Must wait for implementation and evidence: automatic 50/30/20 allocation, JitoSOL acquisition, quote and slippage guarantees, user basket position, redemption, yield, rebalancing, Mainnet funds, investment-like claims, and any claim that C3 settlement happened.
+Must wait for implementation and evidence: automatic 40/30/30 allocation, constituent acquisition, quote and slippage guarantees, user basket position, redemption, yield, rebalancing, Mainnet funds, investment-like claims, and any claim that C3 settlement happened.
 
 ## 10. Rollback plan
 

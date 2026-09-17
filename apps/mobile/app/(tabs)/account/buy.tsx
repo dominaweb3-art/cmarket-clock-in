@@ -22,6 +22,8 @@ import { ellipsify } from '@/utils/ellipsify'
 import { useCluster } from '@/components/cluster/cluster-provider'
 import { AppConfig } from '@/constants/app-config'
 import { useI18n } from '@/components/i18n/i18n-provider'
+import { createDevnetPaymentReceipt } from '@/services/devnet-payment-receipts'
+import { recordDevnetPaymentReceipt } from '@/services/devnet-payment-receipt-storage'
 import {
   createAssociatedTokenAccountInstruction,
   createTransferCheckedInstruction,
@@ -259,6 +261,18 @@ export default function BuyScreen() {
       )
 
       setSignature(signature)
+      try {
+        await recordDevnetPaymentReceipt(
+          createDevnetPaymentReceipt({
+            signature,
+            amountUsdc: numericAmount.toFixed(AppConfig.usdcDecimals),
+            walletAddress: walletPublicKey.toBase58(),
+            treasuryAddress: AppConfig.treasuryPublicKey.toBase58(),
+          }),
+        )
+      } catch {
+        setError(t('buy.receiptStorageError'))
+      }
       await usdcQuery.refresh()
 
       Alert.alert(
@@ -425,6 +439,7 @@ export default function BuyScreen() {
           {signature ? (
             <View style={styles.receiptCard}>
               <AppText style={styles.receiptTitle}>{t('buy.paymentConfirmed')}</AppText>
+              <AppText style={styles.receiptNote}>{t('buy.receiptDisclosure')}</AppText>
               <AppText style={styles.receiptSignature}>{ellipsify(signature, 10)}</AppText>
               <View style={styles.receiptActions}>
                 <Pressable onPress={copySignature} style={styles.receiptButton}>
@@ -729,6 +744,12 @@ const styles = StyleSheet.create({
     color: '#172D48',
     fontSize: 16,
     fontWeight: '800',
+  },
+  receiptNote: {
+    marginTop: 6,
+    color: '#456685',
+    fontSize: 12,
+    lineHeight: 18,
   },
   receiptSignature: {
     marginTop: 8,

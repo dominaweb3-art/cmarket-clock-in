@@ -24,7 +24,7 @@ C Market provides:
 - A focused purchase flow.
 - Mobile wallet approval.
 - On-chain confirmation and Explorer verification.
-- A foundation for repeatable basket activity.
+- Read-only activity receipts for confirmed Devnet payments.
 
 ## Slide 4 — Why Solana Mobile
 
@@ -69,7 +69,7 @@ React Native mobile UI
 
 - Versioned basket methodology.
 - Transparent constituent and weight updates.
-- Activity and history.
+- Expanded activity analytics and history reconciliation.
 - Robust settlement implementation.
 - Signed release APK.
 - Security and failure-mode testing.

@@ -15,12 +15,13 @@ import { LanguageSelector } from '@/components/i18n/language-selector'
 import { useI18n } from '@/components/i18n/i18n-provider'
 import { TranslationKey } from '@/locales'
 import { AppConfig } from '@/constants/app-config'
+import { C3OverviewCard } from '@/components/c3/c3-overview-card'
+import { C3_CORE_TARGETS } from '@/constants/c3-core'
 
 type IndexKey = 'C3' | 'C5' | 'C10' | 'C20' | 'C50'
 
 type Asset = {
   symbol: string
-  name: string
   percent: number
   color: string
 }
@@ -43,26 +44,7 @@ const INDEX_CONFIGS: Record<IndexKey, IndexConfig> = {
     titleKey: 'account.c3Title',
     descriptionKey: 'account.c3Description',
     active: true,
-    assets: [
-      {
-        symbol: 'cbBTC',
-        name: 'Coinbase Bitcoin',
-        percent: 40,
-        color: '#F7931A',
-      },
-      {
-        symbol: 'ETH',
-        name: 'Portal ETH',
-        percent: 30,
-        color: '#627EEA',
-      },
-      {
-        symbol: 'SOL',
-        name: 'Solana',
-        percent: 30,
-        color: '#9945FF',
-      },
-    ],
+    assets: C3_CORE_TARGETS.map(({ symbol, percent, color }) => ({ symbol, percent, color })),
   },
 
   C5: {
@@ -243,39 +225,9 @@ export function AccountFeature() {
               <AppText style={styles.balanceNote}>{t('account.balanceNote')}</AppText>
             </View>
 
-            <View style={styles.exposureCard}>
-              <View style={styles.sectionHeader}>
-                <AppText style={styles.sectionTitle}>{t('account.targetComposition')}</AppText>
-
-                <AppText style={styles.linkText}>{t('account.viewAll')}</AppText>
-              </View>
-
-              <View style={styles.exposureRow}>
-                {selectedConfig.assets.map((asset) => (
-                  <View key={asset.symbol} style={styles.exposureItem}>
-                    <View style={[styles.assetIcon, { backgroundColor: asset.color }]}>
-                      <AppText style={styles.assetIconText}>{asset.symbol.charAt(0)}</AppText>
-                    </View>
-
-                    <AppText style={styles.assetSymbol}>{asset.symbol}</AppText>
-
-                    <AppText style={styles.assetPercent}>{asset.percent}%</AppText>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <View style={styles.infoIcon}>
-                <AppText style={styles.infoIconText}>↗</AppText>
-              </View>
-
-              <View style={styles.infoText}>
-                <AppText style={styles.infoTitle}>{t('account.positionTitle')}</AppText>
-
-                <AppText style={styles.infoDescription}>{t('account.positionDescription')}</AppText>
-              </View>
-            </View>
+            {selectedConfig.label === 'C3' ? (
+              <C3OverviewCard compact onDetails={() => router.push('/account/c3' as never)} />
+            ) : null}
 
             <View style={styles.actionRow}>
               <Pressable style={styles.primaryButton} onPress={showPurchaseInfo}>
@@ -301,15 +253,19 @@ export function AccountFeature() {
               <AppText style={styles.navText}>{t('nav.markets')}</AppText>
             </View>
 
-            <View style={styles.navItem}>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/account/buy')} style={styles.navItem}>
               <AppText style={styles.navIcon}>＋</AppText>
               <AppText style={styles.navText}>{t('nav.buy')}</AppText>
-            </View>
+            </Pressable>
 
-            <View style={styles.navItem}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/account/activity' as never)}
+              style={styles.navItem}
+            >
               <AppText style={styles.navIcon}>▤</AppText>
               <AppText style={styles.navText}>{t('nav.activity')}</AppText>
-            </View>
+            </Pressable>
 
             <View style={styles.navItem}>
               <AppText style={styles.navIcon}>•••</AppText>

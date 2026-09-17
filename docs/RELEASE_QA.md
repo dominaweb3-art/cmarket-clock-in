@@ -40,6 +40,10 @@ Explorer: `https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZv
 
 This is a Devnet USDC payment to the C3 treasury. It does not perform basket settlement; C3 settlement remains planned for a later phase.
 
+The shared C3 Core methodology shown in the product is Bitcoin 40%, Ethereum 30%, and Solana 30%. These are target weights only; the verified Devnet payment does not create BTC, ETH, or SOL holdings.
+
+The Activity screen stores only confirmed Devnet payment receipts. Each receipt is deduplicated by transaction signature and contains the schema version, signature, confirmed status, exact USDC amount, cluster, wallet public key, treasury public key, confirmation time, and a Devnet Explorer URL. Refresh is read-only and malformed records are ignored safely.
+
 The signature text initially supplied for verification was 86 characters and was rejected by RPC as `WrongSize`; the canonical 88-character signature above is the finalized transaction returned by the sender's Devnet history.
 
 ## Confirmed payment evidence
