@@ -59,7 +59,12 @@ export type C3CoreMainnetPurchaseState =
 const STATE_TRANSITIONS: Readonly<Record<C3CoreMainnetPurchaseState, readonly C3CoreMainnetPurchaseState[]>> = {
   draft: ['quoting', 'cancelled_before_submission'],
   quoting: ['ready_for_review', 'reconciliation_required', 'draft', 'cancelled_before_submission'],
-  ready_for_review: ['awaiting_wallet', 'cancelled_before_submission'],
+  ready_for_review: [
+    'awaiting_wallet',
+    'cancelled_before_submission',
+    'submission_outcome_uncertain',
+    'reconciliation_required',
+  ],
   awaiting_wallet: [
     'submitted_unconfirmed',
     'cancelled_before_submission',

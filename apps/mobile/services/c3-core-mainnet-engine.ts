@@ -21,6 +21,7 @@ import {
 import {
   C3CoreMainnetPurchaseIntent,
   C3CoreMainnetStore,
+  consumeC3RecoveryAttempt,
   createC3BoundedRecoveryRecord,
   deriveStateFromLegs,
 } from './c3-core-mainnet-state.ts'
@@ -44,6 +45,7 @@ import {
   validateC3CoreMainnetTransaction,
 } from './c3-core-mainnet-validation.ts'
 import { getAssociatedTokenAddressSync } from '../utils/spl-token-compatible.ts'
+import { createC3AuthorizationManifest } from './c3-core-mainnet-manifest.ts'
 
 type MainnetWalletSender = (transaction: VersionedTransaction, minContextSlot: number) => Promise<string>
 
@@ -119,7 +121,31 @@ export class C3CoreMainnetEngine {
     const quotingIntent = await this.updatePurchaseState(intent, 'quoting')
     try {
       const inputAmountBaseUnits = BigInt(intent.legs[leg].allocationUsdcBaseUnits)
-      const { build, transactionData } = await this.prepareBuild(leg, inputAmountBaseUnits)
+      const { build, transactionData, validation, lookupTables } = await this.prepareBuild(leg, inputAmountBaseUnits)
+      const outputDestination = validation.expectedOutputDestination
+      const authorizationManifest = await createC3AuthorizationManifest({
+        transaction: transactionData.transaction,
+        lookupTables,
+        leg,
+        walletAddress: this.options.walletAddress,
+        inputMint: C3_CORE_MAINNET_ASSETS.input,
+        inputAccount: getC3JupiterSourceTokenAccount(build),
+        inputAmountBaseUnits: inputAmountBaseUnits.toString(),
+        outputMint: build.outputMint,
+        outputDestination,
+        minimumOutputBaseUnits: build.otherAmountThreshold,
+        jupiterProgramId: C3_CORE_MAINNET_CONFIG.programs.jupiterSwapV6,
+        approvedRouteProgramIds: validation.approvedRouteProgramIds,
+        temporaryWsolAccount:
+          leg === 'SOL'
+            ? getAssociatedTokenAddressSync(
+                C3_CORE_MAINNET_CONFIG.wrappedSolMint,
+                new PublicKey(this.options.walletAddress),
+              ).toBase58()
+            : undefined,
+        lastValidBlockHeight: build.blockhashWithMetadata.lastValidBlockHeight,
+        minContextSlot: transactionData.minContextSlot,
+      })
 
       const review: C3CoreMainnetReview = {
         purchaseId,
@@ -147,6 +173,7 @@ export class C3CoreMainnetEngine {
       })
       const awaitingReview = await this.updateLeg(quotingIntent, leg, 'awaiting_approval', {
         minimumOutputBaseUnits: review.minimumOutputBaseUnits,
+        authorizationManifest,
       })
       await this.updatePurchaseState(awaitingReview, 'ready_for_review')
       return review
@@ -171,6 +198,8 @@ export class C3CoreMainnetEngine {
     const pendingKey = pendingBuildKey(purchaseId, leg)
     const pending = this.pendingBuilds.get(pendingKey)
     if (!pending) throw new Error('The quote expired from memory. Review a fresh quote before approving.')
+    if (!intent.legs[leg].authorizationManifest)
+      throw new Error('The approved authorization manifest is missing. Reconciliation is required before approval.')
     if (this.submissionLocks.has(pendingKey)) throw new Error('This C3 Mainnet leg is already being submitted.')
     if (intent.legs[leg].state === 'confirmed') throw new Error('A confirmed C3 Mainnet leg cannot be submitted again.')
 
@@ -238,9 +267,14 @@ export class C3CoreMainnetEngine {
           )
           continue
         }
+        const recoveryIntent = await this.prepareRecoveryAttempt(intent, leg.id)
+        intent = recoveryIntent.intent
+        if (recoveryIntent.status !== 'allowed') {
+          continue
+        }
         const recovery = await recoverC3MainnetSignature(
           this.confirmationProviders[0],
-          this.expectationFromRecord(intent, leg),
+          this.expectationFromRecord(intent, intent.legs[leg.id]),
         )
         if (recovery.status === 'recovered' && recovery.signature) {
           intent = await this.updateLeg(
@@ -251,14 +285,25 @@ export class C3CoreMainnetEngine {
             'reconciliation_required',
           )
           intent = await this.reconcileLeg(intent, leg.id, recovery.signature, leg.minimumOutputBaseUnits)
-        } else if (recovery.status === 'none' || recovery.status === 'ambiguous') {
+        } else if (
+          recovery.status === 'none' ||
+          recovery.status === 'ambiguous' ||
+          recovery.status === 'expired' ||
+          recovery.status === 'exhausted'
+        ) {
           intent = await this.updateLeg(
             intent,
             leg.id,
             'reconciliation_required',
             {
-              errorCode: recovery.status === 'none' ? 'history_no_match' : 'history_ambiguous',
-              recovery: createC3BoundedRecoveryRecord('reconciliation_required'),
+              errorCode:
+                recovery.status === 'none'
+                  ? 'history_no_match'
+                  : recovery.status === 'ambiguous'
+                    ? 'history_ambiguous'
+                    : recovery.status === 'expired'
+                      ? 'recovery_expired'
+                      : 'recovery_exhausted',
             },
             'reconciliation_required',
           )
@@ -335,7 +380,7 @@ export class C3CoreMainnetEngine {
           treasuryAddress: this.options.treasuryAddress,
         })
         if (!validation.passed) throw new Error(`Transaction validation failed: ${validation.issues.join('; ')}`)
-        return { build, transactionData }
+        return { build, transactionData, validation, lookupTables: transactionData.lookupTables }
       } catch (error) {
         if (error instanceof C3TransactionSizeError) {
           lastSizeError = error
@@ -430,7 +475,7 @@ export class C3CoreMainnetEngine {
     }).compileToV0Message(lookupTables)
     const transaction = new VersionedTransaction(message)
     const serializedBytes = assertC3VersionedTransactionFits(transaction)
-    return { transaction, serializedBytes, minContextSlot: await this.connection.getSlot('confirmed') }
+    return { transaction, serializedBytes, minContextSlot: await this.connection.getSlot('confirmed'), lookupTables }
   }
 
   private async loadValidatedLookupTables(
@@ -623,6 +668,17 @@ export class C3CoreMainnetEngine {
         { signature, errorCode: 'missing_minimum_output' },
         'reconciliation_required',
       )
+    if (!intent.legs[leg].authorizationManifest)
+      return this.updateLeg(
+        intent,
+        leg,
+        'reconciliation_required',
+        { signature, minimumOutputBaseUnits: minimum, errorCode: 'missing_authorization_manifest' },
+        'reconciliation_required',
+      )
+    const recoveryIntent = await this.prepareRecoveryAttempt(intent, leg)
+    intent = recoveryIntent.intent
+    if (recoveryIntent.status !== 'allowed') return intent
     const result = await reconcileC3MainnetSignature(
       this.confirmationProviders,
       signature,
@@ -633,6 +689,7 @@ export class C3CoreMainnetEngine {
         signature,
         minimumOutputBaseUnits: minimum,
         confirmedOutputBaseUnits: result.outputAmountBaseUnits ?? minimum,
+        recovery: undefined,
         finalizedEvidence: {
           status: 'finalized',
           verifiedAt: Date.now(),
@@ -646,6 +703,7 @@ export class C3CoreMainnetEngine {
       const failed = await this.updateLeg(intent, leg, 'failed_on_chain', {
         signature,
         minimumOutputBaseUnits: minimum,
+        recovery: undefined,
         errorCode: 'on_chain_error',
       })
       this.pendingBuilds.delete(pendingBuildKey(intent.id, leg))
@@ -660,6 +718,30 @@ export class C3CoreMainnetEngine {
     )
   }
 
+  private async prepareRecoveryAttempt(
+    intent: C3CoreMainnetPurchaseIntent,
+    leg: C3CoreMainnetLegId,
+  ): Promise<{ intent: C3CoreMainnetPurchaseIntent; status: 'allowed' | 'expired' | 'exhausted' }> {
+    const current = intent.legs[leg]
+    const record = current.recovery ?? createC3BoundedRecoveryRecord('reconciliation_required')
+    const decision = consumeC3RecoveryAttempt(record)
+    if (decision.status !== 'allowed') {
+      const blocked = await this.updateLeg(
+        intent,
+        leg,
+        'reconciliation_required',
+        {
+          recovery: decision.record,
+          errorCode: decision.status === 'expired' ? 'recovery_expired' : 'recovery_exhausted',
+        },
+        'reconciliation_required',
+      )
+      return { intent: blocked, status: decision.status }
+    }
+    const attempted = await this.updateLeg(intent, leg, current.state, { recovery: decision.record })
+    return { intent: attempted, status: 'allowed' }
+  }
+
   private expectationFromRecord(
     intent: C3CoreMainnetPurchaseIntent,
     leg: C3CoreMainnetLegRecord,
@@ -670,12 +752,16 @@ export class C3CoreMainnetEngine {
       leg: leg.id,
       walletAddress: intent.walletAddress,
       inputMint: C3_CORE_MAINNET_CONFIG.assets.input,
+      inputAccount: leg.authorizationManifest?.inputAccount,
       inputAmountBaseUnits: leg.allocationUsdcBaseUnits,
       outputMint: leg.outputMint,
       destination: leg.destination,
       minimumOutputBaseUnits,
       treasuryAddress: this.options.treasuryAddress,
       jupiterProgramId: C3_CORE_MAINNET_CONFIG.programs.jupiterSwapV6,
+      approvedRouteProgramIds: leg.authorizationManifest?.approvedRouteProgramIds,
+      authorizationManifest: leg.authorizationManifest,
+      recovery: leg.recovery,
       temporaryWsolAccount:
         leg.id === 'SOL'
           ? getAssociatedTokenAddressSync(

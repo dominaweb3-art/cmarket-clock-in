@@ -49,7 +49,7 @@ This repository is a hackathon project and has no guarantee of production securi
 
 ## Guarded C3 Core Mainnet engine
 
-The C3 Core Mainnet engine is implemented separately from the verified Devnet payment flow and is disabled unless `EXPO_PUBLIC_ENABLE_C3_MAINNET` is exactly `true`. Runtime execution also requires the configured cluster to be `mainnet-beta`; missing, malformed, or ambiguous values fail closed. The tracked and local release configuration keeps the flag disabled.
+The C3 Core Mainnet engine is implemented separately from the verified Devnet payment flow. The shipped build uses a source-controlled immutable `false` capability constant; environment variables, route parameters, storage, and constructor values cannot enable Mainnet. Runtime execution also requires the exact `mainnet-beta` cluster, but that gate is unreachable while the release capability is false.
 
 The engine uses sequential Jupiter builds for 40% cbBTC, 30% Portal ETH, and 30% native SOL. It never embeds a Jupiter API key, requests fresh keyless builds immediately before each leg, caps slippage at 100 bps, validates mints, exact inputs, destinations, signers, fee payer, programs, and prohibited authority instructions, and rejects stale blockhashes or transactions over 1,232 bytes.
 
@@ -67,7 +67,7 @@ Security tests include a valid sanitized Jupiter V2 fixture plus malicious fixtu
 
 ### Phase 5G.2 recovery controls
 
-The disabled engine's persisted document is schema-versioned and strict. It rejects unknown versions, extra fields, malformed public keys or signatures, unsupported clusters or mints, altered allocations, duplicate IDs, stale revisions, impossible transitions, incomplete confirmed records, and legacy unversioned arrays. Allocations are recomputed from the original USDC base-unit total; persisted leg percentages, order, mints, and destinations are never trusted. Only approved diagnostic codes are retained, and transaction payloads or arbitrary provider error text are not persisted.
+The disabled engine's persisted document is schema-versioned and strict. It rejects unknown versions, extra fields, malformed public keys or signatures, unsupported clusters or mints, altered allocations, duplicate IDs, stale revisions, impossible transitions, incomplete confirmed records, missing authorization manifests, and legacy unversioned arrays. Allocations are recomputed from the original USDC base-unit total; persisted leg percentages, order, mints, and destinations are never trusted. Only approved diagnostic codes are retained, and transaction payloads or arbitrary provider error text are not persisted.
 
 State writes are serialized by an asynchronous mutex, guarded by expected revisions, staged, and verified by read-back. A conflict or storage failure cannot produce a submittable state. `submitted_unconfirmed`, `submission_outcome_uncertain`, and `reconciliation_required` are never converted to an ordinary failure or retried automatically. Confirmed legs are immutable, and a later leg cannot reset them.
 

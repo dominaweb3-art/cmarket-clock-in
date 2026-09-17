@@ -16,6 +16,7 @@ import type {
   C3CoreMainnetPurchaseState,
   C3PurchaseIntentIdGenerator,
 } from './c3-core-mainnet-core.ts'
+import type { C3MainnetAuthorizationManifest } from './c3-core-mainnet-manifest.ts'
 
 export const C3_CORE_MAINNET_PERSISTED_SCHEMA_VERSION = 3 as const
 export const C3_CORE_MAINNET_STORAGE_KEY = 'cmarket.c3-core-mainnet.purchase-intents.v3'
@@ -60,6 +61,7 @@ export type C3CoreMainnetLegRecord = Readonly<{
   minimumOutputBaseUnits?: string
   confirmedOutputBaseUnits?: string
   finalizedEvidence?: C3CoreMainnetFinalizedEvidence
+  authorizationManifest?: C3MainnetAuthorizationManifest
   recovery?: C3CoreMainnetRecoveryRecord
   updatedAt: number
   errorCode?: string
@@ -163,7 +165,10 @@ const ERROR_CODES = new Set([
   'recovered_signature',
   'history_no_match',
   'history_ambiguous',
+  'recovery_expired',
+  'recovery_exhausted',
   'missing_minimum_output',
+  'missing_authorization_manifest',
   'explicit_review_no_match',
 ])
 
@@ -290,6 +295,20 @@ export function createC3BoundedRecoveryRecord(
     attempts: 0,
     maxAttempts: 3,
   }
+}
+
+export type C3RecoveryAttemptResult = Readonly<{
+  status: 'allowed' | 'expired' | 'exhausted'
+  record: C3CoreMainnetRecoveryRecord
+}>
+
+export function consumeC3RecoveryAttempt(
+  record: C3CoreMainnetRecoveryRecord,
+  now = Date.now(),
+): C3RecoveryAttemptResult {
+  if (now >= record.expiresAt) return { status: 'expired', record }
+  if (record.attempts >= record.maxAttempts) return { status: 'exhausted', record }
+  return { status: 'allowed', record: { ...record, attempts: record.attempts + 1 } }
 }
 
 export class C3CoreMainnetStore {
@@ -483,7 +502,15 @@ function validateC3PersistedLeg(
   assertExactKeys(
     value,
     ['id', 'order', 'inputMint', 'outputMint', 'destination', 'allocationUsdcBaseUnits', 'state', 'updatedAt'],
-    ['signature', 'minimumOutputBaseUnits', 'confirmedOutputBaseUnits', 'finalizedEvidence', 'recovery', 'errorCode'],
+    [
+      'signature',
+      'minimumOutputBaseUnits',
+      'confirmedOutputBaseUnits',
+      'finalizedEvidence',
+      'authorizationManifest',
+      'recovery',
+      'errorCode',
+    ],
   )
   if (value.id !== id || value.order !== order) throw corrupt(`leg ${id} order or identifier changed`)
   if (value.inputMint !== C3_CORE_MAINNET_ASSETS.input) throw corrupt(`leg ${id} input mint changed`)
@@ -512,6 +539,8 @@ function validateC3PersistedLeg(
     expectBaseUnits(value.confirmedOutputBaseUnits, `leg ${id} confirmed output`)
   if (value.finalizedEvidence !== undefined)
     validateFinalizedEvidence(value.finalizedEvidence, `leg ${id} finalized evidence`)
+  if (value.authorizationManifest !== undefined)
+    validateAuthorizationManifest(value.authorizationManifest, `leg ${id} authorization manifest`)
   if (value.recovery !== undefined) validateRecoveryRecord(value.recovery, `leg ${id} recovery`)
   if (value.errorCode !== undefined) {
     const errorCode = expectString(value.errorCode, `leg ${id} error code`)
@@ -532,7 +561,7 @@ function validateC3PersistedLeg(
     throw corrupt(`leg ${id} confirmed output is outside confirmed state`)
   if (
     value.recovery !== undefined &&
-    !['submitted_unconfirmed', 'submission_outcome_uncertain', 'reconciliation_required'].includes(
+    !['awaiting_approval', 'submitted_unconfirmed', 'submission_outcome_uncertain', 'reconciliation_required'].includes(
       value.state as string,
     )
   )
@@ -559,6 +588,11 @@ function validateC3PersistedLeg(
   }
   if (value.state === 'awaiting_approval' && value.minimumOutputBaseUnits === undefined)
     throw corrupt(`leg ${id} awaiting approval has no approved minimum output`)
+  if (
+    ['pending', 'quoting', 'cancelled_before_submission'].includes(value.state as string) &&
+    value.authorizationManifest !== undefined
+  )
+    throw corrupt(`leg ${id} pre-approval state contains an authorization manifest`)
   if (
     ['pending', 'awaiting_approval', 'cancelled_before_submission'].includes(value.state as string) &&
     value.signature !== undefined
@@ -652,7 +686,8 @@ function assertImmutableIntentFields(previous: C3CoreMainnetPurchaseIntent, next
       before.inputMint !== after.inputMint ||
       before.outputMint !== after.outputMint ||
       before.destination !== after.destination ||
-      before.allocationUsdcBaseUnits !== after.allocationUsdcBaseUnits
+      before.allocationUsdcBaseUnits !== after.allocationUsdcBaseUnits ||
+      JSON.stringify(before.authorizationManifest) !== JSON.stringify(after.authorizationManifest)
     ) {
       throw new C3PersistenceError('storage_conflict', `C3 ${id} leg intent fields are immutable.`)
     }
@@ -681,6 +716,126 @@ function validateFinalizedEvidence(value: unknown, label: string): asserts value
   expectTimestamp(value.verifiedAt, `${label} verifiedAt`)
   const fingerprint = expectString(value.fingerprint, `${label} fingerprint`)
   if (fingerprint.length > 4096) throw corrupt(`${label} fingerprint is too large`)
+}
+
+function validateAuthorizationManifest(value: unknown, label: string): asserts value is C3MainnetAuthorizationManifest {
+  if (!isRecord(value)) throw corrupt(`${label} is invalid`)
+  const required = [
+    'version',
+    'leg',
+    'walletAddress',
+    'feePayer',
+    'requiredSignerAddresses',
+    'staticAccountKeys',
+    'messageHeader',
+    'addressLookupTables',
+    'outerInstructions',
+    'approvedRouteProgramIds',
+    'jupiterProgramId',
+    'inputMint',
+    'inputAccount',
+    'inputAmountBaseUnits',
+    'outputMint',
+    'outputDestination',
+    'minimumOutputBaseUnits',
+    'recentBlockhash',
+    'lastValidBlockHeight',
+    'minContextSlot',
+    'messageFingerprint',
+  ]
+  assertExactKeys(value, required, ['temporaryWsolAccount'])
+  if (value.version !== 1 || !['cbBTC', 'portalETH', 'SOL'].includes(value.leg as string))
+    throw corrupt(`${label} version or leg is invalid`)
+  expectPublicKey(value.walletAddress, `${label} wallet`)
+  expectPublicKey(value.feePayer, `${label} fee payer`)
+  if (
+    !Array.isArray(value.requiredSignerAddresses) ||
+    !value.requiredSignerAddresses.every((item) => typeof item === 'string')
+  )
+    throw corrupt(`${label} signers are invalid`)
+  if (
+    value.feePayer !== value.walletAddress ||
+    value.requiredSignerAddresses.length !== 1 ||
+    value.requiredSignerAddresses[0] !== value.walletAddress
+  )
+    throw corrupt(`${label} is not user-only`)
+  if (!Array.isArray(value.staticAccountKeys) || !value.staticAccountKeys.every(isManifestAccount))
+    throw corrupt(`${label} static account keys are invalid`)
+  if (
+    !isRecord(value.messageHeader) ||
+    !Number.isSafeInteger(value.messageHeader.numRequiredSignatures) ||
+    !Number.isSafeInteger(value.messageHeader.numReadonlySignedAccounts) ||
+    !Number.isSafeInteger(value.messageHeader.numReadonlyUnsignedAccounts) ||
+    value.messageHeader.numRequiredSignatures < 1 ||
+    value.messageHeader.numReadonlySignedAccounts < 0 ||
+    value.messageHeader.numReadonlyUnsignedAccounts < 0
+  )
+    throw corrupt(`${label} message header is invalid`)
+  if (!Array.isArray(value.addressLookupTables) || !value.addressLookupTables.every(isManifestLookupTable))
+    throw corrupt(`${label} lookup tables are invalid`)
+  if (!Array.isArray(value.outerInstructions) || !value.outerInstructions.every(isManifestInstruction))
+    throw corrupt(`${label} outer instructions are invalid`)
+  if (!Array.isArray(value.approvedRouteProgramIds) || !value.approvedRouteProgramIds.every(isPublicKeyString))
+    throw corrupt(`${label} route program registry is invalid`)
+  expectPublicKey(value.jupiterProgramId, `${label} Jupiter program`)
+  expectPublicKey(value.inputMint, `${label} input mint`)
+  expectPublicKey(value.inputAccount, `${label} input account`)
+  expectBaseUnits(value.inputAmountBaseUnits, `${label} input amount`)
+  expectPublicKey(value.outputMint, `${label} output mint`)
+  expectPublicKey(value.outputDestination, `${label} output destination`)
+  expectBaseUnits(value.minimumOutputBaseUnits, `${label} minimum output`)
+  if (value.temporaryWsolAccount !== undefined) expectPublicKey(value.temporaryWsolAccount, `${label} WSOL account`)
+  expectString(value.recentBlockhash, `${label} recent blockhash`)
+  if (!Number.isSafeInteger(value.lastValidBlockHeight) || value.lastValidBlockHeight <= 0)
+    throw corrupt(`${label} blockhash expiry is invalid`)
+  if (!Number.isSafeInteger(value.minContextSlot) || value.minContextSlot < 0)
+    throw corrupt(`${label} context slot is invalid`)
+  if (!/^[a-f0-9]{64}$/.test(String(value.messageFingerprint))) throw corrupt(`${label} fingerprint is invalid`)
+}
+
+function isPublicKeyString(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    new PublicKey(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isManifestAccount(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isPublicKeyString(value.address) &&
+    typeof value.isSigner === 'boolean' &&
+    typeof value.isWritable === 'boolean'
+  )
+}
+
+function isManifestInstruction(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Number.isSafeInteger(value.index) &&
+    value.index >= 0 &&
+    isPublicKeyString(value.programId) &&
+    Array.isArray(value.accounts) &&
+    value.accounts.every(isManifestAccount) &&
+    typeof value.dataBase64 === 'string'
+  )
+}
+
+function isManifestLookupTable(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isPublicKeyString(value.address) &&
+    Array.isArray(value.writableIndexes) &&
+    Array.isArray(value.readonlyIndexes) &&
+    Array.isArray(value.addresses) &&
+    Array.isArray(value.loadedWritableAddresses) &&
+    Array.isArray(value.loadedReadonlyAddresses) &&
+    [...value.writableIndexes, ...value.readonlyIndexes].every((index) => Number.isSafeInteger(index) && index >= 0) &&
+    [...value.addresses, ...value.loadedWritableAddresses, ...value.loadedReadonlyAddresses].every(isPublicKeyString)
+  )
 }
 
 function parseDocument(raw: string | null): PersistedDocument | null {

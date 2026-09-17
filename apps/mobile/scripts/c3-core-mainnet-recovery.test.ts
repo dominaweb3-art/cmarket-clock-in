@@ -5,6 +5,8 @@ import {
   migrateC3PersistedPurchaseIntent,
   C3_CORE_MAINNET_STORAGE_KEY,
   C3_CORE_MAINNET_STAGING_KEY,
+  consumeC3RecoveryAttempt,
+  createC3BoundedRecoveryRecord,
   type C3AsyncStorage,
   validateC3PersistedPurchaseIntent,
 } from '../services/c3-core-mainnet-state.ts'
@@ -27,6 +29,29 @@ const signature = REALISTIC_FIXTURE_SIGNATURE
 const secondSignature = 'AKAh9LUoWFG2sxAMotzmLNpKwPTCiG6Q4YTwAinZMnkvYKPAKVPwYSfoQDp8XLKWzpbCNx66XB1BrcD1ZUPqU39'
 const minOutput = '26000'
 const jupiter = C3_CORE_MAINNET_CONFIG.programs.jupiterSwapV6
+
+const recoveryBoundary = createC3BoundedRecoveryRecord('reconciliation_required', 10_000)
+assert(consumeC3RecoveryAttempt(recoveryBoundary, 10_000).record.attempts === 1, 'attempt 0 must be allowed')
+assert(
+  consumeC3RecoveryAttempt({ ...recoveryBoundary, attempts: 1 }, 10_000).record.attempts === 2,
+  'attempt 1 must be allowed',
+)
+assert(
+  consumeC3RecoveryAttempt({ ...recoveryBoundary, attempts: 2 }, 10_000).record.attempts === 3,
+  'attempt 2 must be allowed',
+)
+assert(
+  consumeC3RecoveryAttempt({ ...recoveryBoundary, attempts: 3 }, 10_000).status === 'exhausted',
+  'attempt 3 must exhaust',
+)
+assert(
+  consumeC3RecoveryAttempt({ ...recoveryBoundary, attempts: 2 }, recoveryBoundary.expiresAt).status === 'expired',
+  'exact expiry must block',
+)
+assert(
+  consumeC3RecoveryAttempt({ ...recoveryBoundary, attempts: 0 }, recoveryBoundary.expiresAt + 1).status === 'expired',
+  'post-expiry must block',
+)
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -146,6 +171,11 @@ assert(
 
 const provider = (name: string, item: C3MainnetTransactionEvidence, recent = false) => ({
   providerId: name,
+  operatorMetadata: {
+    operatorId: `operator-${name}`,
+    reviewed: true as const,
+    reviewReference: `review-${name}`,
+  },
   endpoint: `https://${name}.example.invalid/rpc`,
   cluster: 'mainnet-beta' as const,
   async getFinalizedTransaction() {

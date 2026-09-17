@@ -7,6 +7,10 @@ import {
   type C3MainnetTransactionEvidence,
 } from '../services/c3-core-mainnet-reconciliation.ts'
 import {
+  fingerprintC3AuthorizationMessage,
+  type C3MainnetAuthorizationManifest,
+} from '../services/c3-core-mainnet-manifest.ts'
+import {
   assertC3VersionedTransactionFits,
   C3TransactionSizeError,
   C3_MAINNET_ROUTE_ACCOUNT_LIMITS,
@@ -80,6 +84,78 @@ function evidence(leg: 'cbBTC' | 'portalETH' | 'SOL', overrides: Partial<C3Mainn
   return { ...realisticC3Evidence(leg), ...overrides }
 }
 
+function manifestFixture() {
+  const base = evidence('cbBTC')
+  const raw = base.raw
+  const staticAccountKeys = raw.accountKeys
+    .filter((account) => account.source === 'transaction')
+    .map(({ address, isSigner, isWritable }) => ({ address, isSigner, isWritable }))
+  const messageHeader = { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 0 }
+  const outerInstructions = raw.outerInstructions.map((instruction) => ({
+    index: instruction.index,
+    programId: instruction.programId,
+    accounts: instruction.accountAddresses.map((address) => {
+      const key = raw.accountKeys.find((candidate) => candidate.address === address)
+      return { address, isSigner: key?.isSigner ?? false, isWritable: key?.isWritable ?? false }
+    }),
+    dataBase64: instruction.dataBase64,
+  }))
+  const addressLookupTables = raw.addressLookupTables.map((table) => ({
+    address: table.address,
+    writableIndexes: table.writableIndexes,
+    readonlyIndexes: table.readonlyIndexes,
+    addresses: table.addresses,
+    loadedWritableAddresses: table.loadedWritableAddresses,
+    loadedReadonlyAddresses: table.loadedReadonlyAddresses,
+  }))
+  const recentBlockhash = '11111111111111111111111111111111'
+  const messageFingerprint = fingerprintC3AuthorizationMessage({
+    version: 0,
+    header: messageHeader,
+    recentBlockhash,
+    staticAccountKeys,
+    messageHeader,
+    addressLookupTables,
+    outerInstructions,
+  })
+  const manifest: C3MainnetAuthorizationManifest = {
+    version: 1,
+    leg: 'cbBTC',
+    walletAddress: REALISTIC_FIXTURE_WALLET,
+    feePayer: REALISTIC_FIXTURE_WALLET,
+    requiredSignerAddresses: [REALISTIC_FIXTURE_WALLET],
+    staticAccountKeys,
+    messageHeader,
+    addressLookupTables,
+    outerInstructions,
+    approvedRouteProgramIds: [REALISTIC_FIXTURE_ROUTE_PROGRAM],
+    jupiterProgramId: C3_CORE_MAINNET_CONFIG.programs.jupiterSwapV6,
+    inputMint: C3_CORE_MAINNET_CONFIG.assets.input,
+    inputAccount: 'GzHwuZ17v1L3avncqgpbmkFMwHThDRKntWQqVRSdwkHc',
+    inputAmountBaseUnits: '20000000',
+    outputMint: C3_CORE_MAINNET_CONFIG.assets.cbBTC,
+    outputDestination: REALISTIC_FIXTURE_CBBTC_DESTINATION,
+    minimumOutputBaseUnits: '26000',
+    recentBlockhash,
+    lastValidBlockHeight: 200,
+    minContextSlot: 100,
+    messageFingerprint,
+  }
+  return {
+    manifest,
+    evidence: evidence('cbBTC', {
+      raw: {
+        ...raw,
+        messageVersion: 0,
+        recentBlockhash,
+        requiredSignerCount: 1,
+        messageHeader,
+        staticAccountKeys: raw.accountKeys.filter((account) => account.source === 'transaction'),
+      },
+    }),
+  }
+}
+
 for (const leg of ['cbBTC', 'portalETH', 'SOL'] as const) {
   const verified = verifyC3MainnetTransactionEvidence(evidence(leg), {
     ...expectation(leg),
@@ -87,6 +163,80 @@ for (const leg of ['cbBTC', 'portalETH', 'SOL'] as const) {
   })
   assert.equal(verified.status, 'confirmed', `${leg} realistic fixture must verify`)
 }
+
+const bound = manifestFixture()
+const boundExpectation = {
+  ...expectation('cbBTC'),
+  inputAccount: bound.manifest.inputAccount,
+  authorizationManifest: bound.manifest,
+  signature: REALISTIC_FIXTURE_SIGNATURE,
+}
+const boundResult = verifyC3MainnetTransactionEvidence(bound.evidence, boundExpectation)
+assert.equal(boundResult.status, 'confirmed', JSON.stringify(boundResult.issues))
+const missingRouteEvidence = verifyC3MainnetTransactionEvidence(
+  { ...bound.evidence, executableProgramIds: undefined },
+  boundExpectation,
+)
+assert.equal(missingRouteEvidence.status, 'reconciliation_required', 'missing route evidence must fail closed')
+for (const [name, outerInstructions] of [
+  [
+    'modified outer Jupiter data',
+    bound.evidence.raw.outerInstructions.map((instruction, index) =>
+      index === 1 ? { ...instruction, dataBase64: 'AQID' } : instruction,
+    ),
+  ],
+  ['reordered outer instructions', [...bound.evidence.raw.outerInstructions].reverse()],
+  [
+    'extra outer account',
+    bound.evidence.raw.outerInstructions.map((instruction, index) =>
+      index === 1
+        ? { ...instruction, accountAddresses: [...instruction.accountAddresses, REALISTIC_FIXTURE_ROUTE_PROGRAM] }
+        : instruction,
+    ),
+  ],
+] as const) {
+  const hostile = verifyC3MainnetTransactionEvidence(
+    { ...bound.evidence, raw: { ...bound.evidence.raw, outerInstructions } },
+    boundExpectation,
+  )
+  assert.equal(hostile.status, 'reconciliation_required', `${name} must fail closed`)
+}
+
+const extraTokenAccount = '9dYjA7v6c7NfLh4d3hCkYQ1FQvYw8GqN6oP3rT2sU1V'
+const extraDebit = verifyC3MainnetTransactionEvidence(
+  {
+    ...bound.evidence,
+    raw: {
+      ...bound.evidence.raw,
+      accountKeys: [
+        ...bound.evidence.raw.accountKeys,
+        { address: extraTokenAccount, isSigner: false, isWritable: true, source: 'transaction' },
+      ],
+      preTokenBalances: [
+        ...bound.evidence.raw.preTokenBalances,
+        {
+          accountIndex: bound.evidence.raw.accountKeys.length,
+          mint: C3_CORE_MAINNET_CONFIG.assets.portalETH,
+          owner: REALISTIC_FIXTURE_WALLET,
+          amountBaseUnits: '100',
+        },
+      ],
+      postTokenBalances: [
+        ...bound.evidence.raw.postTokenBalances,
+        {
+          accountIndex: bound.evidence.raw.accountKeys.length,
+          mint: C3_CORE_MAINNET_CONFIG.assets.portalETH,
+          owner: REALISTIC_FIXTURE_WALLET,
+          amountBaseUnits: '0',
+        },
+      ],
+      preLamportBalances: [...bound.evidence.raw.preLamportBalances, '0'],
+      postLamportBalances: [...bound.evidence.raw.postLamportBalances, '0'],
+    },
+  },
+  boundExpectation,
+)
+assert.equal(extraDebit.status, 'reconciliation_required', 'extra user-owned token debit must fail closed')
 
 const maliciousInnerTransfer = evidence('cbBTC', {
   raw: {
@@ -162,6 +312,11 @@ const provider = (
   endpoint = `https://${providerId}.example.invalid/rpc`,
 ): C3MainnetConfirmationProvider => ({
   providerId,
+  operatorMetadata: {
+    operatorId: `operator-${providerId}`,
+    reviewed: true,
+    reviewReference: `review-${providerId}`,
+  },
   endpoint,
   cluster: 'mainnet-beta',
   async getFinalizedTransaction() {
@@ -209,6 +364,40 @@ assert.equal(matching.status, 'confirmed')
 assert.equal(matching.evidenceFingerprints?.length, 2)
 assert.match(getC3MainnetEvidenceFingerprint(evidence('portalETH'), 'rpc-a'), /"providerId":"rpc-a"/)
 assert.match(getC3MainnetEvidenceFingerprint(evidence('portalETH'), 'rpc-a'), /"blockTimeMs":1700000000000/)
+
+const httpProvider = await reconcileC3MainnetSignature(
+  [
+    provider('rpc-a', evidence('portalETH'), 'http://rpc-a.example.invalid/rpc'),
+    provider('rpc-b', evidence('portalETH')),
+  ],
+  REALISTIC_FIXTURE_SIGNATURE,
+  expected,
+)
+assert.equal(httpProvider.status, 'reconciliation_required')
+const sameOperator = await reconcileC3MainnetSignature(
+  [
+    provider('rpc-a', evidence('portalETH')),
+    {
+      ...provider('rpc-b', evidence('portalETH')),
+      operatorMetadata: { operatorId: 'operator-rpc-a', reviewed: true, reviewReference: 'review-rpc-b' },
+    },
+  ],
+  REALISTIC_FIXTURE_SIGNATURE,
+  expected,
+)
+assert.equal(sameOperator.status, 'reconciliation_required')
+const unreviewedOperator = await reconcileC3MainnetSignature(
+  [
+    provider('rpc-a', evidence('portalETH')),
+    {
+      ...provider('rpc-b', evidence('portalETH')),
+      operatorMetadata: { operatorId: 'operator-rpc-b', reviewed: false as unknown as true, reviewReference: '' },
+    },
+  ],
+  REALISTIC_FIXTURE_SIGNATURE,
+  expected,
+)
+assert.equal(unreviewedOperator.status, 'reconciliation_required')
 
 const oversizedPortalEth = createOversizedPortalEthTransaction()
 assert.deepEqual(C3_MAINNET_ROUTE_ACCOUNT_LIMITS, [64, 48, 32])

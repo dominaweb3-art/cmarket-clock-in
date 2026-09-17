@@ -106,6 +106,7 @@ const sourceToken = new PublicKey('GzHwuZ17v1L3avncqgpbmkFMwHThDRKntWQqVRSdwkHc'
 const outputAta = getAssociatedTokenAddressSync(C3_CORE_MAINNET_CONFIG.cbBTCMint, wallet).toBase58()
 const expectedWsolAccount = getAssociatedTokenAddressSync(C3_CORE_MAINNET_CONFIG.wrappedSolMint, wallet).toBase58()
 const ammAccount = '8TxrtAxqA5PA2Y1d2pxzCz9SoDhjrBcYqNAQKVv6p443'
+const approvedRouteProgram = '9xQeWvG816bUx9EPfP5uQ5aQJ7hXfD8h3WZ2kYp5u7V'
 const eventAuthority = 'D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf'
 const routeDiscriminator = [187, 100, 250, 204, 49, 196, 175, 20]
 
@@ -165,6 +166,7 @@ const validBuild: JupiterBuildResponse = {
   priceImpactPct: '0.1',
   blockhashWithMetadata: { blockhash: '11111111111111111111111111111111', lastValidBlockHeight: 1 },
   swapInstruction: validSwapInstruction,
+  approvedRouteProgramIds: [approvedRouteProgram],
   routePlan: [
     {
       percent: 100,

@@ -272,7 +272,7 @@ This phase does not change the verified Devnet payment flow or mobile transactio
 
 ## 14. Phase 5E — Disabled non-custodial engine
 
-The first production-oriented engine is implemented behind the public flag `EXPO_PUBLIC_ENABLE_C3_MAINNET`. The flag is fail-closed: only the exact string `true` enables it, and execution is refused unless the configured cluster is `mainnet-beta`. The current `.env.example` keeps the flag `false`; the Devnet app continues to use its existing configuration and purchase implementation.
+The reviewed engine is preserved as a disabled implementation separate from the Devnet payment screen. The shipped artifact uses an immutable source-controlled `false` capability constant; environment variables, route parameters, storage, and constructor values cannot enable Mainnet. The exact `mainnet-beta` runtime gate remains a defense-in-depth check for a separately reviewed future artifact.
 
 The engine is isolated under `services/c3-core-mainnet-*` and `constants/c3-core-mainnet.ts`. It centralizes the verified Mainnet mints, decimals, 40/30/30 weights, 100-basis-point slippage cap, Jupiter keyless endpoints, program allowlist, 1,232-byte limit, and blockhash policy. Integer USDC allocation assigns 40% to cbBTC and 30% to Portal ETH; native SOL receives the remainder so all legs sum exactly to the requested amount. Purchases below 50 USDC are rejected on Mainnet only.
 
@@ -284,7 +284,7 @@ The guarded route is registered only for deep-link and future integration testin
 
 ## 15. Phase 5G.1 — Transaction-validation hardening
 
-The disabled engine was hardened after an independent security review. Mainnet remains disabled by default and the verified Devnet payment flow is unchanged. The engine has no caller-controlled enable override: the exact environment value `EXPO_PUBLIC_ENABLE_C3_MAINNET=true` is required, and the runtime cluster must be exactly `mainnet-beta`. Release builds therefore fail closed when the flag is absent, malformed, or false.
+The disabled engine was hardened after an independent security review. Mainnet remains disabled in the current artifact and the verified Devnet payment flow is unchanged. The capability is source-controlled and immutable `false`; there is no environment, caller, route, or storage override. A future artifact would still require the exact `mainnet-beta` cluster and the complete release/security gate.
 
 Purchase amounts are parsed as strict decimal strings into USDC base-unit `bigint` values. Signs, scientific notation, non-finite values, excess precision, leading-zero forms, negative values, and overflow are rejected. Mainnet purchases must be between 50 and 500 USDC. The 40/30/30 allocation uses integer arithmetic and assigns the remainder to SOL so the three legs always sum exactly to the input.
 
@@ -302,7 +302,7 @@ Authoritative implementation references: Jupiter's V2 build schema at https://de
 
 ## Phase 5G.2 persistence and recovery hardening
 
-The disabled Mainnet engine now uses a strict persisted document schema version 2 under a dedicated AsyncStorage key. The document contains only a monotonic document revision and validated purchase metadata. Each intent records the exact `mainnet-beta` cluster, canonical wallet, immutable total input, basket version, per-leg order, approved input/output mints, user-owned destination, state, public signature, approved minimum output, confirmed output, timestamps, and a bounded diagnostic code. Unknown schema versions, extra fields, malformed keys or signatures, unsupported mints, changed allocations, non-canonical integers, invalid timestamps, impossible states, duplicate IDs, and legacy array data are rejected; corrupted data is not silently converted into an executable purchase.
+The disabled Mainnet engine now uses a strict persisted document schema version 3 under a dedicated AsyncStorage key. The document contains only a monotonic document revision, validated purchase metadata, safe authorization-manifest metadata, and bounded recovery evidence. Each intent records the exact `mainnet-beta` cluster, canonical wallet, immutable total input, basket version, per-leg order, approved input/output mints, user-owned destination, state, public signature, approved minimum output, confirmed output, timestamps, and a bounded diagnostic code. Unknown schema versions, extra fields, malformed keys or signatures, unsupported mints, changed allocations, non-canonical integers, invalid timestamps, impossible states, duplicate IDs, missing manifest evidence, and legacy array data are rejected; corrupted data is not silently converted into an executable purchase.
 
 Allocations are recomputed from the immutable original USDC base-unit total on every read: 40% cbBTC, 30% Portal ETH, and the exact remainder as the SOL leg. The three leg amounts must sum exactly to the original input and remain constrained to 50–500 USDC. Intent IDs use 128 bits from the platform cryptographic random source and support an injected generator in tests; they are not derived from wallet, amount, or time.
 
@@ -419,3 +419,17 @@ Recovery records are bounded to a 24-hour review window and three attempts. A re
 - The signed APK remains the Devnet release and is validated with its existing package identity and cold-launch procedure. No wallet approval or transaction is part of this phase.
 
 The verified Devnet USDC payment flow is unchanged. Mainnet source remains disabled and excluded from the normal Expo Router graph; this phase does not claim Mainnet settlement capability.
+
+## Phase 5K — final reconciliation security gate
+
+Phase 5K closes the remaining reconciliation and recovery controls without enabling Mainnet or changing the verified Devnet transaction flow.
+
+Before any future wallet invocation, the engine creates a canonical authorization manifest from the validated v0 transaction and resolved lookup tables. The manifest records only public, reviewable metadata and a SHA-256 message fingerprint: the wallet and fee payer, required signers, message header, static keys, ALT addresses and indexes, ordered outer instruction program/account/data metadata, exact input and output fields, approved route program IDs, blockhash context, and the expected temporary WSOL account when applicable. Raw signed or unsigned payloads are not persisted. The same manifest is compared with finalized RPC evidence after confirmation; changed instruction order, data, accounts, blockhash, ALT contents, route registry, or wallet-facing fields fails closed.
+
+Reconciliation validates outer and inner instructions and all observed token effects. It accepts only the approved USDC debit and the expected user-owned output, rejects extra user-owned token debits or credits, and rejects unknown programs, authority changes, delegates, approvals, arbitrary SOL destinations, treasury outputs, and unrelated account closes. Missing owners, inner evidence, message fields, ALT evidence, route IDs, or effect evidence are failures, not successful confirmations. A finalized status or null `meta.err` alone is never treated as proof of payment.
+
+The approved route registry is now part of build validation and the authorization manifest. A build with no explicit canonical route program IDs cannot reach approval; every route ID is rechecked during reconciliation. Production confirmation providers must use HTTPS endpoints, distinct normalized URLs, distinct provider IDs, and distinct reviewed operator IDs. HTTP endpoints, duplicate identities, duplicate operators, shared endpoints, or missing operator metadata fail closed. Test fixtures may inject providers, but the disabled mobile release has no Mainnet provider configuration.
+
+Recovery is durable and bounded to a 24-hour window with at most three read-only attempts. The attempt is consumed before each recovery query and the updated revision is persisted. Public signatures and evidence survive restart. There is no automatic resubmission or reversal; expired or exhausted recovery remains blocked for explicit review. The state matrix and hostile fixtures cover modified or reordered outer instructions, extra accounts, unexpected token debits, route-registry failures, provider policy violations, recovery boundaries, and impossible persisted combinations.
+
+The Portal ETH serialization boundary remains fail closed at 1,232 bytes. It is measured before wallet invocation, and bounded route-shaping fallback cannot turn a size failure into approval. This remediation does not claim Portal ETH live execution, atomic three-leg settlement, or Mainnet readiness. Mainnet remains hidden, the immutable build capability remains `false`, and the Devnet-only APK contains no Mainnet endpoints, mints, or route registration.

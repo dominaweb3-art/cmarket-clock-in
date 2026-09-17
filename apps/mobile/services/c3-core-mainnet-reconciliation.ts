@@ -4,6 +4,12 @@ import bs58 from 'bs58'
 import { C3_CORE_MAINNET_ASSETS } from './c3-core-mainnet-core.ts'
 import type { C3CoreMainnetLegId } from './c3-core-mainnet-core.ts'
 import { C3_CORE_MAINNET_CONFIG } from '../constants/c3-core-mainnet.ts'
+import type {
+  C3AuthorizationAccount,
+  C3AuthorizationInstruction,
+  C3MainnetAuthorizationManifest,
+} from './c3-core-mainnet-manifest.ts'
+import { fingerprintC3AuthorizationMessage } from './c3-core-mainnet-manifest.ts'
 
 export type C3MainnetAccountKeyEvidence = Readonly<{
   address: string
@@ -41,6 +47,15 @@ export type C3MainnetLookupTableEvidence = Readonly<{
 }>
 
 export type C3MainnetRawTransactionEvidence = Readonly<{
+  messageVersion?: 0
+  recentBlockhash?: string
+  requiredSignerCount?: number
+  messageHeader?: Readonly<{
+    numRequiredSignatures: number
+    numReadonlySignedAccounts: number
+    numReadonlyUnsignedAccounts: number
+  }>
+  staticAccountKeys?: readonly C3MainnetAccountKeyEvidence[]
   accountKeys: readonly C3MainnetAccountKeyEvidence[]
   outerInstructions: readonly C3MainnetInstructionEvidence[]
   innerInstructions: readonly C3MainnetInstructionEvidence[]
@@ -90,6 +105,7 @@ export type C3MainnetLegExpectation = Readonly<{
   leg: C3CoreMainnetLegId
   walletAddress: string
   inputMint: string
+  inputAccount?: string
   inputAmountBaseUnits: string
   outputMint: string
   destination: string
@@ -97,6 +113,8 @@ export type C3MainnetLegExpectation = Readonly<{
   treasuryAddress?: string
   jupiterProgramId: string
   approvedRouteProgramIds?: readonly string[]
+  authorizationManifest?: C3MainnetAuthorizationManifest
+  recovery?: Readonly<{ createdAt: number; expiresAt: number; attempts: number; maxAttempts: number }>
   temporaryWsolAccount?: string
   createdAtMs?: number
   nowMs?: number
@@ -113,8 +131,15 @@ export type C3MainnetReconciliationResult = Readonly<{
   evidenceFingerprints?: readonly string[]
 }>
 
+export type C3MainnetOperatorMetadata = Readonly<{
+  operatorId: string
+  reviewed: true
+  reviewReference: string
+}>
+
 export type C3MainnetConfirmationProvider = Readonly<{
   providerId: string
+  operatorMetadata: C3MainnetOperatorMetadata
   endpoint: string
   cluster: 'mainnet-beta'
   getFinalizedTransaction: (signature: string) => Promise<C3MainnetTransactionEvidence | null>
@@ -182,6 +207,8 @@ export function verifyC3MainnetTransactionEvidence(
     issues.push('unexpected lamport recipient')
   }
   if (!evidence.lookupTablesValidated) issues.push('address lookup tables were not independently validated')
+
+  if (expected.authorizationManifest) validateAuthorizationManifestEquivalence(evidence, expected, issues)
 
   issues.push(...validateRawEvidence(evidence.raw, evidence, expected))
 
@@ -308,7 +335,7 @@ export async function reconcileC3MainnetSignature(
 }
 
 export type C3MainnetRecoveryResult = Readonly<{
-  status: 'recovered' | 'none' | 'ambiguous' | 'reconciliation_required'
+  status: 'recovered' | 'none' | 'ambiguous' | 'reconciliation_required' | 'expired' | 'exhausted'
   signature?: string
   candidates: readonly string[]
   issues: readonly string[]
@@ -319,6 +346,13 @@ export async function recoverC3MainnetSignature(
   expected: Omit<C3MainnetLegExpectation, 'signature'>,
   limit = 20,
 ): Promise<C3MainnetRecoveryResult> {
+  if (expected.recovery) {
+    const now = expected.nowMs ?? Date.now()
+    if (now >= expected.recovery.expiresAt)
+      return { status: 'expired', candidates: [], issues: ['recovery window has expired'] }
+    if (expected.recovery.attempts > expected.recovery.maxAttempts)
+      return { status: 'exhausted', candidates: [], issues: ['recovery attempt budget is exhausted'] }
+  }
   if (!provider.getRecentTransactions)
     return { status: 'reconciliation_required', candidates: [], issues: ['bounded wallet history is unavailable'] }
   let history: readonly C3MainnetTransactionEvidence[]
@@ -354,11 +388,13 @@ export async function recoverC3MainnetSignature(
 
 export function createConnectionConfirmationProvider(
   providerId: string,
+  operatorMetadata: C3MainnetOperatorMetadata,
   connection: Connection,
   endpoint = connection.rpcEndpoint,
 ): C3MainnetConfirmationProvider {
   return {
     providerId,
+    operatorMetadata,
     endpoint,
     cluster: 'mainnet-beta',
     async getFinalizedTransaction(signature) {
@@ -423,6 +459,21 @@ async function parseConnectionTransaction(
   const feePayer = signerAddresses[0] ?? ''
   const lookupResolution = await resolveLookupTables(connection, message, meta, transaction.slot)
   const raw: C3MainnetRawTransactionEvidence = {
+    messageVersion: message?.version === 0 ? 0 : undefined,
+    recentBlockhash: typeof message?.recentBlockhash === 'string' ? message.recentBlockhash : undefined,
+    requiredSignerCount: Number(message?.header?.numRequiredSignatures ?? -1),
+    messageHeader:
+      message?.header &&
+      Number.isSafeInteger(Number(message.header.numRequiredSignatures)) &&
+      Number.isSafeInteger(Number(message.header.numReadonlySignedAccounts)) &&
+      Number.isSafeInteger(Number(message.header.numReadonlyUnsignedAccounts))
+        ? {
+            numRequiredSignatures: Number(message.header.numRequiredSignatures),
+            numReadonlySignedAccounts: Number(message.header.numReadonlySignedAccounts),
+            numReadonlyUnsignedAccounts: Number(message.header.numReadonlyUnsignedAccounts),
+          }
+        : undefined,
+    staticAccountKeys,
     accountKeys,
     outerInstructions,
     innerInstructions,
@@ -604,11 +655,100 @@ function validateRawEvidence(
       issues.push('instruction contains an invalid account key')
     if (!isBase64(instruction.dataBase64)) issues.push('instruction data is not valid base64')
     validateInstructionSemantics(instruction, parentAccounts, expected, issues)
+    if (instruction.parentIndex !== undefined && !parentAccounts.has(instruction.parentIndex))
+      issues.push('inner instruction refers to a missing outer instruction')
   }
   validateTokenEffects(raw, evidence, expected, issues)
   validateLamportEffects(raw, expected, issues)
   validateLookupEvidence(raw, evidence.slot, issues)
   return issues
+}
+
+function validateAuthorizationManifestEquivalence(
+  evidence: C3MainnetTransactionEvidence,
+  expected: C3MainnetLegExpectation,
+  issues: string[],
+) {
+  const manifest = expected.authorizationManifest
+  if (!manifest) return
+  const raw = evidence.raw
+  if (
+    raw.messageVersion !== 0 ||
+    !raw.recentBlockhash ||
+    !raw.messageHeader ||
+    !raw.staticAccountKeys ||
+    !Array.isArray(evidence.executableProgramIds) ||
+    raw.staticAccountKeys.length !== manifest.staticAccountKeys.length
+  ) {
+    issues.push('finalized transaction is missing the approved message manifest evidence')
+    return
+  }
+  if (raw.recentBlockhash !== manifest.recentBlockhash) issues.push('recent blockhash differs from approved manifest')
+  if (JSON.stringify(raw.messageHeader) !== JSON.stringify(manifest.messageHeader))
+    issues.push('message header differs from approved manifest')
+  const actualStaticAccountKeys = raw.staticAccountKeys.map(({ address, isSigner, isWritable }) => ({
+    address,
+    isSigner,
+    isWritable,
+  }))
+  if (JSON.stringify(actualStaticAccountKeys) !== JSON.stringify(manifest.staticAccountKeys))
+    issues.push('static account keys differ from approved manifest')
+
+  const actualInstructions: C3AuthorizationInstruction[] = raw.outerInstructions.map((instruction) => ({
+    index: instruction.index,
+    programId: instruction.programId,
+    accounts: instruction.accountAddresses.map((address) => {
+      const key = raw.accountKeys.find((candidate) => candidate.address === address)
+      return {
+        address,
+        isSigner: key?.isSigner ?? false,
+        isWritable: key?.isWritable ?? false,
+      }
+    }),
+    dataBase64: instruction.dataBase64,
+  }))
+  if (JSON.stringify(actualInstructions) !== JSON.stringify(manifest.outerInstructions))
+    issues.push('outer instruction message differs from approved manifest')
+
+  const actualTables = raw.addressLookupTables.map((table) => ({
+    address: table.address,
+    writableIndexes: table.writableIndexes,
+    readonlyIndexes: table.readonlyIndexes,
+    addresses: table.addresses,
+    loadedWritableAddresses: table.loadedWritableAddresses,
+    loadedReadonlyAddresses: table.loadedReadonlyAddresses,
+  }))
+  if (JSON.stringify(actualTables) !== JSON.stringify(manifest.addressLookupTables))
+    issues.push('address lookup table evidence differs from approved manifest')
+
+  const actualRoutePrograms = (evidence.executableProgramIds ?? [])
+    .filter((programId) => !CORE_PROGRAMS.has(programId))
+    .filter((programId) => programId !== manifest.jupiterProgramId)
+    .sort()
+  if (JSON.stringify(actualRoutePrograms) !== JSON.stringify([...manifest.approvedRouteProgramIds].sort()))
+    issues.push('finalized route programs differ from the approved route registry')
+
+  const fingerprint = fingerprintC3AuthorizationMessage({
+    version: raw.messageVersion,
+    header: raw.messageHeader,
+    recentBlockhash: raw.recentBlockhash,
+    staticAccountKeys: actualStaticAccountKeys,
+    messageHeader: raw.messageHeader,
+    addressLookupTables: actualTables,
+    outerInstructions: actualInstructions,
+  })
+  if (fingerprint !== manifest.messageFingerprint) issues.push('finalized message fingerprint differs from approval')
+
+  if (manifest.walletAddress !== expected.walletAddress || manifest.feePayer !== expected.walletAddress)
+    issues.push('approved manifest wallet or fee payer is not the connected wallet')
+  if (manifest.inputMint !== expected.inputMint || manifest.outputMint !== expected.outputMint)
+    issues.push('approved manifest mints differ from the reconciliation expectation')
+  if (manifest.inputAmountBaseUnits !== expected.inputAmountBaseUnits)
+    issues.push('approved manifest input amount differs from the reconciliation expectation')
+  if (manifest.minimumOutputBaseUnits !== expected.minimumOutputBaseUnits)
+    issues.push('approved manifest minimum output differs from the reconciliation expectation')
+  if (manifest.outputDestination !== expected.destination)
+    issues.push('approved manifest destination differs from the reconciliation expectation')
 }
 
 function validateInstructionSemantics(
@@ -719,6 +859,7 @@ function validateTokenEffects(
     if (!isCanonicalBaseUnits(delta.amountBaseUnits)) issues.push('token balance evidence is malformed')
     if (expected.treasuryAddress && delta.address === expected.treasuryAddress)
       issues.push('token balance evidence references the treasury')
+    if (!delta.owner) issues.push('token balance evidence is missing an owner')
   }
   if (evidence.metaErr !== null) return
   const inputDebit = deltas
@@ -726,6 +867,29 @@ function validateTokenEffects(
     .reduce((total, delta) => total - delta.delta, 0n)
   if (inputDebit !== BigInt(expected.inputAmountBaseUnits))
     issues.push('raw token balances do not prove the exact USDC debit')
+  const userOwnedDeltas = deltas.filter((delta) => delta.owner === expected.walletAddress && delta.delta !== 0n)
+  for (const delta of userOwnedDeltas) {
+    if (
+      delta.mint === expected.inputMint &&
+      delta.delta < 0n &&
+      (!expected.inputAccount || delta.address === expected.inputAccount)
+    )
+      continue
+    if (
+      expected.leg !== 'SOL' &&
+      delta.mint === expected.outputMint &&
+      delta.delta > 0n &&
+      delta.address === expected.destination
+    )
+      continue
+    if (
+      expected.leg === 'SOL' &&
+      delta.mint === C3_CORE_MAINNET_ASSETS.wSOL &&
+      (delta.address === expected.temporaryWsolAccount || delta.address === expected.walletAddress)
+    )
+      continue
+    issues.push('unexpected user-owned token balance effect')
+  }
   if (expected.leg !== 'SOL') {
     const outputDeltas = deltas.filter((delta) => delta.mint === expected.outputMint && delta.delta > 0n)
     const destinationDelta = outputDeltas.find((delta) => delta.address === expected.destination)
@@ -945,9 +1109,18 @@ function publicKeyText(value: unknown): string | null {
 function validateIndependentProviders(providers: readonly C3MainnetConfirmationProvider[]): string[] {
   if (providers.length < 2) return ['two independently configured Mainnet confirmation providers are required']
   const ids = providers.map((provider) => provider.providerId.trim())
+  const operatorIds = providers.map((provider) => provider.operatorMetadata?.operatorId?.trim() ?? '')
   const endpoints = providers.map((provider) => normalizeRpcEndpoint(provider.endpoint))
   if (ids.some((id) => !id)) return ['every confirmation provider requires a non-empty provider identity']
   if (new Set(ids).size !== ids.length) return ['confirmation provider identities must be distinct']
+  if (
+    providers.some(
+      (provider) => provider.operatorMetadata?.reviewed !== true || !provider.operatorMetadata.reviewReference?.trim(),
+    )
+  )
+    return ['every confirmation provider requires reviewed operator metadata']
+  if (operatorIds.some((id) => !id)) return ['every confirmation provider requires a reviewed operator identity']
+  if (new Set(operatorIds).size !== operatorIds.length) return ['confirmation provider operators must be distinct']
   if (endpoints.some((endpoint) => endpoint === null))
     return ['every confirmation provider requires a valid RPC endpoint']
   const normalized = endpoints as string[]
@@ -960,15 +1133,9 @@ function validateIndependentProviders(providers: readonly C3MainnetConfirmationP
 function normalizeRpcEndpoint(endpoint: string): string | null {
   try {
     const parsed = new URL(endpoint)
-    if (
-      !['https:', 'http:'].includes(parsed.protocol) ||
-      parsed.username ||
-      parsed.password ||
-      parsed.search ||
-      parsed.hash
-    )
-      return null
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) return null
     parsed.hostname = parsed.hostname.toLowerCase()
+    if (parsed.port === '443') parsed.port = ''
     parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/'
     return parsed.toString()
   } catch {

@@ -21,6 +21,7 @@ export type JupiterRoutePlanItem = Readonly<{
   swapInfo?: {
     label?: string
     ammKey?: string
+    programId?: string
     inputMint?: string
     outputMint?: string
     inAmount?: string
@@ -52,6 +53,7 @@ export type JupiterBuildResponse = Readonly<{
   prioritizationFeeLamports?: unknown
   platformFee?: unknown
   routePlan: ReadonlyArray<JupiterRoutePlanItem>
+  approvedRouteProgramIds?: readonly string[]
 }>
 
 export type C3CoreMainnetValidationContext = Readonly<{
@@ -70,6 +72,7 @@ export type C3CoreMainnetValidationResult = Readonly<{
   outputDestinationMentions: string[]
   signerAccounts: string[]
   programIds: string[]
+  approvedRouteProgramIds: string[]
   issues: string[]
 }>
 
@@ -331,6 +334,14 @@ export function validateC3CoreMainnetTransaction(
     ),
   )
   const programIds = unique(instructions.map((instruction) => instruction.programId))
+  const approvedRouteProgramIds = unique([
+    ...(build.approvedRouteProgramIds ?? []),
+    ...(build.routePlan ?? []).map((route) => route.swapInfo?.programId ?? '').filter(Boolean),
+  ])
+  for (const programId of approvedRouteProgramIds) {
+    if (!isCanonicalPublicKey(programId)) issues.push(`approved route program ID is invalid: ${programId}`)
+  }
+  if (approvedRouteProgramIds.length === 0) issues.push('approved route program registry is missing')
   const outputDestinationMentions = unique(
     instructions
       .flatMap((instruction) => instruction.accounts.map((account) => account.pubkey))
@@ -461,6 +472,7 @@ export function validateC3CoreMainnetTransaction(
     outputDestinationMentions,
     signerAccounts,
     programIds,
+    approvedRouteProgramIds,
     issues,
   }
 }
@@ -822,6 +834,14 @@ function requireRouteString(value: string | undefined, label: string, issues: st
   } catch {
     issues.push(`${label} is not a valid public key`)
     return null
+  }
+}
+
+function isCanonicalPublicKey(value: string): boolean {
+  try {
+    return new PublicKey(value).toBase58() === value
+  } catch {
+    return false
   }
 }
 

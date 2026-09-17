@@ -87,7 +87,7 @@ The implementation now uses the MWA 2.0 `signAndSendTransactions` path recommend
 
 ## Phase 5E guarded Mainnet engine
 
-The disabled C3 Core Mainnet engine is separate from the Devnet purchase screen. `EXPO_PUBLIC_ENABLE_C3_MAINNET` defaults to `false`, is required to be exactly `true`, and still cannot execute unless the configured cluster is `mainnet-beta`. The normal mobile UI does not expose navigation to the Mainnet route while the guard is false; a direct route attempt shows the disabled state.
+The disabled C3 Core Mainnet engine is separate from the Devnet purchase screen. The shipped artifact uses an immutable source-controlled `false` capability constant; `EXPO_PUBLIC_ENABLE_C3_MAINNET`, route parameters, storage, and constructor values cannot enable it. The normal mobile UI does not expose Mainnet navigation, and the exact `mainnet-beta` runtime gate remains unreachable in this artifact.
 
 The engine prepares three sequential non-custodial legs: 40% cbBTC, 30% Wormhole Portal ETH, and 30% native SOL. It requests fresh keyless Jupiter builds, applies 100 bps maximum slippage, validates the transaction before any wallet request, and persists no transaction payloads. Each future leg will require its own review and wallet approval. The current Devnet app and verified Devnet payment remain unchanged.
 
