@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "C Market",
+    "slug": "c-market",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "cmarket",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.dominaweb3.cmarket",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#102A43"
+      }
+    },
+    "plugins": [
+      "expo-dev-client"
+    ]
+  }
+}

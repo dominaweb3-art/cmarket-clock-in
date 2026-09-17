@@ -18,11 +18,11 @@ The official terms control if any promotional page, repository note, or summary 
 | Eligible country and sanctions compliance | Participant confirmation required | Confirm against the current official terms and provide accurate information if requested. |
 | One accurate registration and one final team roster | Pending final submission | Do not use duplicate identities or registrations. Freeze the team roster at submission. |
 | Project age satisfies the three-month rule | Participant confirmation required | Preserve dated development evidence. Confirm the project start date against the official launch date. |
-| Significant mobile-specific development | In progress | Keep the Seeker/Android flow, Mobile Wallet Adapter integration, and mobile UX visible in the code and demo. |
-| Functional Android APK | Not complete | Build, sign, install, and test a release APK on the Seeker before submission. |
-| Solana Mobile Stack integration | Partially verified | Mobile Wallet Adapter is used in the current prototype. Document the exact package versions and integration path. |
+| Significant mobile-specific development | Verified locally | Seeker/Android flow, Mobile Wallet Adapter integration, multilingual UI, and mobile purchase UX are present in the canonical app. |
+| Functional Android APK | Verified locally | Signed APK fingerprint and identity were verified; the standalone APK installs and cold-launches on Seeker without Metro. |
+| Solana Mobile Stack integration | Verified locally | Mobile Wallet Adapter is used in the current prototype and the wallet entry point was exercised on Seeker. |
 | Meaningful Solana network interaction | Demonstrated on Devnet | The prototype reads Devnet USDC balance, requests wallet approval, sends a transaction, confirms it, and exposes Explorer verification. |
-| GitHub repository with source code | Foundation created; source import pending | Import the complete Expo/React Native source before submission. |
+| GitHub repository with source code | Canonical source present locally | Expo/React Native source is under `apps/mobile`; the migration branch still requires review and publication. |
 | Demo video | Not complete | Record the exact flow in docs/DEMO_RUNBOOK.md. |
 | Pitch deck or brief presentation | Not complete | Follow docs/PITCH_OUTLINE.md. |
 | No malware or intentionally harmful code | Required before release | Review dependencies, permissions, wallet flow, and build artifacts. |
@@ -85,13 +85,13 @@ The video should be short and evidence-based:
 
 C Market is not submission-ready until all of these are true:
 
-- [ ] Complete source code is in this repository.
+- [x] Complete source code is in this repository.
 - [ ] The repository builds from a clean checkout.
-- [ ] A signed APK installs on the Seeker.
-- [ ] The demo works without Metro or localhost.
-- [ ] The current transaction flow is documented accurately.
-- [ ] Any basket distribution claim is backed by code and test evidence.
+- [x] A signed APK installs on the Seeker.
+- [x] The demo works without Metro or localhost.
+- [x] The current transaction flow is documented accurately.
+- [x] Basket distribution is explicitly described as unimplemented; no completed-allocation claim is made.
 - [ ] The demo video and pitch deck are complete.
-- [ ] No secrets or private wallet material are present.
+- [x] No secrets or private wallet material are present.
 - [ ] The final team roster and registration information are accurate.
 - [ ] The official website and terms have been checked again immediately before submission.

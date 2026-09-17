@@ -1,5 +1,7 @@
 # C Market Pitch Outline
 
+![C Market — Onchain indexes for a brighter tomorrow](../assets/brand/cmarket-wordmark.png)
+
 ## Slide 1 — The one-line idea
 
 **C Market makes on-chain basket discovery and purchase understandable on a Solana Mobile device.**
