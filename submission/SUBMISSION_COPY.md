@@ -47,8 +47,8 @@ APK is signed, installable, and tested on a physical Seeker with Metro stopped.
 - Version: 0.1.1 (version code 2)
 - Network: Solana Devnet
 - Verified payment: 5 USDC, signature
-  `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd`
-- Explorer: https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet
+  `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd`
+- Explorer: https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet
 
 ## Honest limitations and roadmap
 

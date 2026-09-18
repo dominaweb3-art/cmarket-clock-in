@@ -14,7 +14,9 @@ not publish a time here.
 - [ ] Verify SHA-256 equals
       `09ef92848c97c7968ab6eb71d41fc1b458e54584d52746f6b457acae0c18146a`.
 - [ ] Demo video following `DEMO_SCRIPT.md`.
+- [ ] Use `DEMO_NARRATION_SIMPLE_ENGLISH.md` if a shorter reading guide is needed.
 - [ ] Pitch deck following `PITCH_DECK_CONTENT.md`.
+- [ ] Review `SCREENSHOT_MANIFEST.md` and `PLACEHOLDER_MATRIX.md`.
 - [ ] Team name, team members, email, and any required public wallet field.
 - [ ] Final review of the official portal's current fields and terms.
 

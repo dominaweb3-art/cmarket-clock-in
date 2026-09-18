@@ -60,7 +60,7 @@ Show: confirmation, Activity receipt if present, and the Devnet Explorer URL.
 Say: “The receipt is tied to a public Devnet signature. This proves the
 payment path, not basket ownership or settlement.”
 
-Reference signature: `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd`.
+Reference signature: `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd`.
 
 ## 2:25–2:45 — Languages and retention
 

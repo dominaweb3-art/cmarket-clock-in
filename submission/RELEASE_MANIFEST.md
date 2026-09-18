@@ -30,8 +30,8 @@ not recorded here.
 - 5 USDC minimum validation: verified
 - Successful supervised Devnet payment: verified
 - Explorer signature:
-  `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd`
-- Explorer URL: https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet
+  `4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd`
+- Explorer URL: https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet
 - Localized UI: English, Español, 简体中文, Português (Brasil)
 
 ## Reproduction

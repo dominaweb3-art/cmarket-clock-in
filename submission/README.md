@@ -24,9 +24,9 @@ anything.
 
 The verified payment signature is:
 
-`4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd`
+`4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd`
 
-[View the verified Devnet transaction](https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HRVHud2NayLQyAJaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet)
+[View the verified Devnet transaction](https://explorer.solana.com/tx/4UgAEFftkfDzQix9UjoHbLFWchLqQ3ZtGb9rZvSaugC2HrRVHud2NayLQyAJaaobU8yz3wCp1bwJcja9UMjcf3Dd?cluster=devnet)
 
 ## Truthful product boundary
 
@@ -72,4 +72,7 @@ Source repository: [github.com/dominaweb3-art/cmarket-clock-in](https://github.c
 - `DEMO_SHOT_LIST.md` — recording and screenshot checklist
 - `PITCH_DECK_CONTENT.md` — eight-slide deck content
 - `RELEASE_MANIFEST.md` — reproducible artifact identity
+- `DEVNET_PAYMENT_EVIDENCE.md` — read-only public transaction facts
+- `SCREENSHOT_MANIFEST.md` — evidence and privacy audit
+- `PLACEHOLDER_MATRIX.md` — fields Juan must complete
 - `FINAL_CHECKLIST.md` — final review and user-owned submission actions

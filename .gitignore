@@ -25,4 +25,5 @@ credentials.json
 /apps/mobile/release-signing/
 /apps/mobile/dist/generated-results/
 /artifacts/releases/*.apk
+/artifacts/submission/clock-in/*.pptx
 /apps/identity/.vercel/
