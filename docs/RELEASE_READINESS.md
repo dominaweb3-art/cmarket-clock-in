@@ -12,7 +12,7 @@
 - The reusable C3 overview states the planned Bitcoin 40% / Ethereum 30% / Solana 30% methodology and distinguishes it from current holdings.
 - Approved C Market APP ICON and ICON ONLY assets are configured for the launcher, adaptive icon, splash screen, favicon, and sign-in brand area.
 - A locally signed standalone APK has been signature-verified, installed on Seeker, and launched without Metro.
-- The release APK is preserved locally at `artifacts/releases/c-market-0.1.0-release.apk`; its committed SHA-256 record is under `submission/releases`.
+- The previous `0.1.0` release APK remains preserved locally, and the continuity release is preserved at `artifacts/releases/c-market-0.1.1-release.apk`; its committed SHA-256 record is `submission/releases/c-market-0.1.1-release.sha256`.
 
 ## Known prototype limitations
 

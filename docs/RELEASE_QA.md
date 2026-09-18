@@ -1,10 +1,24 @@
 # C Market Standalone Release QA
 
-Date: 2026-09-15
+Date: 2026-09-17
 
-Artifact: `artifacts/releases/c-market-0.1.0-release.apk` (intentionally ignored by Git)
+Artifact: `artifacts/releases/c-market-0.1.1-release.apk` (intentionally ignored by Git)
 
-Digest record: `submission/releases/c-market-0.1.0-release.sha256`
+Digest record: `submission/releases/c-market-0.1.1-release.sha256`
+
+The previous `c-market-0.1.0-release.apk` artifact and digest remain preserved.
+
+## Phase 7B signing continuity and visual QA
+
+- The installed `com.dominaweb3.cmarket` package was signed with the existing dedicated C Market release certificate.
+- The Phase 7A validation APK was signed with a different generated certificate and was not installed or used to replace app data.
+- The final `0.1.1` APK was built with the existing matching release key, verified with APK Signature Scheme v2, and installed as a non-destructive update.
+- The package identifier remained `com.dominaweb3.cmarket`; app data was preserved.
+- The standalone APK cold-launched on Seeker with Metro stopped.
+- C3 overview and details showed the truthful Bitcoin 40%, Ethereum 30%, Solana 30% target allocation without claiming acquired holdings.
+- Buy and Activity navigation remained available; Buy continued to describe a Devnet USDC payment prototype and did not claim basket settlement.
+- English, Español, 简体中文, and Português (Brasil) were checked for the C3, Buy, Activity, and account surfaces without observed clipping or crash.
+- No wallet approval, signature, submission, retry, or transaction was performed during this phase.
 
 ## Completed on Seeker
 
