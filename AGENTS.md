@@ -202,3 +202,58 @@ Before starting any task, ask:
 > Does this directly help deliver a functional, safe, verifiable C3 purchase, dashboard, sale, USDC withdrawal, recovery path, or Seeker release before the deadline?
 
 If not, defer it. Do not spend delivery time on C5, C10, speculative rewards, additional chains, or visual extras while the C3 vertical slice is incomplete.
+
+## Mandatory execution report for the project manager
+
+After every execution that inspects, changes, builds, tests, deploys, installs, or validates anything, the final response must include a detailed project-manager report. This report is mandatory even when the execution fails, is blocked, or makes no source-code changes.
+
+The report must be written in clear Spanish unless the user explicitly requests another language. It must not assume that the project manager already knows the repository, previous phases, commands, acronyms, branches, protocols, or current status. Explain technical terms briefly when they affect a decision.
+
+Every report must state:
+
+1. The current project point: what C3 capability exists today and what capability does not exist yet.
+2. The exact objective of the execution.
+3. What was inspected, changed, built, tested, installed, deployed, or deliberately not executed.
+4. The workspace, branch, commit, and worktree status used.
+5. Files changed, files intentionally preserved, and whether any protected workspace was touched.
+6. Validation performed, with a separate result for each relevant check.
+7. Wallet, network, RPC, blockchain, or external-service actions. State explicitly whether authorization, signing, submission, transfer, deployment, or push occurred.
+8. Security and product implications in plain language.
+9. Errors, blockers, warnings, unverified assumptions, and their practical impact.
+10. Decisions required from the project manager, if any, with the reason and available options.
+11. The single recommended next action, including why it is the highest-priority step for the delivery deadline.
+
+The report must distinguish clearly between:
+
+- `COMPLETED`: verified and working in the stated environment.
+- `PARTIALLY_COMPLETED`: some checks passed but required work remains.
+- `BLOCKED`: progress cannot continue safely without a specific external condition or decision.
+- `NOT_EXECUTED`: intentionally skipped because it was outside scope or unsafe.
+- `UNVERIFIED`: claimed by documentation or configuration but not proven by the current execution.
+
+Do not report a planned feature as implemented. Do not call a quote a purchase, a submitted intent a settled position, a webhook an on-chain confirmation, or a simulated asset a real C3 holding. Do not hide failures behind phrases such as “todo”, “pending” or “requires review”; explain what failed, why it matters, and what must happen next.
+
+Use this report structure unless the user requests a different format:
+
+```text
+PROJECT MANAGER REPORT
+Execution date:
+Execution objective:
+Classification:
+Current project status:
+Status of this execution:
+Workspace and branch:
+Commit and worktree:
+Completed work:
+Files changed:
+Protected files/workspaces preserved:
+Validation results:
+Wallet/network/blockchain actions:
+Security impact:
+Product and hackathon impact:
+Errors, blockers, warnings, and unverified items:
+Decisions required:
+Recommended next action:
+```
+
+If no decision is required, write `No decision required` explicitly. If no wallet or blockchain action occurred, write `No wallet authorization, signing, submission, transfer, or deployment occurred`. The report must be understandable on its own without relying on previous chat messages.
