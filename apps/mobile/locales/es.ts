@@ -33,6 +33,37 @@ export const es = {
   'c3.buy': 'Continuar al pago',
   'c3.back': 'Volver',
   'c3.totalNote': '{total}% del objetivo está definido; este prototipo no registra ninguna asignación.',
+  'c3Vault.eyebrow': 'SYMMETRY V3 · DEVNET',
+  'c3Vault.title': 'Preparación de la bóveda C3',
+  'c3Vault.description':
+    'Esta verificación de solo lectura comprueba el programa Symmetry on-chain y, al configurarlos, la bóveda C3 y el mint de participaciones.',
+  'c3Vault.checking': 'VERIFICANDO',
+  'c3Vault.readOnly': 'SOLO LECTURA',
+  'c3Vault.checkingTitle': 'Verificando Solana Devnet',
+  'c3Vault.checkingDescription': 'Esta verificación no crea solicitudes de wallet ni transacciones.',
+  'c3Vault.deploymentRequiredTitle': 'Programa Symmetry verificado; bóveda C3 sin desplegar',
+  'c3Vault.deploymentRequiredDescription':
+    'El protocolo está disponible en Devnet, pero todavía se debe crear, revisar y configurar la bóveda C3 y su mint de participaciones.',
+  'c3Vault.configurationInvalidTitle': 'La configuración C3 está incompleta',
+  'c3Vault.configurationInvalidDescription':
+    'La bóveda y el mint de participaciones deben ser direcciones Solana válidas y configurarse juntos.',
+  'c3Vault.programUnavailableTitle': 'No se pudo verificar el programa Symmetry',
+  'c3Vault.programUnavailableDescription':
+    'Las operaciones C3 permanecen deshabilitadas hasta verificar el programa en Devnet.',
+  'c3Vault.vaultInvalidTitle': 'La evidencia de la bóveda C3 no coincide',
+  'c3Vault.vaultInvalidDescription':
+    'El propietario de la bóveda o el mint configurado no coincide con los programas on-chain requeridos. Las operaciones siguen deshabilitadas.',
+  'c3Vault.readyTitle': 'Bóveda C3 verificada para lectura',
+  'c3Vault.readyDescription':
+    'El programa, la bóveda y el mint existen. Comprar y vender siguen deshabilitados hasta implementar y revisar la seguridad transaccional.',
+  'c3Vault.rpcErrorTitle': 'La evidencia de Devnet no está disponible temporalmente',
+  'c3Vault.rpcErrorDescription':
+    'La app no pudo completar la consulta RPC de solo lectura. No se intentó ninguna transacción.',
+  'c3Vault.program': 'Programa Symmetry V3',
+  'c3Vault.vault': 'Cuenta de bóveda C3',
+  'c3Vault.shareMint': 'Mint de participaciones C3',
+  'c3Vault.safety': 'Este estado nunca autoriza una wallet, firma, envía ni mueve fondos.',
+  'c3Vault.refresh': 'Actualizar evidencia on-chain',
   'balance.solLoadError': 'No se pudo cargar el saldo SOL',
   'balance.updateFailed': 'Falló la actualización del saldo',
   'balance.usdcLoadError': 'No se pudo cargar el saldo USDC',

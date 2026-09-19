@@ -1,9 +1,26 @@
 import type { TranslationKey } from '@/locales'
 
+import { C3_VAULT_ALLOCATION_BPS } from './c3-vault-config'
+
 export const C3_CORE_TARGETS = [
-  { symbol: 'BTC', percent: 40, color: '#F7931A', labelKey: 'c3.assetBitcoin' },
-  { symbol: 'ETH', percent: 30, color: '#627EEA', labelKey: 'c3.assetEthereum' },
-  { symbol: 'SOL', percent: 30, color: '#9945FF', labelKey: 'c3.assetSolana' },
+  {
+    symbol: 'BTC',
+    percent: C3_VAULT_ALLOCATION_BPS.bitcoin / 100,
+    color: '#F7931A',
+    labelKey: 'c3.assetBitcoin',
+  },
+  {
+    symbol: 'ETH',
+    percent: C3_VAULT_ALLOCATION_BPS.ethereum / 100,
+    color: '#627EEA',
+    labelKey: 'c3.assetEthereum',
+  },
+  {
+    symbol: 'SOL',
+    percent: C3_VAULT_ALLOCATION_BPS.solana / 100,
+    color: '#9945FF',
+    labelKey: 'c3.assetSolana',
+  },
 ] as const satisfies ReadonlyArray<{
   symbol: string
   percent: number

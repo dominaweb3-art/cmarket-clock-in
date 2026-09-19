@@ -33,6 +33,37 @@ export const ptBR = {
   'c3.buy': 'Continuar para o pagamento',
   'c3.back': 'Voltar',
   'c3.totalNote': '{total}% do objetivo está definido; este protótipo não registra nenhuma alocação.',
+  'c3Vault.eyebrow': 'SYMMETRY V3 · DEVNET',
+  'c3Vault.title': 'Preparação do cofre C3',
+  'c3Vault.description':
+    'Esta verificação somente leitura confirma o programa Symmetry on-chain e, quando configurados, o cofre C3 e o mint de participações.',
+  'c3Vault.checking': 'VERIFICANDO',
+  'c3Vault.readOnly': 'SOMENTE LEITURA',
+  'c3Vault.checkingTitle': 'Verificando a Solana Devnet',
+  'c3Vault.checkingDescription': 'Esta verificação não cria solicitações de carteira nem transações.',
+  'c3Vault.deploymentRequiredTitle': 'Programa Symmetry verificado; cofre C3 não implantado',
+  'c3Vault.deploymentRequiredDescription':
+    'O protocolo está disponível na Devnet, mas o cofre C3 e seu mint de participações ainda precisam ser criados, revisados e configurados.',
+  'c3Vault.configurationInvalidTitle': 'A configuração C3 está incompleta',
+  'c3Vault.configurationInvalidDescription':
+    'O cofre e o mint de participações devem ser endereços Solana válidos e configurados juntos.',
+  'c3Vault.programUnavailableTitle': 'Não foi possível verificar o programa Symmetry',
+  'c3Vault.programUnavailableDescription':
+    'As operações C3 permanecem desativadas até que o programa seja verificado na Devnet.',
+  'c3Vault.vaultInvalidTitle': 'A evidência do cofre C3 não corresponde',
+  'c3Vault.vaultInvalidDescription':
+    'O proprietário do cofre ou o mint configurado não corresponde aos programas on-chain exigidos. As operações continuam desativadas.',
+  'c3Vault.readyTitle': 'Cofre C3 verificado para leitura',
+  'c3Vault.readyDescription':
+    'O programa, o cofre e o mint existem. Comprar e vender seguem desativados até a segurança transacional ser implementada e revisada.',
+  'c3Vault.rpcErrorTitle': 'A evidência da Devnet está temporariamente indisponível',
+  'c3Vault.rpcErrorDescription':
+    'O app não conseguiu concluir a consulta RPC somente leitura. Nenhuma transação foi tentada.',
+  'c3Vault.program': 'Programa Symmetry V3',
+  'c3Vault.vault': 'Conta do cofre C3',
+  'c3Vault.shareMint': 'Mint de participações C3',
+  'c3Vault.safety': 'Este status nunca autoriza uma carteira, assina, envia ou movimenta fundos.',
+  'c3Vault.refresh': 'Atualizar evidência on-chain',
   'balance.solLoadError': 'Não foi possível carregar o saldo SOL',
   'balance.updateFailed': 'Falha ao atualizar o saldo',
   'balance.usdcLoadError': 'Não foi possível carregar o saldo USDC',
