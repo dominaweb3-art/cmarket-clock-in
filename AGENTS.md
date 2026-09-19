@@ -112,7 +112,7 @@ The proposed model is:
 
 Points must never alter C3 NAV, vault reserves, weights, or underlying assets. Each credit must record wallet, checkpoint, C3 position evidence, configuration version, SKR mint, and official on-chain eligibility evidence. A screenshot, client flag, or unauthenticated API response is not sufficient.
 
-The repository contains conflicting fee proposals: historical documentation mentions 60 bps deposit and 10 bps withdrawal, while the reward mockup shows 15 bps and 7.5 bps with SKR. Do not implement both or choose silently. Product, Security, and Governance must approve one versioned fee schedule first.
+Product approved `c3-fees/product-candidate-v1` as the candidate C Market fee policy: 15 bps on buys, 15 bps on sells, and a 50% verified-SKR discount to 7.5 bps. This is not an active or governance-approved fee. Fee collection and the discount remain disabled until Security review and Squads governance approval are recorded. Historical proposals of 60 bps on deposits and 10 bps on withdrawals are obsolete provenance records; preserve them as obsolete and never implement or silently delete them.
 
 ## Mandatory implementation phases
 

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cmarket-identity.vercel.app/schemas/c3-devnet-config.v1.json",
+  "title": "C Market C3 Symmetry Devnet deployment configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "classification",
+    "network",
+    "methodology",
+    "symmetry",
+    "deployment",
+    "fees",
+    "assets",
+    "share",
+    "authorities",
+    "metadata",
+    "safetyPolicy"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "c3-devnet-config/v1" },
+    "classification": { "const": "SHARED" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster", "rpcUrl", "mainnetEnabled"],
+      "properties": {
+        "cluster": { "const": "devnet" },
+        "rpcUrl": { "type": "string", "pattern": "^https://" },
+        "mainnetEnabled": { "const": false }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bitcoinBps", "ethereumBps", "solanaBps", "totalBps"],
+      "properties": {
+        "bitcoinBps": { "const": 4000 },
+        "ethereumBps": { "const": 3000 },
+        "solanaBps": { "const": 3000 },
+        "totalBps": { "const": 10000 }
+      }
+    },
+    "symmetry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "sdkVersion",
+        "programId",
+        "globalConfigPda",
+        "protocolUsdcMint",
+        "wsolMint"
+      ],
+      "properties": {
+        "sdkVersion": { "const": "1.0.22" },
+        "programId": { "type": "string", "minLength": 32 },
+        "globalConfigPda": { "type": "string", "minLength": 32 },
+        "protocolUsdcMint": { "type": "string", "minLength": 32 },
+        "wsolMint": { "type": "string", "minLength": 32 }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vaultId",
+        "expectedShareMint",
+        "expectedVaultPda",
+        "creationPlanSha256",
+        "squadsApprovalEvidence"
+      ],
+      "properties": {
+        "vaultId": { "type": ["integer", "null"], "minimum": 0 },
+        "expectedShareMint": { "type": ["string", "null"] },
+        "expectedVaultPda": { "type": ["string", "null"] },
+        "creationPlanSha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "squadsApprovalEvidence": { "type": ["string", "null"] }
+      }
+    },
+    "fees": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "productApproved",
+        "securityApproved",
+        "squadsGovernanceApproved",
+        "collectionEnabled",
+        "skrDiscountEnabled",
+        "buyRateUnitsPer100000",
+        "sellRateUnitsPer100000",
+        "verifiedSkrRateUnitsPer100000",
+        "vaultHostDepositFeeBpsAtDeployment",
+        "vaultHostWithdrawFeeBpsAtDeployment",
+        "obsoleteProposals"
+      ],
+      "properties": {
+        "version": { "const": "c3-fees/product-candidate-v1" },
+        "productApproved": { "const": true },
+        "securityApproved": { "const": false },
+        "squadsGovernanceApproved": { "const": false },
+        "collectionEnabled": { "const": false },
+        "skrDiscountEnabled": { "const": false },
+        "buyRateUnitsPer100000": { "const": 150 },
+        "sellRateUnitsPer100000": { "const": 150 },
+        "verifiedSkrRateUnitsPer100000": { "const": 75 },
+        "vaultHostDepositFeeBpsAtDeployment": { "const": 0 },
+        "vaultHostWithdrawFeeBpsAtDeployment": { "const": 0 },
+        "obsoleteProposals": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["operation", "basisPoints", "status"],
+            "properties": {
+              "operation": { "enum": ["deposit", "withdraw"] },
+              "basisPoints": { "type": "integer" },
+              "status": { "const": "obsolete" }
+            }
+          }
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputUsdc", "bitcoin", "ethereum", "solana"],
+      "properties": {
+        "inputUsdc": { "$ref": "#/$defs/asset" },
+        "bitcoin": { "$ref": "#/$defs/asset" },
+        "ethereum": { "$ref": "#/$defs/asset" },
+        "solana": { "$ref": "#/$defs/asset" }
+      }
+    },
+    "share": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "name",
+        "symbol",
+        "mint",
+        "decimals",
+        "purchaseEnabled",
+        "saleEnabled"
+      ],
+      "properties": {
+        "name": { "const": "C3 Devnet Participation" },
+        "symbol": { "const": "C3DEV" },
+        "mint": { "type": ["string", "null"] },
+        "decimals": { "const": 6 },
+        "purchaseEnabled": { "const": false },
+        "saleEnabled": { "const": false }
+      }
+    },
+    "authorities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "creator",
+        "hostFeeDestination",
+        "configuration",
+        "emergency",
+        "keeper"
+      ],
+      "properties": {
+        "creator": { "type": ["string", "null"] },
+        "hostFeeDestination": { "type": ["string", "null"] },
+        "configuration": { "type": ["string", "null"] },
+        "emergency": { "type": ["string", "null"] },
+        "keeper": { "type": ["string", "null"] }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["uri"],
+      "properties": { "uri": { "type": ["string", "null"] } }
+    },
+    "safetyPolicy": { "type": "object", "additionalProperties": true },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "label",
+        "mint",
+        "decimals",
+        "weightBps",
+        "environment",
+        "productionForbidden"
+      ],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "mint": { "type": ["string", "null"] },
+        "decimals": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 18
+        },
+        "weightBps": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "environment": { "const": "devnet" },
+        "productionForbidden": { "type": "boolean" }
+      }
+    }
+  }
+}

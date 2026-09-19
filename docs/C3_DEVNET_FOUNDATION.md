@@ -52,14 +52,18 @@ The recommended boundary is:
 
 No service or keeper is deployed by this milestone. Before introducing the SDK anywhere, its dependency chain, transaction output, permissions, license, and release bundle isolation must be reviewed.
 
-## Blocking work before a functional buy/sell demo
+## Phase 1B specification and current gate
 
-1. Confirm Devnet representations and oracles for the selected Bitcoin and Ethereum exposure. Do not substitute Mainnet mints or simulated assets.
-2. Resolve and approve one fee schedule; conflicting proposals remain in project documentation.
-3. Define NAV, share decimals, rounding, slippage, minimums, and withdrawal semantics.
-4. Create a governed Devnet C3 vault and share mint with evidence of its configuration.
-5. Build the least-privileged keeper and independent reconciliation service.
-6. Add a wallet-facing deposit flow only after validating every generated instruction, signer, authority, destination, amount, program, ALT, expiry, and recovery state.
-7. Add sale and USDC withdrawal with the same controls.
+The exact candidate, verification command, runbook, threat model, and deployment checklist are now defined in:
 
-Until those steps pass review, the existing Devnet USDC payment remains a separate prototype and must not be described as a C3 vault purchase.
+- `config/c3/c3-devnet-candidate.v1.json`
+- `docs/C3_DEVNET_DEPLOYMENT_SPEC.md`
+- `docs/C3_DEVNET_DEPLOYMENT_RUNBOOK.md`
+- `docs/C3_THREAT_MODEL.md`
+- `docs/C3_DEVNET_DEPLOYMENT_CHECKLIST.md`
+
+Product approved `c3-fees/product-candidate-v1`: 15 bps buy, 15 bps sell, and 7.5 bps with verified SKR eligibility. It is a candidate only. Collection and the SKR discount remain disabled until Security and Squads governance approve an exact mechanism. Historical 60 bps deposit and 10 bps withdrawal proposals remain obsolete provenance.
+
+The current decision is **NO-GO**. No official, redeemable BTC or ETH Devnet representation was verified; the truthful plan uses explicit TEST simulation mints that have not been created. The selected USDC has no verified Jupiter Devnet route, the tested public Hermes endpoint did not provide a fresh update, authorities and metadata are unset, and exact share rounding/dust/withdrawal accounting lacks executable evidence.
+
+Until the strict command exits zero, the existing Devnet USDC payment remains a separate prototype and must not be described as a C3 vault purchase.

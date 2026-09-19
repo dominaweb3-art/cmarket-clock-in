@@ -1,0 +1,201 @@
+{
+  "$schema": "./c3-devnet-config.schema.v1.json",
+  "schemaVersion": "c3-devnet-config/v1",
+  "classification": "SHARED",
+  "observedAt": "2026-09-19T21:49:16Z",
+  "network": {
+    "cluster": "devnet",
+    "rpcUrl": "https://api.devnet.solana.com",
+    "mainnetEnabled": false
+  },
+  "methodology": {
+    "bitcoinBps": 4000,
+    "ethereumBps": 3000,
+    "solanaBps": 3000,
+    "totalBps": 10000
+  },
+  "symmetry": {
+    "sdkVersion": "1.0.22",
+    "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "globalConfigPda": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+    "rentPayerPda": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+    "protocolUsdcMint": "USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT",
+    "wsolMint": "So11111111111111111111111111111111111111112",
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "token2022Program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "associatedTokenProgram": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+    "metadataProgram": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+    "addressLookupTableProgram": "AddressLookupTab1e1111111111111111111111111",
+    "pythReceiverProgram": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+    "globalConfigObserved": {
+      "allowCreation": true,
+      "allowDeposits": true,
+      "allowWithdraws": true,
+      "allowAutomation": true,
+      "maxDepositFeeBps": 1000,
+      "maxWithdrawFeeBps": 1000,
+      "protocolDepositFeeBps": 50,
+      "protocolWithdrawFeeBps": 50,
+      "protocolTradeFeeBps": 50,
+      "rebalanceIntentLifetimeSeconds": 600,
+      "priceUpdateLifetimeSeconds": 60,
+      "bountyMint": "So11111111111111111111111111111111111111112"
+    }
+  },
+  "deployment": {
+    "vaultId": null,
+    "expectedShareMint": null,
+    "expectedVaultPda": null,
+    "creationPlanSha256": null,
+    "squadsApprovalEvidence": null
+  },
+  "fees": {
+    "version": "c3-fees/product-candidate-v1",
+    "productApproved": true,
+    "securityApproved": false,
+    "squadsGovernanceApproved": false,
+    "collectionEnabled": false,
+    "skrDiscountEnabled": false,
+    "buyRateUnitsPer100000": 150,
+    "sellRateUnitsPer100000": 150,
+    "verifiedSkrRateUnitsPer100000": 75,
+    "roundingPolicy": "candidate_display_math_rounds_fee_up_to_one_input_base_unit; protocol_accounting_must_be_verified_before_enablement",
+    "vaultHostDepositFeeBpsAtDeployment": 0,
+    "vaultHostWithdrawFeeBpsAtDeployment": 0,
+    "compatibilityNote": "Symmetry host fees are integer basis points and immutable at vault creation; they cannot express 7.5 bps. No fee is enabled until Security and Squads approve an exact on-chain design.",
+    "obsoleteProposals": [
+      { "operation": "deposit", "basisPoints": 60, "status": "obsolete" },
+      { "operation": "withdraw", "basisPoints": 10, "status": "obsolete" }
+    ]
+  },
+  "assets": {
+    "inputUsdc": {
+      "label": "Circle Devnet USDC",
+      "mint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "decimals": 6,
+      "weightBps": 0,
+      "environment": "devnet",
+      "productionForbidden": true,
+      "ownerProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "symmetryProtocolMintMatch": false,
+      "jupiterRouteToWsol": "unavailable_token_not_tradable"
+    },
+    "bitcoin": {
+      "label": "C3 TEST Bitcoin — simulation asset, no BTC backing or redemption",
+      "mint": null,
+      "decimals": 8,
+      "weightBps": 4000,
+      "environment": "devnet",
+      "productionForbidden": true,
+      "assetStatus": "test_mint_not_created",
+      "mintAuthorityPolicy": "Squads-governed Devnet test authority; minting disabled except reviewed test fixtures",
+      "freezeAuthorityPolicy": "Squads emergency authority or null after test distribution",
+      "oracle": {
+        "provider": "Pyth Core",
+        "feedId": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+        "account": "4cSM2e6rvbGQUFiJbqytoVMi5GgghSMr8LwVrT9VPSPo",
+        "accountOwner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+        "accountVerified": true,
+        "freshUpdateTransport": "unavailable_hermes_http_401"
+      }
+    },
+    "ethereum": {
+      "label": "C3 TEST Ethereum — simulation asset, no ETH backing or redemption",
+      "mint": null,
+      "decimals": 8,
+      "weightBps": 3000,
+      "environment": "devnet",
+      "productionForbidden": true,
+      "assetStatus": "test_mint_not_created",
+      "mintAuthorityPolicy": "Squads-governed Devnet test authority; minting disabled except reviewed test fixtures",
+      "freezeAuthorityPolicy": "Squads emergency authority or null after test distribution",
+      "oracle": {
+        "provider": "Pyth Core",
+        "feedId": "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+        "account": "42amVS4KgzR9rA28tkVYqVXjq9Qa8dcZQMbH5EYFX6XC",
+        "accountOwner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+        "accountVerified": true,
+        "freshUpdateTransport": "unavailable_hermes_http_401"
+      }
+    },
+    "solana": {
+      "label": "Wrapped SOL used by the vault; native SOL only at user boundaries when supported",
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9,
+      "weightBps": 3000,
+      "environment": "devnet",
+      "productionForbidden": false,
+      "assetStatus": "verified",
+      "ownerProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "oracle": {
+        "provider": "Pyth Core",
+        "feedId": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+        "account": "7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE",
+        "accountOwner": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+        "accountVerified": true,
+        "freshUpdateTransport": "unavailable_hermes_http_401"
+      }
+    }
+  },
+  "share": {
+    "name": "C3 Devnet Participation",
+    "symbol": "C3DEV",
+    "mint": null,
+    "decimals": 6,
+    "startPriceUsdc": "1.0",
+    "transferability": "standard_spl_transfer_possible; entitlement_indexing_must_follow_token_ownership",
+    "accounting": "proportional ownership; exact on-chain fee order, integer rounding, and dust disposition remain UNVERIFIED",
+    "purchaseEnabled": false,
+    "saleEnabled": false
+  },
+  "authorities": {
+    "creator": null,
+    "hostFeeDestination": null,
+    "configuration": null,
+    "emergency": null,
+    "keeper": null
+  },
+  "metadata": {
+    "uri": null,
+    "requiredFields": ["name", "symbol", "description", "image", "cover"]
+  },
+  "safetyPolicy": {
+    "oracleFreshnessSeconds": 60,
+    "oracleConfidenceMaxBps": 200,
+    "quoteExpirySeconds": 30,
+    "overallSlippageMaxBps": 100,
+    "perTradeSlippageMaxBps": 50,
+    "priceDeviationPauseBps": 300,
+    "minimumPurchaseUsdc": "5.00",
+    "maximumPurchaseUsdc": "500.00",
+    "maximumVaultExposureUsdc": "5000.00",
+    "rebalanceAbsoluteDriftBps": 300,
+    "rebalanceRelativeDriftBps": 1000,
+    "rebalanceCooldownSeconds": 3600,
+    "maximumConcurrentIntentPerWalletVault": 1,
+    "transactionMaxAgeSeconds": 60,
+    "automaticTransactionRetries": 0,
+    "pauseOn": [
+      "stale_or_missing_oracle",
+      "oracle_confidence_exceeded",
+      "missing_or_expired_quote",
+      "price_deviation_exceeded",
+      "wrong_cluster_mint_owner_or_decimals",
+      "unknown_route_program",
+      "keeper_or_rpc_uncertainty",
+      "vault_exposure_limit",
+      "duplicate_or_partial_intent",
+      "share_accounting_not_reconciled"
+    ]
+  },
+  "sources": [
+    "https://docs.symmetry.fi/llms.txt",
+    "https://docs.symmetry.fi/concepts/vaults.md",
+    "https://docs.symmetry.fi/concepts/rebalancing.md",
+    "https://docs.symmetry.fi/concepts/fees-and-oracles.md",
+    "https://docs.symmetry.fi/guides/keeper.md",
+    "https://docs.pyth.network/price-feeds/core/contract-addresses/solana",
+    "https://docs.pyth.network/price-feeds/core/price-feeds",
+    "https://dev.jup.ag"
+  ]
+}
