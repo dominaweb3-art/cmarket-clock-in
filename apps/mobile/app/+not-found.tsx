@@ -1,38 +1,27 @@
-import { Link, Stack } from 'expo-router'
-import { StyleSheet } from 'react-native'
+import { Link } from 'expo-router'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { StyleSheet, View } from 'react-native'
 
 import { AppText } from '@/components/app-text'
 
-import { AppView } from '@/components/app-view'
-import { useI18n } from '@/components/i18n/i18n-provider'
-
-export default function NotFoundScreen() {
-  const { t } = useI18n()
-
+export default function CandidateNotFound() {
   return (
-    <>
-      <Stack.Screen options={{ title: t('notFound.title') }} />
-      <AppView style={styles.container}>
-        <AppText type="title" style={{ textAlign: 'center' }}>
-          {t('notFound.message')}
-        </AppText>
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.content}>
+        <AppText style={styles.title}>Candidate route not found</AppText>
+        <AppText style={styles.description}>The read-only C3 candidate does not expose execution routes.</AppText>
         <Link href="/" style={styles.link}>
-          <AppText type="link">{t('notFound.home')}</AppText>
+          Return to C3 candidate
         </Link>
-      </AppView>
-    </>
+      </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
-  },
+  screen: { flex: 1, backgroundColor: '#F5F7FB' },
+  content: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
+  title: { color: '#172D48', fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  description: { color: '#526A84', fontSize: 15, lineHeight: 22, textAlign: 'center' },
+  link: { color: '#087F5B', fontSize: 16, fontWeight: '800' },
 })

@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "C Market",
-    "slug": "c-market",
+    "name": "C Market Candidate",
+    "slug": "c-market-candidate",
     "version": "0.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "cmarket",
+    "scheme": "cmarket-candidate",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": ["android.permission.INTERNET"],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.dominaweb3.cmarket"
+      "package": "com.dominaweb3.cmarket.candidate"
     },
     "web": {
       "bundler": "metro",

@@ -1,5 +1,5 @@
 {
-  "name": "cmarket-mobile",
+  "name": "cmarket-mobile-candidate",
   "scripts": {
     "android": "expo run:android",
     "android:build": "expo prebuild -p android",
@@ -7,6 +7,8 @@
     "android:release:validate": "NODE_ENV=production expo prebuild --platform android --clean --no-install && cd android && NODE_ENV=production ./gradlew assembleRelease",
     "build": "tsc --noEmit && npm run android:build",
     "c3:core:mainnet:build-simulate": "node --experimental-strip-types ./scripts/c3-core-mainnet-build-simulation.mjs",
+    "c3:core:mainnet:candidate-quotes": "node --experimental-strip-types ./scripts/c3-mainnet-candidate-quotes.mjs",
+    "test:c3-mainnet-candidate": "node --experimental-strip-types ./scripts/c3-mainnet-candidate-safety.test.mjs",
     "c3:core:mainnet-preflight": "node ./scripts/c3-core-mainnet-feasibility-preflight.mjs",
     "test:c3-core-mainnet": "node --experimental-strip-types ./scripts/c3-core-mainnet-engine.test.ts",
     "test:c3-core-mainnet-security": "node --experimental-strip-types ./scripts/c3-core-mainnet-reconciliation-security.test.ts",
@@ -30,8 +32,8 @@
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },
-  "displayName": "C Market",
-  "description": "A Solana Mobile basket prototype for the CLOCK IN hackathon.",
+  "displayName": "C Market Candidate",
+  "description": "Read-only C3 Core Mainnet quote candidate. No wallet execution is enabled.",
   "usecase": "Mobile",
   "keywords": [
     "expo",

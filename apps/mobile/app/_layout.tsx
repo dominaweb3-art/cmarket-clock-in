@@ -1,19 +1,16 @@
-import { PortalHost } from '@rn-primitives/portal'
-import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
-import { StatusBar } from 'expo-status-bar'
-import 'react-native-reanimated'
-import { useCallback } from 'react'
 import * as SplashScreen from 'expo-splash-screen'
+import { useFonts } from 'expo-font'
+import { useCallback } from 'react'
 import { View } from 'react-native'
+import 'react-native-reanimated'
 
-import { AppProviders } from '@/components/app-providers'
-import { AppSplashController } from '@/components/app-splash-controller'
-import { useAuth } from '@/components/auth/auth-provider'
+import { AppTheme } from '@/components/app-theme'
+import { I18nProvider } from '@/components/i18n/i18n-provider'
 
 void SplashScreen.preventAutoHideAsync()
 
-export default function RootLayout() {
+export default function CandidateRootLayout() {
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   })
@@ -30,30 +27,14 @@ export default function RootLayout() {
 
   return (
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <AppProviders>
-        <AppSplashController />
-        <RootNavigator />
-        <StatusBar style="dark" />
-      </AppProviders>
-
-      <PortalHost />
+      <AppTheme>
+        <I18nProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </I18nProvider>
+      </AppTheme>
     </View>
-  )
-}
-
-function RootNavigator() {
-  const { isAuthenticated } = useAuth()
-
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={isAuthenticated}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="+not-found" />
-      </Stack.Protected>
-
-      <Stack.Protected guard={!isAuthenticated}>
-        <Stack.Screen name="sign-in" />
-      </Stack.Protected>
-    </Stack>
   )
 }
