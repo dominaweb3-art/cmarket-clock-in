@@ -1,5 +1,21 @@
 # C Market workspace guidance
 
+## Master product objective
+
+The delivery objective is one functional, secure, verifiable C3 dApp for Android/Seeker before the hackathon deadline. Do not lose time building parallel products before this vertical slice works end to end.
+
+C3 is a tokenized Symmetry V3 vault with a fixed strategic allocation:
+
+- 40% Bitcoin exposure.
+- 30% Ethereum exposure.
+- 30% Solana exposure.
+
+The user buys, views, and sells a C3 position. The vault keeps the underlying assets; the user receives a C3 participation/share token and receives USDC after a confirmed sale. MWA only authorizes the user's wallet actions. C Market must never custody user private keys or sign on the user's behalf.
+
+The canonical architecture is: Expo/React Native mobile app → MWA → C Market read/index/reconciliation backend → Jupiter allowed routes → Symmetry V3 vault and keeper → Solana base layer. Squads governs configuration, treasury, limits, and emergency controls.
+
+The first release must focus on C3. C5, C10, Earn, MagicBlock, new reward systems, and extra chains are deferred until C3 purchase, NAV, activity, sale, USDC withdrawal, recovery, and security verification are complete.
+
 ## Canonical workspace
 
 The canonical repository is `/Users/juantorres/Projects/cmarket-integration`.
@@ -35,3 +51,154 @@ Shared work is committed once on the shared branch and transferred through Git. 
 ## Truthfulness and provenance
 
 Disclose pre-existing code and concurrent hackathon development accurately. The World’s Fair boundary is `2026-09-14T13:00:00Z`. A retrospective tag created after that boundary must never be described as evidence that the tag existed before the event.
+
+## C3 product workflow
+
+The required user flow is:
+
+1. Connect a compatible wallet through MWA.
+2. Verify the exact cluster, wallet, USDC balance, and current C3 configuration.
+3. Verify SKR eligibility only from official on-chain evidence when rewards are enabled.
+4. Select a USDC purchase amount.
+5. Show NAV, share price, fee, slippage, minimum output, target allocation, risks, and expected intent state.
+6. Request an explicit wallet signature for the deposit.
+7. Let Symmetry create the vault intent and let the least-privileged keeper process permitted swaps/rebalancing.
+8. Reconcile the on-chain result before showing success.
+9. Show the user's C3 position, NAV, composition, activity, and pending keeper state.
+10. For a sale, request the user's explicit withdrawal authorization, liquidate the corresponding position, and return USDC only after on-chain confirmation.
+
+“Automatic” means that a previously authorized intent can be processed by a constrained keeper. It never means hidden signing, hidden submission, unrestricted custody, or automatic reversal.
+
+Required operation states:
+
+```text
+draft -> awaiting_wallet -> intent_submitted -> keeper_pending -> settled
+```
+
+Recovery states:
+
+```text
+cancelled | expired | failed_recoverable | manual_review | partially_completed
+```
+
+Every operation needs an immutable intent identifier, idempotency key, expiry, evidence, reconciliation, and duplicate-submit protection.
+
+## C3 user interface requirements
+
+The first functional C3 release must include:
+
+- C3 dashboard with NAV, TVL, target/actual allocation, freshness, and risk.
+- Buy flow showing USDC input, expected C3 shares, price, fees, slippage, and minimum received.
+- Visible intent and keeper states; never hide asynchronous settlement.
+- Sell flow showing C3 shares, estimated USDC, fees, liquidity, and settlement state.
+- Activity screen with signatures, intents, rebalances, and correct Explorer links.
+- MWA reconnect/reauthorize, wallet cancellation, wrong network, background/foreground, expired blockhash, RPC errors, and manual review states.
+- English base copy with the existing localized UI preserved.
+
+Do not display underlying BTC, ETH, or SOL as individually purchased user assets. Do not claim guaranteed yield, guaranteed returns, instant liquidity, or completed C3 allocation before evidence exists.
+
+## SKR rewards guardrails
+
+The proposed reward model is not active until its official mint, staking/delegation state, rules, fee policy, and authority are verified on-chain and approved by governance.
+
+The proposed model is:
+
+- checkpoint every 48 hours;
+- 10 points for each 10 USDC active in C3;
+- 1.10 activity multiplier when official SKR eligibility is proven;
+- 50% C Market fee discount only when eligibility is proven;
+- sale stops future accumulation from the next checkpoint;
+- each wallet/C3/checkpoint/configuration tuple can be credited once.
+
+Points must never alter C3 NAV, vault reserves, weights, or underlying assets. Each credit must record wallet, checkpoint, C3 position evidence, configuration version, SKR mint, and official on-chain eligibility evidence. A screenshot, client flag, or unauthenticated API response is not sufficient.
+
+The repository contains conflicting fee proposals: historical documentation mentions 60 bps deposit and 10 bps withdrawal, while the reward mockup shows 15 bps and 7.5 bps with SKR. Do not implement both or choose silently. Product, Security, and Governance must approve one versioned fee schedule first.
+
+## Mandatory implementation phases
+
+### Phase 1 — foundations
+
+- Confirm final USDC, BTC, ETH, SOL, and C3 share mints.
+- Verify Symmetry V3 Devnet capabilities.
+- Define share math, NAV, decimals, rounding, fees, slippage, and limits.
+- Create versioned configuration and threat model.
+
+### Phase 2 — governance and security
+
+- Create separate Squads governance, treasury, and emergency responsibilities where appropriate.
+- Configure 2-of-3 approval, timelocks, limits, and emergency pause.
+- Define keeper permissions, RPC providers, recovery, and incident runbooks.
+
+### Phase 3 — C3 Devnet vertical slice
+
+- Implement deposit, intent processing, rebalance, NAV, sale, and USDC withdrawal.
+- Test duplicate submission, stale blockhash, RPC 429, wallet rejection, interruption, restart, partial completion, and keeper outage.
+- Verify every success from Solana state, not only a webhook or local state.
+
+### Phase 4 — Seeker app
+
+- Integrate MWA in an Expo Development Build.
+- Implement C3 dashboard, buy, sell, activity, reauthorization, and lifecycle recovery.
+- Test with Mock MWA and a physical Seeker with at least two compatible wallets.
+
+### Phase 5 — SKR rewards
+
+- Verify official SKR eligibility on-chain.
+- Implement checkpoint calculation and idempotent points.
+- Implement the approved fee discount.
+- Show evidence and rules in the app.
+
+### Phase 6 — controlled Mainnet
+
+- Complete program, integration, dependency, and operational audits.
+- Run a low-limit pilot with monitoring, pause tests, and withdrawal recovery.
+- Enable progressively and reversibly only after governance approval.
+
+## Security boundaries
+
+- No private keys, seed phrases, keeper keypairs, Squads keys, or privileged API keys in the APK, source repository, or client bundle.
+- MWA is authorization only; it is not custody.
+- Symmetry owns the vault accounting and underlying-asset custody through its on-chain program.
+- Jupiter supplies permitted quotes/routes; it is not vault authority.
+- Backend stores only operational state, public metadata, deduplication records, and reconciled evidence.
+- Keeper uses minimum privilege and cannot silently change weights, assets, receivers, or fees.
+- Squads controls versioned configuration, treasury policies, limits, and emergency actions.
+- Oracles require freshness, confidence, decimal, and circuit-breaker checks.
+- RPC/webhooks are evidence sources; final success requires independent on-chain reconciliation.
+- Never automatically retry an uncertain transaction, reverse a successful leg, delete a submitted signature, or report success without evidence.
+
+## Scope exclusions until C3 is complete
+
+Do not implement C5, C10, automatic Earn, an Earn Router, MagicBlock/Ephemeral Rollups, session keys with spend authority, internal custodial ledgers, or unverified SKR rewards before the C3 vertical slice is functional and tested.
+
+## Workspace roles
+
+- `/Users/juantorres/Projects/cmarket-integration`: canonical shared workspace.
+- `/Users/juantorres/Projects/c10-pocket`: protected historical Seeker-tested source; never modify.
+- `/Users/juantorres/Projects/cmarket-clockin`: protected stable CLOCK IN submission.
+- `/Users/juantorres/Projects/cmarket-worldsfair`: protected World’s Fair submission.
+- `/Users/juantorres/Projects/cmarket-mainnet-candidate`: read-only candidate; never treat it as a production release.
+
+The stable Devnet CLOCK IN app, the read-only Mainnet candidate, and the future C3 production app must remain separately identifiable and separately buildable. Do not enable Mainnet in the stable Devnet release.
+
+## Definition of done for a C3 milestone
+
+A milestone is complete only when:
+
+- the requested scope is implemented in the correct branch;
+- TypeScript, lint, formatting, relevant tests, Expo Doctor, and Android validation are run;
+- Devnet behavior remains unchanged unless explicitly authorized;
+- wallet actions are supervised and no unauthorized signing/submission occurs;
+- all amounts, mints, programs, authorities, destinations, and cluster values are validated;
+- failure, retry, recovery, persistence, and duplicate-submit behavior are tested;
+- no secrets or signing material are exposed;
+- `git diff --check` and `git status` are clean before handoff;
+- the commit and validation evidence are recorded truthfully.
+
+## Focus rule
+
+Before starting any task, ask:
+
+> Does this directly help deliver a functional, safe, verifiable C3 purchase, dashboard, sale, USDC withdrawal, recovery path, or Seeker release before the deadline?
+
+If not, defer it. Do not spend delivery time on C5, C10, speculative rewards, additional chains, or visual extras while the C3 vertical slice is incomplete.
