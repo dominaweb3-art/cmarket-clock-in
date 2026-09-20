@@ -2,7 +2,7 @@
 
 ## Master product objective
 
-The delivery objective is one functional, secure, verifiable C3 dApp for Android/Seeker before the hackathon deadline. Do not lose time building parallel products before this vertical slice works end to end.
+The delivery objective is one functional, secure, verifiable C3 dApp for Android/Seeker before the hackathon deadline. All economic C3 implementation and acceptance work targets a controlled Solana Mainnet pilot with real assets. Devnet is not valid evidence of economic C3 settlement and may be used only for non-economic mobile, MWA, lifecycle, recovery, and regression checks. Do not lose time building parallel products before the real C3 vertical slice works end to end.
 
 C3 is a tokenized Symmetry V3 vault with a fixed strategic allocation:
 
@@ -16,7 +16,7 @@ The canonical architecture is: Expo/React Native mobile app → MWA → C Market
 
 The first release must focus on C3. C5, C10, Earn, MagicBlock, new reward systems, and extra chains are deferred until C3 purchase, NAV, activity, sale, USDC withdrawal, recovery, and security verification are complete.
 
-Product direction recorded on 2026-09-20: the functional C3 target is a controlled Mainnet Symmetry V3 vault using real USDC, cbBTC, Portal ETH, and WSOL. A 1 USDC amount is permitted only for a supervised real-network pilot after the Mainnet gate passes; it is not automatically the public commercial minimum because fixed keeper bounty, rent, priority fees, account creation, and slippage can be disproportionate. Mainnet remains disabled in all current artifacts until a separate source-reviewed release records Security and Squads approval.
+Product direction recorded on 2026-09-20: the functional C3 target is a controlled Mainnet Symmetry V3 pooled vault using real USDC and independently revalidated BTC, ETH, and SOL representations. The controlled-pilot minimum purchase is exactly 1 USDC; every amount at or above that minimum receives C3 shares representing proportional exposure to the complete pooled vault. The immutable target is always 4,000 bps BTC, 3,000 bps ETH, and 3,000 bps SOL, regardless of purchase size. Never model a purchase as fixed dollar legs such as $0.40/$0.30/$0.30. Costs may be disproportionate at 1 USDC and must be disclosed, but they do not alter the target percentages. Mainnet public access remains disabled in current artifacts until a separate source-reviewed, allowlisted pilot release records Security and Squads approval.
 
 ## Canonical workspace
 
@@ -37,7 +37,7 @@ The current product is an Android Expo Router application under `apps/mobile`.
 - Do not expose environment values, credentials, signing material, seed phrases, private keys, or tokens.
 - Do not request wallet authorization or automatically sign, submit, reverse, or retry wallet transactions.
 - Do not modify the historical `c10-pocket` source files when creating provenance records; Git tags and read-only inspection are allowed when explicitly requested.
-- Keep Devnet payment behavior separate from any future Mainnet capability.
+- Keep Devnet behavior separate from Mainnet capability. Devnet is permitted only for non-economic mobile, MWA, lifecycle, recovery, and regression testing; do not build or present a Devnet basket as the C3 product.
 - Prefer read-only checks before any external or repository mutation.
 
 ## Hackathon classification
@@ -61,10 +61,10 @@ The required user flow is:
 1. Connect a compatible wallet through MWA.
 2. Verify the exact cluster, wallet, USDC balance, and current C3 configuration.
 3. Verify SKR eligibility only from official on-chain evidence when rewards are enabled.
-4. Select a USDC purchase amount.
-5. Show NAV, share price, fee, slippage, minimum output, target allocation, risks, and expected intent state.
+4. Select a USDC purchase amount of at least 1 USDC.
+5. Show NAV, share price, fee, slippage, minimum output, the immutable 40%/30%/30% target, current allocation, risks, and expected intent state.
 6. Request an explicit wallet signature for the deposit.
-7. Let Symmetry create the vault intent and let the least-privileged keeper process permitted swaps/rebalancing.
+7. Let Symmetry create the vault intent and issue proportional C3 shares. The least-privileged keeper may aggregate net flows and process permitted swaps/rebalancing for the pooled vault; it must not perform three micro-swaps for every individual deposit.
 8. Reconcile the on-chain result before showing success.
 9. Show the user's C3 position, NAV, composition, activity, and pending keeper state.
 10. For a sale, request the user's explicit withdrawal authorization, liquidate the corresponding position, and return USDC only after on-chain confirmation.
@@ -85,12 +85,28 @@ cancelled | expired | failed_recoverable | manual_review | partially_completed
 
 Every operation needs an immutable intent identifier, idempotency key, expiry, evidence, reconciliation, and duplicate-submit protection.
 
+## Canonical C3 allocation and amount rules
+
+- `BTC_TARGET_BPS = 4000`.
+- `ETH_TARGET_BPS = 3000`.
+- `SOL_TARGET_BPS = 3000`.
+- `TOTAL_TARGET_BPS = 10000`.
+- `MIN_PURCHASE_USDC = 1`.
+- Reject any configuration whose target weights do not total exactly 10,000 bps.
+- Reject any controlled-pilot purchase below 1 USDC.
+- Use validated decimal strings and bigint-compatible integer arithmetic. Never use floating-point arithmetic for money, shares, NAV, fees, or allocation calculations.
+- The target allocation and current allocation are distinct. The target is immutable; the current allocation may temporarily drift while a bounded authorized intent is pending.
+- Rounding and dust handling must never change the canonical target weights.
+- Dollar values may describe only the total purchase, total NAV, current derived asset values, fees, network costs, and total seed capital. Asset values must be derived at execution time from verified prices, vault balances, NAV, and the immutable basis-point target.
+- A confirmed deposit issues C3 shares at independently reconciled NAV/share price. Underlying assets remain inside the Symmetry vault and are never delivered individually to the buyer.
+- A sale redeems or burns the user's C3 shares and returns USDC only after verified vault accounting and finalized on-chain settlement.
+
 ## C3 user interface requirements
 
 The first functional C3 release must include:
 
 - C3 dashboard with NAV, TVL, target/actual allocation, freshness, and risk.
-- Buy flow showing USDC input, expected C3 shares, price, fees, slippage, and minimum received.
+- Buy flow enforcing the 1 USDC minimum and showing USDC input, expected C3 shares, price, fees, slippage, and minimum received.
 - Visible intent and keeper states; never hide asynchronous settlement.
 - Sell flow showing C3 shares, estimated USDC, fees, liquidity, and settlement state.
 - Activity screen with signatures, intents, rebalances, and correct Explorer links.
@@ -98,6 +114,7 @@ The first functional C3 release must include:
 - English base copy with the existing localized UI preserved.
 
 Do not display underlying BTC, ETH, or SOL as individually purchased user assets. Do not claim guaranteed yield, guaranteed returns, instant liquidity, or completed C3 allocation before evidence exists.
+Do not display fixed per-purchase dollar allocations. Display the immutable percentage target separately from the vault's current derived values and allocation drift.
 
 ## SKR rewards guardrails
 
@@ -120,10 +137,10 @@ Product approved `c3-fees/product-candidate-v1` as the candidate C Market fee po
 
 ### Phase 1 — foundations
 
-- Confirm final USDC, BTC, ETH, SOL, and C3 share mints.
-- Verify Symmetry V3 Devnet capabilities.
+- Revalidate final Mainnet USDC, BTC, ETH, SOL, Symmetry program, oracle, token-program, and C3 share-mint requirements from current official and on-chain evidence.
+- Verify the Mainnet pooled-vault deposit, share issuance, redemption, intent, keeper, NAV, and withdrawal design without authorizing funds.
 - Define share math, NAV, decimals, rounding, fees, slippage, and limits.
-- Create versioned configuration and threat model.
+- Create versioned 4,000/3,000/3,000 configuration, 1 USDC minimum, threat model, and fail-closed readiness gate.
 
 ### Phase 2 — governance and security
 
@@ -131,17 +148,17 @@ Product approved `c3-fees/product-candidate-v1` as the candidate C Market fee po
 - Configure 2-of-3 approval, timelocks, limits, and emergency pause.
 - Define keeper permissions, RPC providers, recovery, and incident runbooks.
 
-### Phase 3 — C3 Devnet vertical slice
+### Phase 3 — isolated Mainnet implementation
 
-- Implement deposit, intent processing, rebalance, NAV, sale, and USDC withdrawal.
+- Implement the isolated builder, keeper, indexer, deposit, proportional share issuance, intent processing, pooled rebalance, NAV, sale, and USDC withdrawal paths with Mainnet disabled.
 - Test duplicate submission, stale blockhash, RPC 429, wallet rejection, interruption, restart, partial completion, and keeper outage.
-- Verify every success from Solana state, not only a webhook or local state.
+- Verify every claimed success from independently reconciled Solana state, not only a webhook, RPC assertion, or local state.
 
 ### Phase 4 — Seeker app
 
 - Integrate MWA in an Expo Development Build.
 - Implement C3 dashboard, buy, sell, activity, reauthorization, and lifecycle recovery.
-- Test with Mock MWA and a physical Seeker with at least two compatible wallets.
+- Use Mock MWA or Devnet only for non-economic UI/lifecycle regression. Test the real economic path only through the later allowlisted Mainnet pilot on a physical Seeker.
 
 ### Phase 5 — SKR rewards
 
@@ -150,11 +167,12 @@ Product approved `c3-fees/product-candidate-v1` as the candidate C Market fee po
 - Implement the approved fee discount.
 - Show evidence and rules in the app.
 
-### Phase 6 — controlled Mainnet
+### Phase 6 — controlled Mainnet pilot and public gate
 
 - Complete program, integration, dependency, and operational audits.
-- Run a low-limit pilot with monitoring, pause tests, and withdrawal recovery.
-- Enable progressively and reversibly only after governance approval.
+- Build a separate source-controlled Mainnet-capable artifact with public access disabled and explicit wallet allowlisting.
+- Run supervised 1 USDC buy and sell acceptance tests with monitoring, pause tests, finalized reconciliation, and withdrawal recovery.
+- Enable progressively and reversibly only after Security and Squads 2-of-3 governance approval; pilot success does not authorize public Mainnet access.
 
 ## Security boundaries
 
@@ -181,6 +199,7 @@ Do not implement C5, C10, automatic Earn, an Earn Router, MagicBlock/Ephemeral R
 - `/Users/juantorres/Projects/cmarket-clockin`: protected stable CLOCK IN submission.
 - `/Users/juantorres/Projects/cmarket-worldsfair`: protected World’s Fair submission.
 - `/Users/juantorres/Projects/cmarket-mainnet-candidate`: read-only candidate; never treat it as a production release.
+- `/Users/juantorres/Projects/cmarket-c3-app`: active C3 product worktree; economic product work targets the controlled Mainnet pilot only.
 
 The stable Devnet CLOCK IN app, the read-only Mainnet candidate, and the future C3 production app must remain separately identifiable and separately buildable. Do not enable Mainnet in the stable Devnet release.
 
@@ -193,6 +212,7 @@ A milestone is complete only when:
 - Devnet behavior remains unchanged unless explicitly authorized;
 - wallet actions are supervised and no unauthorized signing/submission occurs;
 - all amounts, mints, programs, authorities, destinations, and cluster values are validated;
+- the immutable 4,000/3,000/3,000 target and 1 USDC minimum are enforced with integer arithmetic independently of purchase size;
 - failure, retry, recovery, persistence, and duplicate-submit behavior are tested;
 - no secrets or signing material are exposed;
 - `git diff --check` and `git status` are clean before handoff;
