@@ -117,6 +117,16 @@ export function evaluatePilotReadiness(config, evidence) {
     "an authenticated official Pyth update must cover BTC, ETH, and SOL within 60 seconds",
   );
   add(
+    "jupiter-production-auth",
+    config.jupiter.productionBuildEndpoint ===
+      "https://api.jup.ag/swap/v2/build" &&
+      config.jupiter.credentialVariableName === "JUPITER_API_KEY" &&
+      config.jupiter.credentialLocation ===
+        "isolated_builder_only_never_mobile_or_repository" &&
+      config.deployment.jupiterProductionCredentialProvisioned === true,
+    "the isolated transaction builder must have the current official Jupiter V2 credential without exposing it to the app",
+  );
+  add(
     "unsigned-build-security-review",
     config.deployment.oneDollarUnsignedBuildSecurityApproved === true,
     "the one-dollar Jupiter builds must pass instruction-level security review before wallet use",

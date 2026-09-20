@@ -45,6 +45,7 @@ function readyFixture() {
     configurationSquads: candidate.assets.cbBtc.mint,
     emergencySquads: candidate.assets.portalEth.mint,
     keeperPublicKey: candidate.assets.wsol.mint,
+    jupiterProductionCredentialProvisioned: true,
     oneDollarUnsignedBuildSecurityApproved: true,
     securityApprovalRecorded: true,
     squadsApprovalRecorded: true,
@@ -85,6 +86,7 @@ for (const mutate of [
   ({ evidence }) => (evidence.quotes['1'].cbBtc.verified = false),
   ({ evidence }) => (evidence.pyth.fresh = false),
   ({ evidence }) => (evidence.rpcHealth = 'unavailable'),
+  ({ config: value }) => (value.deployment.jupiterProductionCredentialProvisioned = false),
   ({ config: value }) => (value.deployment.oneDollarUnsignedBuildSecurityApproved = false),
   ({ config: value }) => (value.deployment.securityApprovalRecorded = false),
 ]) {

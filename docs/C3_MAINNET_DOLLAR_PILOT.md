@@ -20,6 +20,8 @@ These results prove current route/build availability only. They do not prove a S
 
 The returned one-dollar builds have not yet passed the repository's full instruction-level security approval. Until that separate review validates signers, fee payer, token accounts, route programs, address lookup tables, debits, outputs, WSOL lifecycle, transaction size, and expiry, the readiness gate fails closed before wallet use.
 
+The read-only route probe uses Jupiter's keyless Lite quote endpoint. Jupiter's current Swap V2 documentation states that production `/build` access requires an `x-api-key`. That credential belongs only in an isolated transaction builder, never in the Android app, repository, generated report, or client logs. Earlier keyless build observations do not override the current documented production requirement.
+
 The inspected Symmetry Mainnet global configuration permits creation, deposits, and withdrawals and currently reports zero protocol deposit, withdrawal, and trade fees. For a three-token deposit, the SDK's documented bounty calculation produces approximately 2,224,999 lamports. At the observed SOL rate implied by the quote, that is approximately 0.246 USDC, before network priority fees or any account/rent cost not paid by the protocol rent-payer. It is about 24.6% of a 1 USDC pilot, 4.9% of 5 USDC, and 2.5% of 10 USDC.
 
 Therefore:
@@ -41,6 +43,7 @@ Therefore:
 
 - Create and approve separate Squads configuration and emergency authorities.
 - Obtain a Pyth API key for the isolated keeper. Since 2026-08-26, Hermes requires authenticated requests; the key must never enter the APK or repository.
+- Provision a Jupiter API key for the isolated transaction builder and repeat the full V2 build validation; the keyless Lite quotes remain liquidity evidence only.
 - Create and independently inspect the Mainnet Symmetry vault plan, real asset/oracle configuration, share mint, fee-zero settings, metadata, keeper limits, and withdrawal path.
 - Re-audit the isolated builder/keeper dependency graph and every generated instruction. The Symmetry SDK remains excluded from the Android bundle.
 - Record an independent instruction-level approval for the one-dollar unsigned Jupiter builds; route availability by itself is insufficient.

@@ -159,6 +159,7 @@ Product approved `c3-fees/product-candidate-v1` as the candidate C Market fee po
 ## Security boundaries
 
 - No private keys, seed phrases, keeper keypairs, Squads keys, or privileged API keys in the APK, source repository, or client bundle.
+- Pyth and Jupiter production credentials belong only in isolated keeper/builder services; keyless read-only quotes are not production authorization.
 - MWA is authorization only; it is not custody.
 - Symmetry owns the vault accounting and underlying-asset custody through its on-chain program.
 - Jupiter supplies permitted quotes/routes; it is not vault authority.

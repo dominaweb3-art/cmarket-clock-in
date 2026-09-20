@@ -76,12 +76,19 @@
     "credentialLocation": "isolated_keeper_only_never_mobile_or_repository",
     "maximumAgeSeconds": 60
   },
+  "jupiter": {
+    "quoteEvidenceEndpoint": "https://lite-api.jup.ag/swap/v1/quote",
+    "productionBuildEndpoint": "https://api.jup.ag/swap/v2/build",
+    "credentialVariableName": "JUPITER_API_KEY",
+    "credentialLocation": "isolated_builder_only_never_mobile_or_repository"
+  },
   "deployment": {
     "vaultAddress": null,
     "shareMint": null,
     "configurationSquads": null,
     "emergencySquads": null,
     "keeperPublicKey": null,
+    "jupiterProductionCredentialProvisioned": false,
     "oneDollarUnsignedBuildSecurityApproved": false,
     "securityApprovalRecorded": false,
     "squadsApprovalRecorded": false
