@@ -20,6 +20,8 @@
     "c3:preflight": "node ./scripts/c3-devnet-feasibility-preflight.mjs",
     "c3:vault:readiness": "node --experimental-strip-types ./scripts/c3-vault-readiness-check.mjs",
     "c3:devnet:deployment-readiness": "node ../../scripts/c3-devnet-deployment-readiness.mjs",
+    "c3:mainnet:dollar-pilot-readiness": "node ../../scripts/c3-mainnet-dollar-pilot-readiness.mjs",
+    "test:c3-mainnet-dollar-pilot": "node --experimental-strip-types ./scripts/c3-mainnet-dollar-pilot.test.mjs",
     "ci": "tsc --noEmit && npm run lint:check && npm run format:check && npm run android:build",
     "dev": "expo start",
     "doctor": "npx -y expo-doctor@latest",

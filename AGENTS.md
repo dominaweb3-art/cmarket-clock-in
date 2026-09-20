@@ -16,6 +16,8 @@ The canonical architecture is: Expo/React Native mobile app → MWA → C Market
 
 The first release must focus on C3. C5, C10, Earn, MagicBlock, new reward systems, and extra chains are deferred until C3 purchase, NAV, activity, sale, USDC withdrawal, recovery, and security verification are complete.
 
+Product direction recorded on 2026-09-20: the functional C3 target is a controlled Mainnet Symmetry V3 vault using real USDC, cbBTC, Portal ETH, and WSOL. A 1 USDC amount is permitted only for a supervised real-network pilot after the Mainnet gate passes; it is not automatically the public commercial minimum because fixed keeper bounty, rent, priority fees, account creation, and slippage can be disproportionate. Mainnet remains disabled in all current artifacts until a separate source-reviewed release records Security and Squads approval.
+
 ## Canonical workspace
 
 The canonical repository is `/Users/juantorres/Projects/cmarket-integration`.

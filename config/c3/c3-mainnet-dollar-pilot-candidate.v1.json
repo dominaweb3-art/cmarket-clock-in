@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "c3-mainnet-dollar-pilot/v1",
+  "classification": "SHARED",
+  "observedAt": "2026-09-20T00:00:00Z",
+  "network": {
+    "cluster": "mainnet-beta",
+    "rpcUrl": "https://api.mainnet.solana.com",
+    "capabilityEnabled": false,
+    "normalNavigationEnabled": false
+  },
+  "methodology": {
+    "cbBtcBps": 4000,
+    "portalEthBps": 3000,
+    "solBps": 3000,
+    "totalBps": 10000
+  },
+  "assets": {
+    "inputUsdc": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "decimals": 6
+    },
+    "cbBtc": {
+      "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+      "decimals": 8,
+      "oracleFeedId": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43"
+    },
+    "portalEth": {
+      "mint": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+      "decimals": 8,
+      "oracleFeedId": "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace"
+    },
+    "wsol": {
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9,
+      "oracleFeedId": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"
+    }
+  },
+  "symmetry": {
+    "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "globalConfigPda": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+    "sdkVersionInspected": "1.0.22",
+    "observedProtocolDepositFeeBps": 0,
+    "observedProtocolWithdrawFeeBps": 0,
+    "observedProtocolTradeFeeBps": 0,
+    "observedBountyBondLamports": 100000,
+    "observedMaxBountyPerTaskLamports": 250000,
+    "observedPriceUpdateBountyDivisor": 3,
+    "estimatedThreeAssetDepositBountyLamports": 2224999,
+    "observedIntentLifetimeSeconds": 600,
+    "observedPriceUpdateLifetimeSeconds": 60
+  },
+  "pilot": {
+    "supervisedMinimumUsdc": "1.00",
+    "quoteSizesUsdc": [1, 5, 10],
+    "publicLaunchMinimumUsdc": null,
+    "maximumPilotUsdc": "10.00",
+    "maximumSlippageBps": 100,
+    "automaticRetries": 0,
+    "requiresExplicitWalletApproval": true,
+    "requiresCostDisclosure": true
+  },
+  "fees": {
+    "version": "c3-fees/product-candidate-v1",
+    "buyRateUnitsPer100000": 150,
+    "sellRateUnitsPer100000": 150,
+    "verifiedSkrRateUnitsPer100000": 75,
+    "collectionEnabled": false,
+    "skrDiscountEnabled": false,
+    "securityApproved": false,
+    "squadsGovernanceApproved": false
+  },
+  "oracle": {
+    "provider": "Pyth Core",
+    "endpoint": "https://pyth.dourolabs.app/hermes/v2/updates/price/latest",
+    "credentialVariableName": "PYTH_API_KEY",
+    "credentialLocation": "isolated_keeper_only_never_mobile_or_repository",
+    "maximumAgeSeconds": 60
+  },
+  "deployment": {
+    "vaultAddress": null,
+    "shareMint": null,
+    "configurationSquads": null,
+    "emergencySquads": null,
+    "keeperPublicKey": null,
+    "oneDollarUnsignedBuildSecurityApproved": false,
+    "securityApprovalRecorded": false,
+    "squadsApprovalRecorded": false
+  },
+  "sources": [
+    "https://docs.symmetry.fi/concepts/vaults",
+    "https://docs.symmetry.fi/concepts/intents",
+    "https://docs.symmetry.fi/concepts/fees-and-oracles",
+    "https://docs.symmetry.fi/sdk/reference",
+    "https://docs.pyth.network/price-feeds/core/upgrade/preparing",
+    "https://dev.jup.ag"
+  ]
+}
