@@ -1,0 +1,148 @@
+{
+  "schemaVersion": "c3-mainnet-deployment/v1",
+  "status": "proposed",
+  "cluster": "mainnet-beta",
+  "genesisHash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh",
+  "executionCapability": false,
+  "programs": {
+    "symmetry": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "symmetryGlobalConfig": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+    "system": "11111111111111111111111111111111",
+    "token": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "associatedToken": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+    "jupiter": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "computeBudget": "ComputeBudget111111111111111111111111111111",
+    "addressLookupTable": "AddressLookupTab1e1111111111111111111111111",
+    "squads": null
+  },
+  "vault": {
+    "address": null,
+    "addressDerivation": {
+      "program": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+      "seeds": ["basket", "share_mint"]
+    },
+    "shareMint": null,
+    "shareMintDerivation": {
+      "program": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+      "seeds": ["mint", "vault_id_u64"]
+    },
+    "shareDecimals": 6
+  },
+  "assets": {
+    "USDC": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "decimals": 6,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "status": "candidate",
+      "evidenceFingerprint": null
+    },
+    "cbBTC": {
+      "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+      "decimals": 8,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "status": "candidate",
+      "evidenceFingerprint": null
+    },
+    "PortalETH": {
+      "mint": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+      "decimals": 8,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "status": "candidate",
+      "evidenceFingerprint": null
+    },
+    "WSOL": {
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "status": "candidate",
+      "evidenceFingerprint": null
+    }
+  },
+  "oracles": {
+    "provider": "pyth-core",
+    "endpoint": "https://pyth.dourolabs.app/hermes/v2/updates/price/latest",
+    "maximumAgeSeconds": 60,
+    "maximumConfidenceBps": 200,
+    "feeds": {
+      "USDC": "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+      "cbBTC": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+      "PortalETH": "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+      "WSOL": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"
+    }
+  },
+  "routes": {
+    "buildEndpoint": "https://api.jup.ag/swap/v2/build",
+    "jupiterProgram": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+    "approvedRoutePrograms": ["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"],
+    "registryStatus": "proposed"
+  },
+  "allocation": {
+    "btcBps": 4000,
+    "ethBps": 3000,
+    "solBps": 3000,
+    "totalBps": 10000
+  },
+  "fees": {
+    "version": "c3-fees/product-candidate-v1",
+    "buyRateUnitsPer100000": 150,
+    "sellRateUnitsPer100000": 150,
+    "skrRateUnitsPer100000": 75,
+    "collectionEnabled": false,
+    "skrDiscountEnabled": false
+  },
+  "pilot": {
+    "minimumPurchaseUsdcBaseUnits": "1000000",
+    "allowlistRoot": null,
+    "allowlistVersion": "c3-mainnet-pilot-v1",
+    "publicAccessEnabled": false
+  },
+  "limits": {
+    "maximumPilotTvlUsdcBaseUnits": "100000000",
+    "maximumPerWalletUsdcBaseUnits": "10000000",
+    "maximumPurchaseUsdcBaseUnits": "10000000",
+    "maximumDailyInflowUsdcBaseUnits": "100000000",
+    "maximumDailyOutflowUsdcBaseUnits": "100000000",
+    "keeperAggregationThresholdUsdcBaseUnits": "5000000",
+    "driftThresholdBps": 100,
+    "maximumSlippageBps": 100,
+    "maximumPriceImpactBps": 100,
+    "oracleFreshnessSeconds": 60,
+    "quoteExpirySeconds": 20,
+    "transactionExpirySeconds": 90,
+    "withdrawalTimeoutSeconds": 900,
+    "timelockSeconds": 86400,
+    "effectiveCostWarningBps": 1000
+  },
+  "authorities": {
+    "governance": null,
+    "treasuryVault": null,
+    "configuration": null,
+    "emergencyPause": null,
+    "fee": null,
+    "keeper": null
+  },
+  "squads": {
+    "memberAddresses": [null, null, null],
+    "threshold": 2,
+    "timelockSeconds": 86400,
+    "spendingLimitsConfigured": false,
+    "destinationAllowlistConfigured": false
+  },
+  "credentials": {
+    "jupiterVariable": "C3_JUPITER_API_KEY",
+    "pythVariable": "C3_PYTH_API_KEY",
+    "rpcPrimaryVariable": "C3_MAINNET_RPC_PRIMARY_URL",
+    "rpcSecondaryVariable": "C3_MAINNET_RPC_SECONDARY_URL",
+    "rpcPrimaryOperatorVariable": "C3_MAINNET_RPC_PRIMARY_OPERATOR_ID",
+    "rpcSecondaryOperatorVariable": "C3_MAINNET_RPC_SECONDARY_OPERATOR_ID"
+  },
+  "approvals": {
+    "securityApproved": false,
+    "governanceApproved": false,
+    "seedCapitalReviewed": false,
+    "assetEvidenceApproved": false,
+    "routeRegistryApproved": false,
+    "oracleEvidenceApproved": false
+  },
+  "immutableConfigurationHash": "3988b70d46149c47c1a1438d09542530f488c02b7bec63df7e469b929d62522f"
+}

@@ -16,6 +16,12 @@ const forbiddenProductionMarkers = [
   'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij',
   '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
   'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
+  '@symmetry-hq/sdk',
+  'C3_JUPITER_API_KEY',
+  'C3_PYTH_API_KEY',
+  'C3_MAINNET_RPC_PRIMARY_URL',
+  'C3_MAINNET_RPC_SECONDARY_URL',
+  'c3-mainnet-services',
 ]
 
 async function walk(directory) {

@@ -1,0 +1,35 @@
+{
+  "classification": "server-only names and descriptions; no values",
+  "variables": [
+    {
+      "name": "C3_JUPITER_API_KEY",
+      "purpose": "Authenticated Jupiter Swap V2 builder access",
+      "scope": "isolated builder only"
+    },
+    {
+      "name": "C3_PYTH_API_KEY",
+      "purpose": "Authenticated Pyth Hermes price updates",
+      "scope": "isolated keeper only"
+    },
+    {
+      "name": "C3_MAINNET_RPC_PRIMARY_URL",
+      "purpose": "Reviewed primary HTTPS Mainnet RPC endpoint",
+      "scope": "isolated reconciliation service only"
+    },
+    {
+      "name": "C3_MAINNET_RPC_SECONDARY_URL",
+      "purpose": "Independently operated secondary HTTPS Mainnet RPC endpoint",
+      "scope": "isolated reconciliation service only"
+    },
+    {
+      "name": "C3_MAINNET_RPC_PRIMARY_OPERATOR_ID",
+      "purpose": "Reviewed public operator identity for the primary provider",
+      "scope": "isolated reconciliation service only"
+    },
+    {
+      "name": "C3_MAINNET_RPC_SECONDARY_OPERATOR_ID",
+      "purpose": "Reviewed public operator identity for the secondary provider",
+      "scope": "isolated reconciliation service only"
+    }
+  ]
+}
