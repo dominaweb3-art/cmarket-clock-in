@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   C3_AMOUNTS,
+  C3_FEES,
   C3_MAINNET,
   C3_MAINNET_EXECUTION_CAPABILITY,
   assertExecutionDisabled,
@@ -12,468 +13,572 @@ import {
   validateDeploymentManifest,
   type C3DeploymentManifest,
 } from "./manifest.ts";
+import {
+  decodeVersionedMessage,
+  deriveAssociatedTokenAddress,
+  publicKeyBytes,
+  type DecodedV0Message,
+  type LookupTableContents,
+} from "./solana.ts";
 
 export type C3Operation =
-  | "squads_create"
-  | "vault_initialize"
-  | "share_mint_initialize"
-  | "vault_configure"
   | "seed_deposit"
   | "deposit_intent"
-  | "share_issue"
   | "rebalance_intent"
   | "redemption_intent"
   | "usdc_withdrawal"
   | "emergency_pause";
 
-export type SemanticAccount = Readonly<{
-  address: string;
-  role: string;
-  signer: boolean;
-  writable: boolean;
-}>;
-
-export type SemanticInstruction = Readonly<{
-  programId: string;
-  kind: string;
-  accounts: readonly SemanticAccount[];
-  dataFingerprint: string;
-  tokenDebit?: Readonly<{
-    owner: string;
-    mint: string;
-    amountBaseUnits: string;
-  }>;
-  tokenCredit?: Readonly<{
-    owner: string;
-    mint: string;
-    amountBaseUnits: string;
-  }>;
-  systemTransfer?: Readonly<{
-    source: string;
-    destination: string;
-    lamports: string;
-  }>;
-  closeAccount?: Readonly<{
-    account: string;
-    refundDestination: string;
-    expectedEphemeralWsol: boolean;
-  }>;
-}>;
-
-export type LookupTableEvidence = Readonly<{
-  address: string;
-  ownerProgram: string;
-  active: boolean;
-  addressesFingerprint: string;
-  approvedFingerprint: string;
-}>;
-
-export type TokenEffectRule = Readonly<{
-  owner: string;
-  mint: string;
-  minimumAmountBaseUnits: string;
-  maximumAmountBaseUnits: string;
-}>;
-
-export type UnsignedBuildRequest = Readonly<{
+export type UserOperationIntent = Readonly<{
   operation: C3Operation;
   intentId: string;
   idempotencyKey: string;
+  wallet: string;
+  inputAmountBaseUnits: string;
+  slippageBps: number;
+  nowUnix: number;
+}>;
+
+export type TrustedInstructionPolicy = Readonly<{
+  programId: string;
+  accountAddresses: readonly string[];
+  signerFlags: readonly boolean[];
+  writableFlags: readonly boolean[];
+  dataBase64: string;
+}>;
+
+export type TrustedEffect = Readonly<{
+  kind: "token_debit" | "token_credit" | "share_mint" | "share_burn";
+  owner: string;
+  mint: string;
+  amountBaseUnits: string;
+  tokenAccount: string;
+}>;
+
+export type TrustedOperationPolicy = Readonly<{
+  policySchemaVersion: "c3-operation-policy/v2";
   configurationVersion: string;
-  manifest: C3DeploymentManifest;
+  configurationHash: string;
+  cluster: "mainnet-beta";
+  genesisHash: string;
+  operation: C3Operation;
   wallet: string;
   feePayer: string;
   vault: string;
+  shareMint: string;
   inputMint: string;
+  userInputTokenAccount: string;
+  vaultInputTokenAccount: string;
+  userShareTokenAccount: string;
   inputAmountBaseUnits: string;
-  expectedShareOutputBaseUnits: string;
-  minimumShareOutputBaseUnits: string;
-  feeBaseUnits: string;
+  expectedOutputBaseUnits: string;
+  minimumOutputBaseUnits: string;
+  feeBaseUnits: "0";
   bountyBaseUnits: string;
-  networkAndRentEstimateBaseUnits: string;
-  expiresAtUnix: number;
+  allowedPrograms: readonly string[];
+  approvedRoutePrograms: readonly string[];
+  instructions: readonly TrustedInstructionPolicy[];
+  expectedEffects: readonly TrustedEffect[];
+  expectedDestinations: readonly string[];
+  reconciliationPostConditions: readonly string[];
+  quoteContextHash: string;
   quoteObservedAtUnix: number;
   quoteExpiresAtUnix: number;
-  blockhashExpiresAtUnix: number;
-  nowUnix: number;
-  expectedSigners: readonly string[];
-  expectedWritableAccounts: readonly string[];
-  expectedDestinations: readonly string[];
-  allowedInstructionKinds: readonly string[];
-  approvedRoutePrograms: readonly string[];
-  expectedTokenDebits: readonly TokenEffectRule[];
-  expectedTokenCredits: readonly TokenEffectRule[];
-  expectedClosableAccounts: readonly string[];
-  instructions: readonly SemanticInstruction[];
-  lookupTables: readonly LookupTableEvidence[];
-  estimatedTransactionBytes: number;
-  expectedPostConditions: readonly string[];
-  reconciliationRequirements: readonly string[];
+  transactionExpiresAtUnix: number;
+  lastValidBlockHeight: number;
+  lookupTableContents: readonly LookupTableContents[];
+  evidenceHash: string;
+  evidenceSource: "reviewed-official" | "synthetic-test";
 }>;
 
 export type C3AuthorizationManifest = Readonly<{
-  schemaVersion: "c3-authorization/v1";
+  schemaVersion: "c3-authorization/v2";
+  authorizationHash: string;
   executionCapability: false;
+  configurationVersion: string;
+  configurationHash: string;
+  cluster: "mainnet-beta";
+  genesisHash: string;
   operation: C3Operation;
   intentId: string;
   idempotencyKey: string;
-  configurationVersion: string;
-  configurationHash: string;
   wallet: string;
-  cluster: "mainnet-beta";
-  expiry: number;
-  inputAsset: string;
-  inputAmountBaseUnits: string;
-  expectedShareOutputBaseUnits: string;
-  minimumShareOutputBaseUnits: string;
-  feeBaseUnits: string;
-  bountyBaseUnits: string;
-  networkAndRentEstimateBaseUnits: string;
   vault: string;
-  programs: readonly string[];
-  accounts: readonly SemanticAccount[];
-  signers: readonly string[];
-  feePayer: string;
-  allowedInstructions: readonly Readonly<{
-    programId: string;
-    kind: string;
-    dataFingerprint: string;
-  }>[];
-  allowedRoutes: readonly string[];
+  shareMint: string;
+  inputMint: string;
+  inputAmountBaseUnits: string;
+  expectedOutputBaseUnits: string;
+  minimumOutputBaseUnits: string;
+  feeBaseUnits: "0";
+  bountyBaseUnits: string;
+  slippageBps: number;
+  quoteContextHash: string;
+  quoteObservedAtUnix: number;
+  quoteExpiresAtUnix: number;
+  transactionExpiresAtUnix: number;
+  recentBlockhash: string;
+  lastValidBlockHeight: number;
+  canonicalV0MessageBase64: string;
+  canonicalV0MessageHash: string;
+  wireBytes: number;
+  staticAccounts: DecodedV0Message["staticAccounts"];
+  loadedAccounts: DecodedV0Message["loadedAccounts"];
+  compiledInstructions: DecodedV0Message["instructions"];
+  lookupTables: DecodedV0Message["lookupTables"];
+  allowedPrograms: readonly string[];
+  approvedRoutePrograms: readonly string[];
+  expectedEffects: readonly TrustedEffect[];
   expectedDestinations: readonly string[];
-  expectedTokenDebits: readonly TokenEffectRule[];
-  expectedTokenCredits: readonly TokenEffectRule[];
-  expectedClosableAccounts: readonly string[];
-  expectedPostConditions: readonly string[];
-  reconciliationRequirements: readonly string[];
-  unsignedTransactionFingerprint: string;
+  reconciliationPostConditions: readonly string[];
 }>;
 
-const OPERATION_PROGRAM_KEYS: Readonly<Record<C3Operation, readonly string[]>> =
-  Object.freeze({
-    squads_create: ["squads"],
-    vault_initialize: ["symmetry", "system", "token"],
-    share_mint_initialize: ["symmetry", "system", "token"],
-    vault_configure: ["symmetry"],
-    seed_deposit: ["symmetry", "token", "associatedToken"],
-    deposit_intent: ["symmetry", "token", "associatedToken"],
-    share_issue: ["symmetry", "token"],
-    rebalance_intent: [
-      "symmetry",
-      "jupiter",
-      "token",
-      "associatedToken",
-      "computeBudget",
-    ],
-    redemption_intent: ["symmetry", "token"],
-    usdc_withdrawal: ["symmetry", "token", "associatedToken"],
-    emergency_pause: ["symmetry", "squads"],
-  });
-
-const PUBLIC_KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const INTEGER = /^(0|[1-9]\d*)$/;
+const HASH = /^[a-f0-9]{64}$/;
+const trustedPolicies = new WeakSet<object>();
 
 function amount(value: string, label: string): bigint {
   if (!INTEGER.test(value))
-    throw new TypeError(`${label} must be an integer base-unit string.`);
+    throw new TypeError(`${label} must be a canonical integer string.`);
   const parsed = BigInt(value);
   if (parsed > C3_AMOUNTS.u64Max) throw new RangeError(`${label} exceeds u64.`);
   return parsed;
 }
 
-function equalSets(left: Set<string>, right: Set<string>): boolean {
-  return left.size === right.size && [...left].every((item) => right.has(item));
+function exactArray(
+  left: readonly unknown[],
+  right: readonly unknown[],
+): boolean {
+  return canonicalize(left) === canonicalize(right);
 }
 
-function validateEffectRules(
-  rules: readonly TokenEffectRule[],
-  label: string,
+function validateIntent(intent: UserOperationIntent): void {
+  const keys = Object.keys(intent).sort();
+  const expectedKeys = [
+    "idempotencyKey",
+    "inputAmountBaseUnits",
+    "intentId",
+    "nowUnix",
+    "operation",
+    "slippageBps",
+    "wallet",
+  ];
+  if (!exactArray(keys, expectedKeys))
+    throw new Error("User intent contains an unauthorized policy override.");
+  if (
+    ![
+      "seed_deposit",
+      "deposit_intent",
+      "rebalance_intent",
+      "redemption_intent",
+      "usdc_withdrawal",
+      "emergency_pause",
+    ].includes(intent.operation)
+  )
+    throw new Error("Unsupported operation type.");
+  if (
+    !/^c3-[a-f0-9]{32,64}$/.test(intent.intentId) ||
+    !HASH.test(intent.idempotencyKey)
+  )
+    throw new Error("Intent identity is malformed.");
+  publicKeyBytes(intent.wallet);
+  const input = amount(intent.inputAmountBaseUnits, "input amount");
+  if (
+    ["seed_deposit", "deposit_intent"].includes(intent.operation) &&
+    input < C3_AMOUNTS.minimumPurchaseUsdcBaseUnits
+  )
+    throw new Error("Controlled pilot minimum is 1 USDC.");
+  if (input > C3_AMOUNTS.maximumPilotPurchaseUsdcBaseUnits)
+    throw new Error("Controlled pilot maximum is 10 USDC.");
+  if (
+    !Number.isInteger(intent.slippageBps) ||
+    intent.slippageBps < 0 ||
+    intent.slippageBps > 100
+  )
+    throw new Error("Slippage exceeds immutable policy.");
+  if (!Number.isSafeInteger(intent.nowUnix) || intent.nowUnix <= 0)
+    throw new Error("Intent time is invalid.");
+}
+
+/** Policy derivation is server-side and excludes all caller-controlled authorization fields. */
+export function deriveTrustedOperationPolicy(
+  manifest: C3DeploymentManifest,
+  intent: UserOperationIntent,
+): TrustedOperationPolicy {
+  assertExecutionDisabled();
+  validateIntent(intent);
+  const validation = validateDeploymentManifest(manifest);
+  if (!validation.valid || validation.missingPublicInputs.length > 0)
+    throw new Error("Verified deployment manifest is incomplete.");
+  if (!["deployment_ready", "deployed", "paused"].includes(manifest.status))
+    throw new Error(
+      "Manifest lifecycle is not ready for trusted policy derivation.",
+    );
+  const root = manifest as Record<string, unknown>;
+  const vaultConfig = root.vault as Record<string, unknown>;
+  const operations = root.operationPolicies as
+    Record<string, unknown> | undefined;
+  const configured = operations?.[intent.operation] as
+    Record<string, unknown> | undefined;
+  if (!configured || configured.evidenceSource !== "reviewed-official")
+    throw new Error("Reviewed operation policy evidence is unavailable.");
+  const vault = String(vaultConfig.address);
+  const shareMint = String(vaultConfig.shareMint);
+  publicKeyBytes(vault);
+  publicKeyBytes(shareMint);
+  const policy = Object.freeze({
+    policySchemaVersion: "c3-operation-policy/v2" as const,
+    configurationVersion: manifest.schemaVersion,
+    configurationHash: computeManifestHash(manifest),
+    cluster: C3_MAINNET.cluster,
+    genesisHash: C3_MAINNET.genesisHash,
+    operation: intent.operation,
+    wallet: intent.wallet,
+    feePayer: intent.wallet,
+    vault,
+    shareMint,
+    inputMint: C3_MAINNET.usdcMint,
+    userInputTokenAccount: deriveAssociatedTokenAddress(
+      intent.wallet,
+      C3_MAINNET.usdcMint,
+    ),
+    vaultInputTokenAccount: deriveAssociatedTokenAddress(
+      vault,
+      C3_MAINNET.usdcMint,
+    ),
+    userShareTokenAccount: deriveAssociatedTokenAddress(
+      intent.wallet,
+      shareMint,
+    ),
+    inputAmountBaseUnits: intent.inputAmountBaseUnits,
+    expectedOutputBaseUnits: String(configured.expectedOutputBaseUnits),
+    minimumOutputBaseUnits: String(configured.minimumOutputBaseUnits),
+    feeBaseUnits: "0" as const,
+    bountyBaseUnits: String(configured.bountyBaseUnits),
+    allowedPrograms: Object.freeze([
+      ...(configured.allowedPrograms as string[]),
+    ]),
+    approvedRoutePrograms: Object.freeze([
+      ...(configured.approvedRoutePrograms as string[]),
+    ]),
+    instructions: Object.freeze([
+      ...(configured.instructions as TrustedInstructionPolicy[]),
+    ]),
+    expectedEffects: Object.freeze([
+      ...(configured.expectedEffects as TrustedEffect[]),
+    ]),
+    expectedDestinations: Object.freeze([
+      ...(configured.expectedDestinations as string[]),
+    ]),
+    reconciliationPostConditions: Object.freeze([
+      ...(configured.reconciliationPostConditions as string[]),
+    ]),
+    quoteContextHash: String(configured.quoteContextHash),
+    quoteObservedAtUnix: Number(configured.quoteObservedAtUnix),
+    quoteExpiresAtUnix: Number(configured.quoteExpiresAtUnix),
+    transactionExpiresAtUnix: Number(configured.transactionExpiresAtUnix),
+    lastValidBlockHeight: Number(configured.lastValidBlockHeight),
+    lookupTableContents: Object.freeze([
+      ...(configured.lookupTableContents as LookupTableContents[]),
+    ]),
+    evidenceHash: String(configured.evidenceHash),
+    evidenceSource: "reviewed-official" as const,
+  });
+  validateTrustedPolicy(policy, intent.nowUnix);
+  trustedPolicies.add(policy);
+  return policy;
+}
+
+export function validateTrustedPolicy(
+  policy: TrustedOperationPolicy,
+  nowUnix: number,
 ): void {
-  const identities = new Set<string>();
-  for (const rule of rules) {
-    if (!PUBLIC_KEY.test(rule.owner) || !PUBLIC_KEY.test(rule.mint))
-      throw new Error(`${label} rule contains malformed public key.`);
-    const minimum = amount(rule.minimumAmountBaseUnits, `${label} minimum`);
-    const maximum = amount(rule.maximumAmountBaseUnits, `${label} maximum`);
-    if (minimum > maximum) throw new Error(`${label} rule range is invalid.`);
-    const identity = `${rule.owner}:${rule.mint}`;
-    if (identities.has(identity))
-      throw new Error(`${label} rules contain a duplicate owner/mint pair.`);
-    identities.add(identity);
+  if (policy.policySchemaVersion !== "c3-operation-policy/v2")
+    throw new Error("Unsupported operation policy.");
+  if (
+    policy.cluster !== C3_MAINNET.cluster ||
+    policy.genesisHash !== C3_MAINNET.genesisHash
+  )
+    throw new Error("Operation policy uses the wrong network.");
+  for (const key of [
+    policy.wallet,
+    policy.feePayer,
+    policy.vault,
+    policy.shareMint,
+  ])
+    publicKeyBytes(key);
+  if (
+    policy.wallet !== policy.feePayer ||
+    policy.inputMint !== C3_MAINNET.usdcMint
+  )
+    throw new Error("Signer, fee payer, or input mint policy mismatch.");
+  if (
+    policy.userInputTokenAccount !==
+      deriveAssociatedTokenAddress(policy.wallet, policy.inputMint) ||
+    policy.vaultInputTokenAccount !==
+      deriveAssociatedTokenAddress(policy.vault, policy.inputMint) ||
+    policy.userShareTokenAccount !==
+      deriveAssociatedTokenAddress(policy.wallet, policy.shareMint)
+  )
+    throw new Error("Trusted token destinations are not canonical ATAs.");
+  const input = amount(policy.inputAmountBaseUnits, "policy input");
+  const expected = amount(
+    policy.expectedOutputBaseUnits,
+    "policy expected output",
+  );
+  const minimum = amount(
+    policy.minimumOutputBaseUnits,
+    "policy minimum output",
+  );
+  if (minimum > expected)
+    throw new Error("Minimum output exceeds expected output.");
+  if (
+    policy.feeBaseUnits !== "0" ||
+    C3_FEES.collectionEnabled ||
+    C3_FEES.skrDiscountEnabled
+  )
+    throw new Error("Fees remain disabled until approvals exist.");
+  if (
+    !HASH.test(policy.configurationHash) ||
+    !HASH.test(policy.quoteContextHash) ||
+    !HASH.test(policy.evidenceHash)
+  )
+    throw new Error("Trusted policy hash evidence is malformed.");
+  if (
+    !Number.isSafeInteger(nowUnix) ||
+    nowUnix < policy.quoteObservedAtUnix ||
+    nowUnix >= policy.quoteExpiresAtUnix ||
+    nowUnix >= policy.transactionExpiresAtUnix ||
+    policy.quoteExpiresAtUnix - policy.quoteObservedAtUnix > 20
+  )
+    throw new Error("Trusted quote or transaction context is stale.");
+  if (new Set(policy.allowedPrograms).size !== policy.allowedPrograms.length)
+    throw new Error("Allowed programs contain duplicates.");
+  if (policy.instructions.length === 0 || policy.expectedEffects.length === 0)
+    throw new Error("Trusted policy lacks exact instructions or effects.");
+  const debits = policy.expectedEffects
+    .filter(
+      (effect) =>
+        effect.kind === "token_debit" &&
+        effect.owner === policy.wallet &&
+        effect.mint === policy.inputMint,
+    )
+    .reduce(
+      (sum, effect) => sum + amount(effect.amountBaseUnits, "authorized debit"),
+      0n,
+    );
+  if (debits > input)
+    throw new Error("Trusted policy can debit more than the user approved.");
+  for (const instruction of policy.instructions) {
+    publicKeyBytes(instruction.programId);
+    if (!policy.allowedPrograms.includes(instruction.programId))
+      throw new Error("Trusted policy contains an unapproved program.");
+    if (
+      instruction.accountAddresses.length !== instruction.signerFlags.length ||
+      instruction.accountAddresses.length !== instruction.writableFlags.length
+    )
+      throw new Error("Trusted instruction account metadata is inconsistent.");
+    for (const account of instruction.accountAddresses) publicKeyBytes(account);
   }
 }
 
-function consumeEffectRule(
-  remaining: TokenEffectRule[],
-  effect: Readonly<{ owner: string; mint: string; amountBaseUnits: string }>,
-  label: string,
-): void {
-  const value = amount(effect.amountBaseUnits, label);
-  const index = remaining.findIndex(
-    (rule) => rule.owner === effect.owner && rule.mint === effect.mint,
+export function validateCanonicalV0Transaction(
+  policy: TrustedOperationPolicy,
+  canonicalV0MessageBase64: string,
+): DecodedV0Message {
+  const decoded = decodeVersionedMessage(
+    canonicalV0MessageBase64,
+    policy.lookupTableContents,
   );
-  if (index < 0) throw new Error(`Unexpected ${label}.`);
-  const rule = remaining[index]!;
+  if (decoded.wireBytes > 1_232)
+    throw new Error("Transaction exceeds Solana's 1,232-byte limit.");
+  const allAccounts = [...decoded.staticAccounts, ...decoded.loadedAccounts];
+  const signers = allAccounts
+    .filter((account) => account.signer)
+    .map((account) => account.address);
   if (
-    value < amount(rule.minimumAmountBaseUnits, `${label} minimum`) ||
-    value > amount(rule.maximumAmountBaseUnits, `${label} maximum`)
+    !exactArray(signers, [policy.wallet]) ||
+    decoded.staticAccounts[0]?.address !== policy.feePayer
   )
-    throw new Error(`${label} is outside its authorized range.`);
-  remaining.splice(index, 1);
+    throw new Error("Connected user must be the only signer and fee payer.");
+  const actual = decoded.instructions.map((instruction) => ({
+    programId: instruction.programId,
+    accountAddresses: instruction.accounts.map((account) => account.address),
+    signerFlags: instruction.accounts.map((account) => account.signer),
+    writableFlags: instruction.accounts.map((account) => account.writable),
+    dataBase64: instruction.dataBase64,
+  }));
+  if (!exactArray(actual, policy.instructions))
+    throw new Error(
+      "Canonical v0 instructions do not exactly match trusted policy.",
+    );
+  if (
+    actual.some(
+      (instruction) => !policy.allowedPrograms.includes(instruction.programId),
+    )
+  )
+    throw new Error("Canonical v0 message contains an unapproved program.");
+  return decoded;
+}
+
+function authorizationPayload(
+  intent: UserOperationIntent,
+  policy: TrustedOperationPolicy,
+  decoded: DecodedV0Message,
+): Omit<C3AuthorizationManifest, "authorizationHash"> {
+  return {
+    schemaVersion: "c3-authorization/v2",
+    executionCapability: C3_MAINNET_EXECUTION_CAPABILITY,
+    configurationVersion: policy.configurationVersion,
+    configurationHash: policy.configurationHash,
+    cluster: policy.cluster,
+    genesisHash: policy.genesisHash,
+    operation: policy.operation,
+    intentId: intent.intentId,
+    idempotencyKey: intent.idempotencyKey,
+    wallet: policy.wallet,
+    vault: policy.vault,
+    shareMint: policy.shareMint,
+    inputMint: policy.inputMint,
+    inputAmountBaseUnits: policy.inputAmountBaseUnits,
+    expectedOutputBaseUnits: policy.expectedOutputBaseUnits,
+    minimumOutputBaseUnits: policy.minimumOutputBaseUnits,
+    feeBaseUnits: policy.feeBaseUnits,
+    bountyBaseUnits: policy.bountyBaseUnits,
+    slippageBps: intent.slippageBps,
+    quoteContextHash: policy.quoteContextHash,
+    quoteObservedAtUnix: policy.quoteObservedAtUnix,
+    quoteExpiresAtUnix: policy.quoteExpiresAtUnix,
+    transactionExpiresAtUnix: policy.transactionExpiresAtUnix,
+    recentBlockhash: decoded.recentBlockhash,
+    lastValidBlockHeight: policy.lastValidBlockHeight,
+    canonicalV0MessageBase64: decoded.messageBase64,
+    canonicalV0MessageHash: decoded.messageHash,
+    wireBytes: decoded.wireBytes,
+    staticAccounts: decoded.staticAccounts,
+    loadedAccounts: decoded.loadedAccounts,
+    compiledInstructions: decoded.instructions,
+    lookupTables: decoded.lookupTables,
+    allowedPrograms: policy.allowedPrograms,
+    approvedRoutePrograms: policy.approvedRoutePrograms,
+    expectedEffects: policy.expectedEffects,
+    expectedDestinations: policy.expectedDestinations,
+    reconciliationPostConditions: policy.reconciliationPostConditions,
+  };
 }
 
 export function buildDisabledUnsignedPackage(
-  request: UnsignedBuildRequest,
+  intent: UserOperationIntent,
+  policy: TrustedOperationPolicy,
+  canonicalV0MessageBase64: string,
 ): C3AuthorizationManifest {
   assertExecutionDisabled();
-  if (
-    request.manifest.executionCapability !== false ||
-    C3_MAINNET_EXECUTION_CAPABILITY !== false
-  )
-    throw new Error("Mainnet capability must remain disabled.");
-  if (
-    request.manifest.cluster !== C3_MAINNET.cluster ||
-    request.manifest.genesisHash !== C3_MAINNET.genesisHash
-  )
-    throw new Error("Wrong Mainnet identity.");
-  const configurationHash = computeManifestHash(request.manifest);
-  if (configurationHash !== request.manifest.immutableConfigurationHash)
-    throw new Error("Configuration hash mismatch.");
-  const manifestValidation = validateDeploymentManifest(request.manifest);
-  if (!manifestValidation.valid)
-    throw new Error("Deployment manifest failed strict validation.");
-  if (
-    !/^c3-[a-f0-9]{32,64}$/.test(request.intentId) ||
-    !/^[a-f0-9]{64}$/.test(request.idempotencyKey)
-  )
-    throw new Error("Intent identity is malformed.");
-  if (
-    !PUBLIC_KEY.test(request.wallet) ||
-    !PUBLIC_KEY.test(request.feePayer) ||
-    request.wallet !== request.feePayer
-  )
-    throw new Error("Connected user must be the fee payer.");
-  if (!PUBLIC_KEY.test(request.vault)) throw new Error("Vault is unresolved.");
-  if (
-    request.nowUnix >= request.expiresAtUnix ||
-    request.nowUnix >= request.quoteExpiresAtUnix ||
-    request.nowUnix >= request.blockhashExpiresAtUnix
-  )
-    throw new Error("Quote, intent, or blockhash is stale.");
-  if (
-    request.quoteObservedAtUnix > request.nowUnix ||
-    request.nowUnix - request.quoteObservedAtUnix > 20
-  )
-    throw new Error("Quote freshness exceeds policy.");
-  if (
-    !Number.isInteger(request.estimatedTransactionBytes) ||
-    request.estimatedTransactionBytes <= 0 ||
-    request.estimatedTransactionBytes > 1_232
-  )
-    throw new Error("Transaction exceeds the 1,232-byte packet limit.");
-  const input = amount(request.inputAmountBaseUnits, "input amount");
-  if (
-    (request.operation === "deposit_intent" ||
-      request.operation === "seed_deposit") &&
-    input < C3_AMOUNTS.minimumPurchaseUsdcBaseUnits
-  )
-    throw new Error("Deposit is below 1 USDC.");
-  const expectedShares = amount(
-    request.expectedShareOutputBaseUnits,
-    "expected shares",
-  );
-  const minimumShares = amount(
-    request.minimumShareOutputBaseUnits,
-    "minimum shares",
-  );
-  if (minimumShares > expectedShares)
-    throw new Error("Minimum shares exceed expected shares.");
-  amount(request.feeBaseUnits, "fee");
-  amount(request.bountyBaseUnits, "bounty");
-  amount(request.networkAndRentEstimateBaseUnits, "network and rent estimate");
-
-  const programs = request.manifest.programs as Record<string, unknown>;
-  const allowedProgramIds = new Set(
-    OPERATION_PROGRAM_KEYS[request.operation]
-      .map((key) => programs[key])
-      .filter((value): value is string => typeof value === "string"),
-  );
-  if (
-    allowedProgramIds.size !== OPERATION_PROGRAM_KEYS[request.operation].length
-  )
-    throw new Error("Operation requires an unresolved or unapproved program.");
-  const expectedSignerSet = new Set(request.expectedSigners);
-  const writableSet = new Set(request.expectedWritableAccounts);
-  const destinationSet = new Set(request.expectedDestinations);
-  const instructionKindSet = new Set(request.allowedInstructionKinds);
-  const routeSet = new Set(request.approvedRoutePrograms);
-  const closableSet = new Set(request.expectedClosableAccounts);
-  if (
-    !expectedSignerSet.has(request.wallet) ||
-    request.expectedSigners.some((signer) => !PUBLIC_KEY.test(signer))
-  )
-    throw new Error("Expected signer set is invalid.");
-  if (routeSet.size !== request.approvedRoutePrograms.length)
-    throw new Error("Route registry contains duplicates.");
-  if (
-    instructionKindSet.size === 0 ||
-    instructionKindSet.size !== request.allowedInstructionKinds.length ||
-    request.allowedInstructionKinds.some(
-      (kind) => !/^[a-z][a-z0-9_]*$/.test(kind),
-    )
-  )
-    throw new Error("Instruction-kind allowlist is invalid.");
-  if (
-    closableSet.size !== request.expectedClosableAccounts.length ||
-    request.expectedClosableAccounts.some(
-      (account) => !PUBLIC_KEY.test(account),
-    )
-  )
-    throw new Error("Closable-account allowlist is invalid.");
-  validateEffectRules(request.expectedTokenDebits, "token debit");
-  validateEffectRules(request.expectedTokenCredits, "token credit");
-  const maximumAuthorizedDebit = request.expectedTokenDebits.reduce(
-    (total, rule) => {
-      if (rule.owner !== request.wallet || rule.mint !== request.inputMint)
-        throw new Error("Token-debit rule is outside the user input boundary.");
-      return total + amount(rule.maximumAmountBaseUnits, "token debit maximum");
-    },
-    0n,
-  );
-  if (maximumAuthorizedDebit > input)
-    throw new Error("Authorized token debits exceed the approved input.");
-  if (
-    request.expectedTokenCredits.some((rule) => !destinationSet.has(rule.owner))
-  )
-    throw new Error("Token-credit rule has an unauthorized destination.");
-  for (const route of routeSet)
-    if (!PUBLIC_KEY.test(route))
-      throw new Error("Route registry contains malformed program.");
-
-  const allAccounts: SemanticAccount[] = [];
-  const actualSigners = new Set<string>();
-  const actualWritableAccounts = new Set<string>();
-  const remainingDebits = [...request.expectedTokenDebits];
-  const remainingCredits = [...request.expectedTokenCredits];
-  for (const instruction of request.instructions) {
-    if (!allowedProgramIds.has(instruction.programId))
-      throw new Error(`Unknown program for ${request.operation}.`);
-    if (!/^[a-f0-9]{64}$/.test(instruction.dataFingerprint))
-      throw new Error("Instruction data fingerprint is malformed.");
-    if (!instructionKindSet.has(instruction.kind))
-      throw new Error("Unknown instruction kind.");
-    for (const account of instruction.accounts) {
-      if (!PUBLIC_KEY.test(account.address))
-        throw new Error("Instruction account is malformed.");
-      if (account.signer && !expectedSignerSet.has(account.address))
-        throw new Error("Unexpected signer.");
-      if (account.writable && !writableSet.has(account.address))
-        throw new Error("Unexpected writable account.");
-      if (account.signer) actualSigners.add(account.address);
-      if (account.writable) actualWritableAccounts.add(account.address);
-      allAccounts.push(account);
-    }
-    if (instruction.tokenDebit) {
-      if (
-        instruction.tokenDebit.mint !== request.inputMint ||
-        instruction.tokenDebit.owner !== request.wallet
-      )
-        throw new Error("Unexpected token debit.");
-      consumeEffectRule(remainingDebits, instruction.tokenDebit, "token debit");
-    }
-    if (instruction.tokenCredit) {
-      if (!destinationSet.has(instruction.tokenCredit.owner))
-        throw new Error("Unexpected token destination.");
-      consumeEffectRule(
-        remainingCredits,
-        instruction.tokenCredit,
-        "token credit",
-      );
-    }
-    if (instruction.systemTransfer) throw new Error("Unexpected SOL transfer.");
-    if (
-      instruction.closeAccount &&
-      (!instruction.closeAccount.expectedEphemeralWsol ||
-        !closableSet.has(instruction.closeAccount.account) ||
-        instruction.closeAccount.refundDestination !== request.wallet)
-    )
-      throw new Error("Unsafe close-account instruction.");
-  }
-  if (!equalSets(actualSigners, expectedSignerSet))
-    throw new Error("Actual signer set does not exactly match authorization.");
-  if (!equalSets(actualWritableAccounts, writableSet))
+  validateIntent(intent);
+  if (!trustedPolicies.has(policy))
     throw new Error(
-      "Actual writable-account set does not exactly match authorization.",
+      "Operation policy was not derived by the trusted policy factory.",
     );
-  if (remainingDebits.length > 0 || remainingCredits.length > 0)
-    throw new Error("Expected token effects are missing.");
-  for (const table of request.lookupTables) {
-    if (
-      !PUBLIC_KEY.test(table.address) ||
-      table.ownerProgram !== C3_MAINNET.addressLookupTableProgram ||
-      !table.active ||
-      !/^[a-f0-9]{64}$/.test(table.addressesFingerprint) ||
-      table.addressesFingerprint !== table.approvedFingerprint
-    )
-      throw new Error("Unauthorized address lookup table.");
-  }
-  if (request.instructions.length === 0)
-    throw new Error("Unsigned package cannot omit decoded instructions.");
   if (
-    request.expectedPostConditions.length === 0 ||
-    request.reconciliationRequirements.length < 2
+    intent.operation !== policy.operation ||
+    intent.wallet !== policy.wallet ||
+    intent.inputAmountBaseUnits !== policy.inputAmountBaseUnits
   )
-    throw new Error(
-      "Post-conditions and independent reconciliation are mandatory.",
-    );
-  const fingerprint = createHash("sha256")
-    .update(
-      canonicalize({
-        instructions: request.instructions,
-        lookupTables: request.lookupTables,
-        estimatedTransactionBytes: request.estimatedTransactionBytes,
-      }),
-    )
+    throw new Error("User intent does not match trusted operation policy.");
+  validateTrustedPolicy(policy, intent.nowUnix);
+  const decoded = validateCanonicalV0Transaction(
+    policy,
+    canonicalV0MessageBase64,
+  );
+  const payload = authorizationPayload(intent, policy, decoded);
+  const authorizationHash = createHash("sha256")
+    .update(canonicalize(payload))
     .digest("hex");
-  return Object.freeze({
-    schemaVersion: "c3-authorization/v1",
-    executionCapability: false,
-    operation: request.operation,
-    intentId: request.intentId,
-    idempotencyKey: request.idempotencyKey,
-    configurationVersion: request.configurationVersion,
-    configurationHash,
-    wallet: request.wallet,
-    cluster: C3_MAINNET.cluster,
-    expiry: request.expiresAtUnix,
-    inputAsset: request.inputMint,
-    inputAmountBaseUnits: request.inputAmountBaseUnits,
-    expectedShareOutputBaseUnits: request.expectedShareOutputBaseUnits,
-    minimumShareOutputBaseUnits: request.minimumShareOutputBaseUnits,
-    feeBaseUnits: request.feeBaseUnits,
-    bountyBaseUnits: request.bountyBaseUnits,
-    networkAndRentEstimateBaseUnits: request.networkAndRentEstimateBaseUnits,
-    vault: request.vault,
-    programs: Object.freeze([...allowedProgramIds].sort()),
-    accounts: Object.freeze(allAccounts),
-    signers: Object.freeze([...expectedSignerSet].sort()),
-    feePayer: request.feePayer,
-    allowedInstructions: Object.freeze(
-      request.instructions.map(({ programId, kind, dataFingerprint }) => ({
-        programId,
-        kind,
-        dataFingerprint,
-      })),
-    ),
-    allowedRoutes: Object.freeze([...routeSet].sort()),
-    expectedDestinations: Object.freeze([...destinationSet].sort()),
-    expectedTokenDebits: Object.freeze([...request.expectedTokenDebits]),
-    expectedTokenCredits: Object.freeze([...request.expectedTokenCredits]),
-    expectedClosableAccounts: Object.freeze([...closableSet].sort()),
-    expectedPostConditions: Object.freeze([...request.expectedPostConditions]),
-    reconciliationRequirements: Object.freeze([
-      ...request.reconciliationRequirements,
-    ]),
-    unsignedTransactionFingerprint: fingerprint,
-  });
+  return Object.freeze({ ...payload, authorizationHash });
+}
+
+const AUTHORIZATION_KEYS = [
+  "schemaVersion",
+  "authorizationHash",
+  "executionCapability",
+  "configurationVersion",
+  "configurationHash",
+  "cluster",
+  "genesisHash",
+  "operation",
+  "intentId",
+  "idempotencyKey",
+  "wallet",
+  "vault",
+  "shareMint",
+  "inputMint",
+  "inputAmountBaseUnits",
+  "expectedOutputBaseUnits",
+  "minimumOutputBaseUnits",
+  "feeBaseUnits",
+  "bountyBaseUnits",
+  "slippageBps",
+  "quoteContextHash",
+  "quoteObservedAtUnix",
+  "quoteExpiresAtUnix",
+  "transactionExpiresAtUnix",
+  "recentBlockhash",
+  "lastValidBlockHeight",
+  "canonicalV0MessageBase64",
+  "canonicalV0MessageHash",
+  "wireBytes",
+  "staticAccounts",
+  "loadedAccounts",
+  "compiledInstructions",
+  "lookupTables",
+  "allowedPrograms",
+  "approvedRoutePrograms",
+  "expectedEffects",
+  "expectedDestinations",
+  "reconciliationPostConditions",
+] as const;
+
+export function parseAndVerifyAuthorizationManifest(
+  rawCanonicalJson: string,
+  nowUnix: number,
+): C3AuthorizationManifest {
+  let value: unknown;
+  try {
+    value = JSON.parse(rawCanonicalJson) as unknown;
+  } catch {
+    throw new Error("Authorization manifest JSON is malformed.");
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Authorization manifest must be an object.");
+  const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).length !== AUTHORIZATION_KEYS.length ||
+    AUTHORIZATION_KEYS.some((key) => !(key in record)) ||
+    Object.keys(record).some(
+      (key) => !AUTHORIZATION_KEYS.includes(key as never),
+    )
+  )
+    throw new Error("Authorization manifest keys are missing or unknown.");
+  const hash = record.authorizationHash;
+  const payload = { ...record };
+  delete payload.authorizationHash;
+  const expected = createHash("sha256")
+    .update(canonicalize(payload))
+    .digest("hex");
+  if (hash !== expected) throw new Error("Authorization hash mismatch.");
+  if (rawCanonicalJson !== canonicalize(record))
+    throw new Error(
+      "Authorization JSON is not canonical or contains alternate encoding.",
+    );
+  const manifest = record as C3AuthorizationManifest;
+  if (
+    manifest.schemaVersion !== "c3-authorization/v2" ||
+    manifest.executionCapability !== false ||
+    manifest.cluster !== C3_MAINNET.cluster ||
+    manifest.genesisHash !== C3_MAINNET.genesisHash ||
+    nowUnix >= manifest.quoteExpiresAtUnix ||
+    nowUnix >= manifest.transactionExpiresAtUnix
+  )
+    throw new Error(
+      "Authorization manifest is unsupported, wrong-network, or expired.",
+    );
+  return Object.freeze(manifest);
 }

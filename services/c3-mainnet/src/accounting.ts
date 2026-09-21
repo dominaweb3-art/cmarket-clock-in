@@ -2,6 +2,179 @@ import { C3_ALLOCATION, C3_AMOUNTS, C3_FEES } from "./constants.ts";
 import { absolute, assertU64, mulDivCeil, mulDivFloor } from "./math.ts";
 import type { C3AssetId } from "./registry.ts";
 
+export type ReconciledVaultSnapshot = Readonly<{
+  schemaVersion: "c3-vault-snapshot/v1";
+  cluster: "mainnet-beta";
+  genesisHash: string;
+  configurationHash: string;
+  slot: number;
+  blockTimeUnix: number;
+  vault: string;
+  balances: readonly Readonly<{
+    asset: C3AssetId;
+    mint: string;
+    tokenAccount: string;
+    balanceBaseUnits: string;
+    decimals: number;
+    priceUsdMicros: string;
+    oracleId: string;
+    oracleConfidenceBps: number;
+    oraclePublishTimeUnix: number;
+  }>[];
+  shareMint: string;
+  shareSupplyBaseUnits: string;
+  pendingAuthorizedInflowsUsdcBaseUnits: string;
+  pendingAuthorizedOutflowsUsdcBaseUnits: string;
+  pendingKeeperEffectsUsdcBaseUnits: string;
+  reservedFeesUsdcBaseUnits: string;
+  reservedBountyUsdcBaseUnits: string;
+  unsolicitedDonations: readonly string[];
+  reconciliationEvidenceHash: string;
+  productionEvidence: boolean;
+}>;
+
+export type VaultSnapshotPolicy = Readonly<{
+  configurationHash: string;
+  vault: string;
+  shareMint: string;
+  tokenAccounts: Readonly<Record<C3AssetId, string>>;
+  mints: Readonly<Record<C3AssetId, string>>;
+  decimals: Readonly<Record<C3AssetId, number>>;
+  oracleIds: Readonly<Record<C3AssetId, string>>;
+  maximumAgeSeconds: number;
+  maximumSlotDrift: number;
+  bootstrapEvidenceHash?: string;
+  minimumBootstrapUsdcBaseUnits: string;
+}>;
+
+const INTEGER = /^(0|[1-9]\d*)$/;
+const HASH = /^[a-f0-9]{64}$/;
+
+function snapshotAmount(value: string, label: string): bigint {
+  if (!INTEGER.test(value))
+    throw new Error(`${label} is not a canonical integer.`);
+  return assertU64(BigInt(value), label);
+}
+
+export function validateReconciledVaultSnapshot(
+  snapshot: ReconciledVaultSnapshot,
+  policy: VaultSnapshotPolicy,
+  nowUnix: number,
+  currentSlot: number,
+): Readonly<{ navUsdMicros: bigint; shareSupplyBaseUnits: bigint }> {
+  if (
+    snapshot.schemaVersion !== "c3-vault-snapshot/v1" ||
+    snapshot.cluster !== "mainnet-beta" ||
+    snapshot.genesisHash !== "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh" ||
+    snapshot.configurationHash !== policy.configurationHash ||
+    snapshot.vault !== policy.vault ||
+    snapshot.shareMint !== policy.shareMint
+  )
+    throw new Error("Vault snapshot identity does not match trusted policy.");
+  if (
+    !snapshot.productionEvidence ||
+    !HASH.test(snapshot.reconciliationEvidenceHash)
+  )
+    throw new Error("Vault snapshot lacks production reconciliation evidence.");
+  if (
+    !Number.isSafeInteger(snapshot.slot) ||
+    snapshot.slot <= 0 ||
+    !Number.isSafeInteger(snapshot.blockTimeUnix) ||
+    nowUnix < snapshot.blockTimeUnix ||
+    nowUnix - snapshot.blockTimeUnix > policy.maximumAgeSeconds ||
+    !Number.isSafeInteger(currentSlot) ||
+    currentSlot < snapshot.slot ||
+    currentSlot - snapshot.slot > policy.maximumSlotDrift
+  )
+    throw new Error("Vault snapshot is stale or has mismatched slot context.");
+  if (snapshot.unsolicitedDonations.length > 0)
+    throw new Error(
+      "Unsolicited donations require explicit manual reconciliation.",
+    );
+  const expectedAssets: C3AssetId[] = ["USDC", "cbBTC", "PortalETH", "WSOL"];
+  if (snapshot.balances.length !== expectedAssets.length)
+    throw new Error(
+      "Vault snapshot must include every canonical asset exactly once.",
+    );
+  const seen = new Set<C3AssetId>();
+  const priced: PricedBalance[] = [];
+  for (const balance of snapshot.balances) {
+    if (seen.has(balance.asset))
+      throw new Error("Vault snapshot contains duplicate balances.");
+    seen.add(balance.asset);
+    if (
+      balance.mint !== policy.mints[balance.asset] ||
+      balance.tokenAccount !== policy.tokenAccounts[balance.asset] ||
+      balance.decimals !== policy.decimals[balance.asset] ||
+      balance.oracleId !== policy.oracleIds[balance.asset]
+    )
+      throw new Error(
+        "Vault balance account, mint, decimals, or oracle mismatch.",
+      );
+    if (
+      !Number.isInteger(balance.oracleConfidenceBps) ||
+      balance.oracleConfidenceBps < 0 ||
+      balance.oracleConfidenceBps > 200 ||
+      nowUnix < balance.oraclePublishTimeUnix ||
+      nowUnix - balance.oraclePublishTimeUnix > policy.maximumAgeSeconds
+    )
+      throw new Error(
+        "Vault oracle evidence is stale or outside confidence policy.",
+      );
+    priced.push({
+      asset: balance.asset,
+      balanceBaseUnits: snapshotAmount(
+        balance.balanceBaseUnits,
+        `${balance.asset} balance`,
+      ),
+      decimals: balance.decimals,
+      priceUsdMicros: snapshotAmount(
+        balance.priceUsdMicros,
+        `${balance.asset} price`,
+      ),
+    });
+  }
+  if (seen.size !== expectedAssets.length)
+    throw new Error("Vault snapshot omits a canonical asset.");
+  let navUsdMicros = calculateVaultNavUsdMicros(priced);
+  const inflows = snapshotAmount(
+    snapshot.pendingAuthorizedInflowsUsdcBaseUnits,
+    "pending inflows",
+  );
+  const outflows = snapshotAmount(
+    snapshot.pendingAuthorizedOutflowsUsdcBaseUnits,
+    "pending outflows",
+  );
+  const keeper = snapshotAmount(
+    snapshot.pendingKeeperEffectsUsdcBaseUnits,
+    "pending keeper effects",
+  );
+  const fees = snapshotAmount(
+    snapshot.reservedFeesUsdcBaseUnits,
+    "reserved fees",
+  );
+  const bounty = snapshotAmount(
+    snapshot.reservedBountyUsdcBaseUnits,
+    "reserved bounty",
+  );
+  if (outflows + fees + bounty > navUsdMicros + inflows + keeper)
+    throw new Error("Vault snapshot pending liabilities exceed assets.");
+  navUsdMicros = navUsdMicros + inflows + keeper - outflows - fees - bounty;
+  const shareSupplyBaseUnits = snapshotAmount(
+    snapshot.shareSupplyBaseUnits,
+    "share supply",
+  );
+  if ((navUsdMicros === 0n) !== (shareSupplyBaseUnits === 0n))
+    throw new Error("NAV and share supply disagree outside bootstrap.");
+  if (
+    shareSupplyBaseUnits === 0n &&
+    policy.bootstrapEvidenceHash !== undefined &&
+    !HASH.test(policy.bootstrapEvidenceHash)
+  )
+    throw new Error("Bootstrap evidence is malformed.");
+  return Object.freeze({ navUsdMicros, shareSupplyBaseUnits });
+}
+
 export type PricedBalance = Readonly<{
   asset: C3AssetId;
   balanceBaseUnits: bigint;
@@ -78,8 +251,10 @@ export function calculateCandidateFeeForDisclosure(
 export function quoteDeposit(
   input: Readonly<{
     depositUsdcBaseUnits: bigint;
-    vaultNavUsdMicros: bigint;
-    shareSupplyBaseUnits: bigint;
+    snapshot: ReconciledVaultSnapshot;
+    snapshotPolicy: VaultSnapshotPolicy;
+    nowUnix: number;
+    currentSlot: number;
     slippageBps: number;
     costInputs: CostInputs;
   }>,
@@ -103,21 +278,32 @@ export function quoteDeposit(
     input.slippageBps > 100
   )
     throw new RangeError("Slippage must be 0-100 bps.");
-  assertU64(input.vaultNavUsdMicros, "vault NAV");
-  assertU64(input.shareSupplyBaseUnits, "share supply");
-  if ((input.vaultNavUsdMicros === 0n) !== (input.shareSupplyBaseUnits === 0n))
-    throw new Error("NAV and share supply cannot disagree for first deposit.");
+  const { navUsdMicros, shareSupplyBaseUnits } =
+    validateReconciledVaultSnapshot(
+      input.snapshot,
+      input.snapshotPolicy,
+      input.nowUnix,
+      input.currentSlot,
+    );
+  if (
+    shareSupplyBaseUnits === 0n &&
+    (!input.snapshotPolicy.bootstrapEvidenceHash ||
+      deposit <
+        snapshotAmount(
+          input.snapshotPolicy.minimumBootstrapUsdcBaseUnits,
+          "minimum bootstrap",
+        ))
+  )
+    throw new Error(
+      "Initial deposit requires reviewed bootstrap evidence and minimum seed.",
+    );
 
   const activeFeeBaseUnits = calculateFee(deposit, "inactive");
   const netDeposit = deposit - activeFeeBaseUnits;
   const expectedSharesBaseUnits =
-    input.shareSupplyBaseUnits === 0n
+    shareSupplyBaseUnits === 0n
       ? netDeposit
-      : mulDivFloor(
-          netDeposit,
-          input.shareSupplyBaseUnits,
-          input.vaultNavUsdMicros,
-        );
+      : mulDivFloor(netDeposit, shareSupplyBaseUnits, navUsdMicros);
   if (expectedSharesBaseUnits <= 0n)
     throw new RangeError("Deposit would issue zero C3 shares.");
   const minimumSharesBaseUnits = mulDivFloor(
@@ -160,8 +346,10 @@ export function quoteDeposit(
 export function quoteRedemption(
   input: Readonly<{
     sharesBaseUnits: bigint;
-    vaultNavUsdMicros: bigint;
-    shareSupplyBaseUnits: bigint;
+    snapshot: ReconciledVaultSnapshot;
+    snapshotPolicy: VaultSnapshotPolicy;
+    nowUnix: number;
+    currentSlot: number;
     slippageBps: number;
   }>,
 ): Readonly<{
@@ -170,8 +358,13 @@ export function quoteRedemption(
   activeFeeBaseUnits: bigint;
 }> {
   const shares = assertU64(input.sharesBaseUnits, "redemption shares");
-  const nav = assertU64(input.vaultNavUsdMicros, "vault NAV");
-  const supply = assertU64(input.shareSupplyBaseUnits, "share supply");
+  const { navUsdMicros: nav, shareSupplyBaseUnits: supply } =
+    validateReconciledVaultSnapshot(
+      input.snapshot,
+      input.snapshotPolicy,
+      input.nowUnix,
+      input.currentSlot,
+    );
   if (shares === 0n || supply === 0n || shares > supply)
     throw new RangeError("Invalid proportional redemption.");
   if (

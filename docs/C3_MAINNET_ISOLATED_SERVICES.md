@@ -4,7 +4,7 @@ Status: implementation foundation; **not production-ready**. Classification: **S
 
 ## Boundary
 
-`services/c3-mainnet` is a server-only package. The mobile app does not import it. It contains deterministic accounting, a strict deployment manifest, semantic instruction validation, dry-run pooled rebalancing, persistence invariants, two-provider reconciliation, a deterministic unsigned deployment plan, and fail-closed readiness commands.
+`services/c3-mainnet` is a server-only package. The mobile app does not import it. It contains deterministic accounting, a strict deployment manifest, canonical v0 message validation, dry-run pooled rebalancing, persistence invariants, two-provider reconciliation, a deterministic unsigned deployment plan, and fail-closed readiness commands.
 
 The package never connects a wallet, signs, submits, deploys, creates a token, creates a vault, or moves funds. It persists public fingerprints and evidence only. It does not store private keys, seed phrases, credentials, signed payloads, or unnecessary wallet data.
 
@@ -26,7 +26,21 @@ Fee collection and the SKR discount remain disabled. The 15/15/7.5 rate schedule
 
 The disabled builder accepts only canonical integer base-unit strings and a hash-bound deployment manifest. It validates cluster/genesis, operation-specific programs, signers, fee payer, writable accounts, debits, destinations, close-account semantics, lookup tables, quote/blockhash expiry, packet size, post-conditions, and two-provider reconciliation requirements. Its output is safe public authorization metadata and an unsigned transaction fingerprint, not a signed payload.
 
-The typed `ReviewedSymmetryAdapter` boundary defines verified vault-state reads and decoded unsigned intent construction. The current adapter foundation still expects a separately reviewed concrete Symmetry integration; direct Symmetry SDK transaction construction has not yet been implemented or approved. Consequently, unit tests do not make the builder production-ready.
+The typed `ReadOnlySymmetryAdapter` boundary requires an authoritative source hash, account-layout hash, instruction-layout hash, dependency-safety review, exact program/global configuration, non-empty reviewed RPC account bytes, and strict vault/share/authority/balance checks. The concrete official decoder and its independent review evidence remain unresolved. Synthetic fixtures cannot satisfy readiness, and the Symmetry SDK remains excluded from the Android application.
+
+## M3.1 security-remediation boundary
+
+The user request now contains only operation, immutable intent/idempotency identifiers, wallet, validated amount, bounded slippage, and current time. Signers, fee payer, vault, share mint, ATAs, programs, exact instruction bytes, writable flags, route registry, destinations, effects, and post-conditions must come from a verified deployment manifest and reviewed server evidence. The current proposed manifest has no reviewed operation policy, so the production builder remains NO-GO.
+
+Authorization uses schema `c3-authorization/v2` and SHA-256 over deterministic canonical bytes binding the complete decoded v0 message, recent blockhash, expiry, account order and flags, compiled instruction bytes, ALT indexes/content hashes, economic limits, routes, effects, and reconciliation conditions. Non-canonical JSON, omitted/unknown fields, alternate encodings, stale authorizations, and replay mutations fail closed.
+
+All intent changes use a mandatory state transition plus revision/state compare-and-swap. The included in-memory repository is explicitly non-production; readiness remains NO-GO until a durable transactional adapter passes restart, concurrency, quarantine, immutable signature, and immutable settlement-evidence checks.
+
+Reconciliation starts from a signature and immutable authorization, resolves two reviewed HTTPS providers from a server registry, reconstructs effects from raw finalized balances/instructions, and requires agreement. Matching synthetic fixtures are parser tests only and cannot settle a production intent. Concrete independently operated provider review records remain required.
+
+NAV/share quotes no longer accept free NAV or supply inputs. They require a fresh reconciled vault snapshot with exact accounts, mints, decimals, oracle identity/freshness, pending liabilities, donation policy, supply, and evidence hash. Bootstrap is fail-closed and requires reviewed seed evidence.
+
+Keeper planning uses projected pooled NAV after authorized inflows, withdrawals, partial execution, fees, bounty, and dust. It never performs per-user three-leg swaps. Failed legs, stale oracles, and missing routes enter manual review.
 
 ## Keeper responsibilities
 

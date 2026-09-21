@@ -126,7 +126,44 @@
     "threshold": 2,
     "timelockSeconds": 86400,
     "spendingLimitsConfigured": false,
-    "destinationAllowlistConfigured": false
+    "destinationAllowlistConfigured": false,
+    "multisigAddress": null,
+    "vaultAddress": null,
+    "roleAssignments": null,
+    "derivationPolicyHash": null,
+    "onchainEvidenceHash": null,
+    "allowedDestinations": []
+  },
+  "symmetryAdapter": {
+    "adapterId": null,
+    "authoritativeSourceUrl": null,
+    "authoritativeSourceHash": null,
+    "accountLayoutHash": null,
+    "instructionLayoutHash": null,
+    "productionReviewed": false,
+    "dependencySafe": false
+  },
+  "rpcRegistry": {
+    "status": "proposed",
+    "providerEvidenceHashes": []
+  },
+  "operationPolicies": {
+    "seed_deposit": null,
+    "deposit_intent": null,
+    "rebalance_intent": null,
+    "redemption_intent": null,
+    "usdc_withdrawal": null,
+    "emergency_pause": null
+  },
+  "lifecycleEvidence": {
+    "verificationReceipt": null,
+    "securityApprovalReceipt": null,
+    "governanceApprovalReceipt": null,
+    "deploymentReadyReceipt": null,
+    "deploymentReceipts": [],
+    "deploymentSlot": null,
+    "pauseReceipt": null,
+    "previousManifestHash": null
   },
   "credentials": {
     "jupiterVariable": "C3_JUPITER_API_KEY",
@@ -144,5 +181,5 @@
     "routeRegistryApproved": false,
     "oracleEvidenceApproved": false
   },
-  "immutableConfigurationHash": "3988b70d46149c47c1a1438d09542530f488c02b7bec63df7e469b929d62522f"
+  "immutableConfigurationHash": "92667ae72a8e1d86c72e241a0856d781a6326e5307b7d59c3b75d198f41953d6"
 }

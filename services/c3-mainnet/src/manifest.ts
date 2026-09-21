@@ -56,6 +56,10 @@ const TOP_LEVEL_KEYS = [
   "limits",
   "authorities",
   "squads",
+  "symmetryAdapter",
+  "rpcRegistry",
+  "operationPolicies",
+  "lifecycleEvidence",
   "credentials",
   "approvals",
   "immutableConfigurationHash",
@@ -63,6 +67,63 @@ const TOP_LEVEL_KEYS = [
 
 const PLACEHOLDER = /^(todo|tbd|replace|placeholder|changeme|unknown|example)/i;
 const PUBLIC_KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const HASH = /^[a-f0-9]{64}$/;
+
+const STATUS_RANK: Readonly<Record<C3ManifestStatus, number>> = Object.freeze({
+  proposed: 0,
+  verified: 1,
+  security_approved: 2,
+  governance_approved: 3,
+  deployment_ready: 4,
+  deployed: 5,
+  paused: 6,
+});
+
+function receiptValid(
+  value: unknown,
+  expectedConfigurationHash: unknown,
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const receipt = value as Record<string, unknown>;
+  return (
+    Object.keys(receipt).length === 5 &&
+    typeof receipt.kind === "string" &&
+    typeof receipt.signature === "string" &&
+    /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(receipt.signature) &&
+    receipt.configurationHash === expectedConfigurationHash &&
+    Number.isSafeInteger(receipt.slot) &&
+    Number(receipt.slot) > 0 &&
+    typeof receipt.evidenceHash === "string" &&
+    HASH.test(receipt.evidenceHash)
+  );
+}
+
+export function assertManifestLifecycleTransition(
+  previous: C3DeploymentManifest,
+  next: C3DeploymentManifest,
+): void {
+  const from = STATUS_RANK[previous.status];
+  const to = STATUS_RANK[next.status];
+  const allowedPauseResume =
+    previous.status === "paused" && next.status === "deployed";
+  if (
+    (!allowedPauseResume && to !== from + 1) ||
+    next.executionCapability !== false
+  )
+    throw new Error(
+      `Unsafe manifest lifecycle transition: ${previous.status} -> ${next.status}.`,
+    );
+  const previousHash = computeManifestHash(previous);
+  const evidence = (next as Record<string, unknown>).lifecycleEvidence as
+    Record<string, unknown> | undefined;
+  if (evidence?.previousManifestHash !== previousHash)
+    throw new Error(
+      "Manifest lifecycle does not bind the previous immutable configuration.",
+    );
+  const validation = validateDeploymentManifest(next);
+  if (!validation.valid)
+    throw new Error("Next manifest lifecycle state is invalid.");
+}
 
 export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -79,6 +140,15 @@ export function computeManifestHash(
 ): string {
   const clone = { ...manifest };
   delete clone.immutableConfigurationHash;
+  return createHash("sha256").update(canonicalize(clone)).digest("hex");
+}
+
+export function computeManifestCoreHash(
+  manifest: Readonly<Record<string, unknown>>,
+): string {
+  const clone = { ...manifest };
+  delete clone.immutableConfigurationHash;
+  delete clone.lifecycleEvidence;
   return createHash("sha256").update(canonicalize(clone)).digest("hex");
 }
 
@@ -454,6 +524,12 @@ export function validateDeploymentManifest(value: unknown): ManifestValidation {
       "timelockSeconds",
       "spendingLimitsConfigured",
       "destinationAllowlistConfigured",
+      "multisigAddress",
+      "vaultAddress",
+      "roleAssignments",
+      "derivationPolicyHash",
+      "onchainEvidenceHash",
+      "allowedDestinations",
     ],
     "squads",
     issues,
@@ -472,11 +548,199 @@ export function validateDeploymentManifest(value: unknown): ManifestValidation {
         missingPublicInputs,
       ),
     );
+  if (Array.isArray(squads.memberAddresses)) {
+    const realMembers = squads.memberAddresses.filter(
+      (member): member is string => typeof member === "string",
+    );
+    if (new Set(realMembers).size !== realMembers.length)
+      issues.push("Squads members must be distinct");
+    if (realMembers.includes("11111111111111111111111111111111"))
+      issues.push("Squads cannot use the default public key");
+  }
   if (
     squads.threshold !== 2 ||
     squads.timelockSeconds !== limits.timelockSeconds
   )
     issues.push("Squads must be 2-of-3 with the manifest timelock");
+
+  for (const key of ["multisigAddress", "vaultAddress"])
+    publicKeyOrMissing(
+      squads[key],
+      `squads.${key}`,
+      issues,
+      missingPublicInputs,
+    );
+  if (
+    typeof squads.multisigAddress === "string" &&
+    squads.multisigAddress === squads.vaultAddress
+  )
+    issues.push("Squads multisig and Vault addresses must differ");
+  if (squads.roleAssignments === null)
+    missingPublicInputs.push("squads.roleAssignments");
+  else {
+    const roles = object(
+      squads.roleAssignments,
+      "squads.roleAssignments",
+      issues,
+    );
+    exactKeys(
+      roles,
+      ["security", "operations", "governance"],
+      "squads.roleAssignments",
+      issues,
+    );
+    if (new Set(Object.values(roles)).size !== 3)
+      issues.push("Squads role assignments must be distinct");
+  }
+  for (const key of ["derivationPolicyHash", "onchainEvidenceHash"])
+    if (squads[key] === null) missingPublicInputs.push(`squads.${key}`);
+    else if (
+      typeof squads[key] !== "string" ||
+      !HASH.test(squads[key] as string)
+    )
+      issues.push(`squads.${key} is malformed`);
+  if (!Array.isArray(squads.allowedDestinations))
+    issues.push("squads.allowedDestinations must be an array");
+  else if (
+    squads.allowedDestinations.some(
+      (destination) =>
+        typeof destination !== "string" || !PUBLIC_KEY.test(destination),
+    )
+  )
+    issues.push("squads.allowedDestinations is malformed");
+
+  const symmetryAdapter = object(
+    root.symmetryAdapter,
+    "symmetryAdapter",
+    issues,
+  );
+  exactKeys(
+    symmetryAdapter,
+    [
+      "adapterId",
+      "authoritativeSourceUrl",
+      "authoritativeSourceHash",
+      "accountLayoutHash",
+      "instructionLayoutHash",
+      "productionReviewed",
+      "dependencySafe",
+    ],
+    "symmetryAdapter",
+    issues,
+  );
+  for (const key of [
+    "adapterId",
+    "authoritativeSourceUrl",
+    "authoritativeSourceHash",
+    "accountLayoutHash",
+    "instructionLayoutHash",
+  ]) {
+    if (symmetryAdapter[key] === null)
+      missingPublicInputs.push(`symmetryAdapter.${key}`);
+  }
+  if (
+    symmetryAdapter.authoritativeSourceUrl !== null &&
+    (typeof symmetryAdapter.authoritativeSourceUrl !== "string" ||
+      !symmetryAdapter.authoritativeSourceUrl.startsWith("https://"))
+  )
+    issues.push("Symmetry authoritative source must be HTTPS");
+  for (const key of [
+    "authoritativeSourceHash",
+    "accountLayoutHash",
+    "instructionLayoutHash",
+  ])
+    if (
+      symmetryAdapter[key] !== null &&
+      (typeof symmetryAdapter[key] !== "string" ||
+        !HASH.test(symmetryAdapter[key] as string))
+    )
+      issues.push(`symmetryAdapter.${key} is malformed`);
+
+  const rpcRegistry = object(root.rpcRegistry, "rpcRegistry", issues);
+  exactKeys(
+    rpcRegistry,
+    ["status", "providerEvidenceHashes"],
+    "rpcRegistry",
+    issues,
+  );
+  if (!["proposed", "verified"].includes(String(rpcRegistry.status)))
+    issues.push("RPC registry status is invalid");
+  if (
+    !Array.isArray(rpcRegistry.providerEvidenceHashes) ||
+    rpcRegistry.providerEvidenceHashes.some(
+      (hash) => typeof hash !== "string" || !HASH.test(hash),
+    )
+  )
+    issues.push("RPC provider evidence hashes are malformed");
+
+  const operationPolicies = object(
+    root.operationPolicies,
+    "operationPolicies",
+    issues,
+  );
+  const operationKeys = [
+    "seed_deposit",
+    "deposit_intent",
+    "rebalance_intent",
+    "redemption_intent",
+    "usdc_withdrawal",
+    "emergency_pause",
+  ];
+  exactKeys(operationPolicies, operationKeys, "operationPolicies", issues);
+  for (const key of operationKeys)
+    if (operationPolicies[key] === null)
+      missingPublicInputs.push(`operationPolicies.${key}`);
+
+  const lifecycle = object(root.lifecycleEvidence, "lifecycleEvidence", issues);
+  exactKeys(
+    lifecycle,
+    [
+      "verificationReceipt",
+      "securityApprovalReceipt",
+      "governanceApprovalReceipt",
+      "deploymentReadyReceipt",
+      "deploymentReceipts",
+      "deploymentSlot",
+      "pauseReceipt",
+      "previousManifestHash",
+    ],
+    "lifecycleEvidence",
+    issues,
+  );
+  const status = root.status as C3ManifestStatus;
+  const coreHash = computeManifestCoreHash(root);
+  const requireReceipt = (minimum: C3ManifestStatus, key: string) => {
+    if (
+      STATUS_RANK[status] >= STATUS_RANK[minimum] &&
+      !receiptValid(lifecycle[key], coreHash)
+    )
+      issues.push(
+        `lifecycleEvidence.${key} is required and must be independently verifiable`,
+      );
+  };
+  requireReceipt("verified", "verificationReceipt");
+  requireReceipt("security_approved", "securityApprovalReceipt");
+  requireReceipt("governance_approved", "governanceApprovalReceipt");
+  requireReceipt("deployment_ready", "deploymentReadyReceipt");
+  if (STATUS_RANK[status] >= STATUS_RANK.deployed) {
+    if (
+      !Array.isArray(lifecycle.deploymentReceipts) ||
+      lifecycle.deploymentReceipts.length === 0 ||
+      lifecycle.deploymentReceipts.some(
+        (receipt) => !receiptValid(receipt, coreHash),
+      )
+    )
+      issues.push("deployed manifest requires finalized deployment receipts");
+    if (
+      !Number.isSafeInteger(lifecycle.deploymentSlot) ||
+      Number(lifecycle.deploymentSlot) <= 0
+    )
+      issues.push("deployed manifest requires a deployment slot");
+  }
+  if (status === "paused" && !receiptValid(lifecycle.pauseReceipt, coreHash))
+    issues.push(
+      "paused manifest requires independently verifiable pause evidence",
+    );
 
   const credentials = object(root.credentials, "credentials", issues);
   exactKeys(
@@ -531,6 +795,43 @@ export function validateDeploymentManifest(value: unknown): ManifestValidation {
     Object.values(approvals).some((approved) => approved !== true)
   )
     issues.push("non-proposed manifest lacks required approval evidence");
+  if (root.status !== "proposed" && missingPublicInputs.length > 0)
+    issues.push("non-proposed manifest has unresolved mandatory public inputs");
+  if (
+    STATUS_RANK[root.status as C3ManifestStatus] >= STATUS_RANK.deployment_ready
+  ) {
+    if (
+      routes.registryStatus !== "verified" ||
+      rpcRegistry.status !== "verified"
+    )
+      issues.push(
+        "deployment readiness requires verified route and RPC registries",
+      );
+    if (
+      symmetryAdapter.productionReviewed !== true ||
+      symmetryAdapter.dependencySafe !== true
+    )
+      issues.push(
+        "deployment readiness requires a concrete reviewed Symmetry adapter",
+      );
+    if (
+      !Array.isArray(rpcRegistry.providerEvidenceHashes) ||
+      rpcRegistry.providerEvidenceHashes.length !== 2 ||
+      new Set(rpcRegistry.providerEvidenceHashes).size !== 2
+    )
+      issues.push(
+        "deployment readiness requires two independent RPC evidence records",
+      );
+    if (
+      !Object.values(assets).every(
+        (asset) =>
+          typeof asset === "object" &&
+          asset !== null &&
+          (asset as Record<string, unknown>).status === "verified",
+      )
+    )
+      issues.push("deployment readiness requires verified asset evidence");
+  }
 
   if (
     typeof root.immutableConfigurationHash !== "string" ||

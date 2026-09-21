@@ -38,6 +38,9 @@ const assets = root.assets as Record<string, Record<string, unknown>>;
 const routes = root.routes as Record<string, unknown>;
 const authorities = root.authorities as Record<string, unknown>;
 const squads = root.squads as Record<string, unknown>;
+const symmetryAdapter = root.symmetryAdapter as Record<string, unknown>;
+const rpcRegistry = root.rpcRegistry as Record<string, unknown>;
+const operationPolicies = root.operationPolicies as Record<string, unknown>;
 const checks: Check[] = [];
 const add = (id: string, pass: boolean, detail: string) =>
   checks.push(Object.freeze({ id, pass, detail }));
@@ -86,6 +89,18 @@ if (mode === "builder" || mode === "deployment") {
     approvals.securityApproved === true,
     "decoded instruction builder requires independent Security approval",
   );
+  add(
+    "trusted-operation-policy",
+    operationPolicies.deposit_intent !== null &&
+      typeof operationPolicies.deposit_intent === "object",
+    "caller-independent exact instruction/effect policy is unresolved",
+  );
+  add(
+    "concrete-symmetry-adapter",
+    symmetryAdapter.productionReviewed === true &&
+      symmetryAdapter.dependencySafe === true,
+    "reviewed official Symmetry layouts and dependency-safe adapter are unresolved",
+  );
 }
 
 if (mode === "keeper" || mode === "deployment") {
@@ -105,6 +120,18 @@ if (mode === "keeper" || mode === "deployment") {
       credentials.rpcSecondary &&
       credentials.rpcOperatorsIndependent,
     "two distinct reviewed HTTPS RPC operators are mandatory",
+  );
+  add(
+    "reviewed-rpc-registry",
+    rpcRegistry.status === "verified" &&
+      Array.isArray(rpcRegistry.providerEvidenceHashes) &&
+      rpcRegistry.providerEvidenceHashes.length === 2,
+    "two independently reviewed RPC provider evidence records are unresolved",
+  );
+  add(
+    "durable-cas-repository",
+    false,
+    "only the non-production in-memory test adapter exists",
   );
   add(
     "keeper-authority",

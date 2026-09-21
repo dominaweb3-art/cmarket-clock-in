@@ -6,14 +6,29 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildDisabledUnsignedPackage,
-  C3_MAINNET,
+  canonicalize,
   computeManifestHash,
+  deriveAssociatedTokenAddress,
+  deriveTrustedOperationPolicy,
+  parseAndVerifyAuthorizationManifest,
   redactOperationalError,
+  validateCanonicalV0Transaction,
   validateDeploymentManifest,
   validateOracleEvidence,
+  validateTrustedPolicy,
   type C3DeploymentManifest,
-  type UnsignedBuildRequest,
+  type TrustedOperationPolicy,
 } from "../src/index.ts";
+import {
+  authorizationFixture,
+  makeV0Message,
+  trustedPolicy,
+  userShares,
+  userUsdc,
+  vault,
+  vaultUsdc,
+  wallet,
+} from "./fixtures.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(
@@ -22,93 +37,8 @@ const manifest = JSON.parse(
     "utf8",
   ),
 ) as C3DeploymentManifest;
-const wallet = C3_MAINNET.cbBtcMint;
-const vault = C3_MAINNET.symmetryGlobalConfig;
-const fingerprint = "a".repeat(64);
 
-function request(): UnsignedBuildRequest {
-  return {
-    operation: "deposit_intent",
-    intentId: `c3-${"1".repeat(32)}`,
-    idempotencyKey: "2".repeat(64),
-    configurationVersion: manifest.schemaVersion,
-    manifest,
-    wallet,
-    feePayer: wallet,
-    vault,
-    inputMint: C3_MAINNET.usdcMint,
-    inputAmountBaseUnits: "1000000",
-    expectedShareOutputBaseUnits: "1000000",
-    minimumShareOutputBaseUnits: "990000",
-    feeBaseUnits: "0",
-    bountyBaseUnits: "245000",
-    networkAndRentEstimateBaseUnits: "5000",
-    expiresAtUnix: 1_100,
-    quoteObservedAtUnix: 995,
-    quoteExpiresAtUnix: 1_015,
-    blockhashExpiresAtUnix: 1_060,
-    nowUnix: 1_000,
-    expectedSigners: [wallet],
-    expectedWritableAccounts: [wallet, vault],
-    expectedDestinations: [vault],
-    allowedInstructionKinds: ["create_deposit_intent"],
-    approvedRoutePrograms: [],
-    expectedTokenDebits: [
-      {
-        owner: wallet,
-        mint: C3_MAINNET.usdcMint,
-        minimumAmountBaseUnits: "1000000",
-        maximumAmountBaseUnits: "1000000",
-      },
-    ],
-    expectedTokenCredits: [
-      {
-        owner: vault,
-        mint: C3_MAINNET.usdcMint,
-        minimumAmountBaseUnits: "1000000",
-        maximumAmountBaseUnits: "1000000",
-      },
-    ],
-    expectedClosableAccounts: [],
-    instructions: [
-      {
-        programId: C3_MAINNET.symmetryProgram,
-        kind: "create_deposit_intent",
-        dataFingerprint: fingerprint,
-        accounts: [
-          {
-            address: wallet,
-            role: "user_authority",
-            signer: true,
-            writable: true,
-          },
-          { address: vault, role: "vault", signer: false, writable: true },
-        ],
-        tokenDebit: {
-          owner: wallet,
-          mint: C3_MAINNET.usdcMint,
-          amountBaseUnits: "1000000",
-        },
-        tokenCredit: {
-          owner: vault,
-          mint: C3_MAINNET.usdcMint,
-          amountBaseUnits: "1000000",
-        },
-      },
-    ],
-    lookupTables: [],
-    estimatedTransactionBytes: 400,
-    expectedPostConditions: [
-      "vault USDC increases; user receives proportional C3 shares only after reconciliation",
-    ],
-    reconciliationRequirements: [
-      "primary reviewed RPC finalized evidence",
-      "independent secondary operator finalized evidence",
-    ],
-  };
-}
-
-test("strict proposed deployment manifest and immutable hash validate", () => {
+test("strict proposed deployment manifest validates but remains explicitly incomplete", () => {
   const result = validateDeploymentManifest(manifest);
   assert.equal(result.valid, true, result.issues.join("; "));
   assert.equal(
@@ -116,10 +46,13 @@ test("strict proposed deployment manifest and immutable hash validate", () => {
     manifest.immutableConfigurationHash,
   );
   assert.ok(result.missingPublicInputs.includes("vault.address"));
-  assert.ok(result.missingPublicInputs.includes("squads.memberAddresses[0]"));
+  assert.ok(result.missingPublicInputs.includes("symmetryAdapter.adapterId"));
+  assert.ok(
+    result.missingPublicInputs.includes("operationPolicies.deposit_intent"),
+  );
 });
 
-test("manifest rejects wrong cluster, Devnet identity, allocation, HTTP, active fees, capability bypass, and placeholders", () => {
+test("manifest rejects wrong network, allocation, active fees, capability, duplicate Squads members and placeholders", () => {
   const mutations: Array<(candidate: Record<string, unknown>) => void> = [
     (value) => {
       value.cluster = "devnet";
@@ -128,11 +61,7 @@ test("manifest rejects wrong cluster, Devnet identity, allocation, HTTP, active 
       value.genesisHash = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
     },
     (value) => {
-      (value.allocation as Record<string, unknown>).btcBps = 3_999;
-    },
-    (value) => {
-      (value.oracles as Record<string, unknown>).endpoint =
-        "http://oracle.invalid";
+      (value.allocation as Record<string, unknown>).btcBps = 3999;
     },
     (value) => {
       (value.fees as Record<string, unknown>).collectionEnabled = true;
@@ -141,14 +70,15 @@ test("manifest rejects wrong cluster, Devnet identity, allocation, HTTP, active 
       value.executionCapability = true;
     },
     (value) => {
-      (value.pilot as Record<string, unknown>).publicAccessEnabled = true;
-    },
-    (value) => {
-      (value.pilot as Record<string, unknown>).allowlistRoot = "bypass";
-    },
-    (value) => {
       (value.authorities as Record<string, unknown>).governance =
         "TODO-governance";
+    },
+    (value) => {
+      (value.squads as Record<string, unknown>).memberAddresses = [
+        wallet,
+        wallet,
+        wallet,
+      ];
     },
   ];
   for (const mutate of mutations) {
@@ -159,7 +89,7 @@ test("manifest rejects wrong cluster, Devnet identity, allocation, HTTP, active 
   }
 });
 
-test("oracle validation rejects stale, malformed, unauthenticated, wrong feed, and excessive confidence evidence", () => {
+test("oracle validation rejects stale, unauthenticated, wrong-feed and excessive-confidence evidence", () => {
   const evidence = {
     asset: "cbBTC" as const,
     feedId: "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
@@ -170,7 +100,7 @@ test("oracle validation rejects stale, malformed, unauthenticated, wrong feed, a
     confidenceMantissa: "1000000",
     exponent: -5,
     publishTimeUnix: 995,
-    receivedTimeUnix: 1_000,
+    receivedTimeUnix: 1000,
   };
   assert.equal(
     validateOracleEvidence(evidence, {
@@ -179,142 +109,176 @@ test("oracle validation rejects stale, malformed, unauthenticated, wrong feed, a
     }).priceUsdMicros,
     100_000_000_000n,
   );
-  assert.throws(() =>
-    validateOracleEvidence(
-      { ...evidence, publishTimeUnix: 900 },
-      { maximumAgeSeconds: 60, maximumConfidenceBps: 200 },
-    ),
+  for (const candidate of [
+    { ...evidence, publishTimeUnix: 900 },
+    { ...evidence, authenticated: false },
+    { ...evidence, feedId: "0".repeat(64) },
+    { ...evidence, confidenceMantissa: "300000000" },
+  ])
+    assert.throws(() =>
+      validateOracleEvidence(candidate, {
+        maximumAgeSeconds: 60,
+        maximumConfidenceBps: 200,
+      }),
+    );
+});
+
+test("caller-facing intent cannot supply or override policy and proposed manifest cannot derive one", () => {
+  const intent = {
+    operation: "deposit_intent" as const,
+    intentId: `c3-${"1".repeat(32)}`,
+    idempotencyKey: "2".repeat(64),
+    wallet,
+    inputAmountBaseUnits: "1000000",
+    slippageBps: 100,
+    nowUnix: 1000,
+  };
+  assert.deepEqual(Object.keys(intent).sort(), [
+    "idempotencyKey",
+    "inputAmountBaseUnits",
+    "intentId",
+    "nowUnix",
+    "operation",
+    "slippageBps",
+    "wallet",
+  ]);
+  assert.throws(
+    () => deriveTrustedOperationPolicy(manifest, intent),
+    /incomplete/,
   );
-  assert.throws(() =>
-    validateOracleEvidence(
-      { ...evidence, authenticated: false },
-      { maximumAgeSeconds: 60, maximumConfidenceBps: 200 },
-    ),
+  const callerPolicy = trustedPolicy();
+  validateTrustedPolicy(callerPolicy, 1000);
+  assert.throws(
+    () => buildDisabledUnsignedPackage(intent, callerPolicy, makeV0Message()),
+    /trusted policy factory/,
   );
+  for (const override of [
+    { vault },
+    { treasury: vault },
+    { feeDestination: vault },
+    { expectedEffects: [] },
+    { signer: vault },
+    { writableAccounts: [vault] },
+  ])
+    assert.throws(() =>
+      buildDisabledUnsignedPackage(
+        { ...intent, ...override } as typeof intent,
+        callerPolicy,
+        makeV0Message(),
+      ),
+    );
+});
+
+test("canonical v0 validation rejects coordinated destination, vault, signer, writable, program, instruction and ATA mutations", () => {
+  const policy = trustedPolicy();
+  const decoded = validateCanonicalV0Transaction(policy, makeV0Message());
+  assert.equal(decoded.staticAccounts[0]?.address, wallet);
+  assert.equal(decoded.instructions.length, 1);
+  const arbitrary = deriveAssociatedTokenAddress(vault, policy.shareMint);
+  const hostileMessages = [
+    makeV0Message({ destination: vaultUsdc }),
+    makeV0Message({ shareDestination: userUsdc }),
+    makeV0Message({ vault: arbitrary }),
+    makeV0Message({ program: policy.inputMint }),
+    makeV0Message({ data: Uint8Array.of(1, 2, 3, 5) }),
+    makeV0Message({ writableReadonlyCount: 2 }),
+    makeV0Message({ extraSigner: userShares }),
+  ];
+  for (const message of hostileMessages)
+    assert.throws(() => validateCanonicalV0Transaction(policy, message));
+
+  const fakePolicy = structuredClone(policy) as TrustedOperationPolicy;
+  (fakePolicy.instructions[0]!.accountAddresses as string[])[2] = arbitrary;
   assert.throws(() =>
-    validateOracleEvidence(
-      { ...evidence, feedId: "0".repeat(64) },
-      { maximumAgeSeconds: 60, maximumConfidenceBps: 200 },
-    ),
-  );
-  assert.throws(() =>
-    validateOracleEvidence(
-      { ...evidence, confidenceMantissa: "300000000" },
-      { maximumAgeSeconds: 60, maximumConfidenceBps: 200 },
-    ),
-  );
-  assert.throws(() =>
-    validateOracleEvidence(
-      { ...evidence, priceMantissa: "null" },
-      { maximumAgeSeconds: 60, maximumConfidenceBps: 200 },
+    buildDisabledUnsignedPackage(
+      {
+        operation: "deposit_intent",
+        intentId: `c3-${"1".repeat(32)}`,
+        idempotencyKey: "2".repeat(64),
+        wallet,
+        inputAmountBaseUnits: "1000000",
+        slippageBps: 100,
+        nowUnix: 1000,
+      },
+      fakePolicy,
+      makeV0Message({ vault: arbitrary }),
     ),
   );
 });
 
-test("disabled builder produces only a fingerprinted unsigned authorization package", () => {
-  const result = buildDisabledUnsignedPackage(request());
-  assert.equal(result.executionCapability, false);
-  assert.equal(result.inputAmountBaseUnits, "1000000");
-  assert.equal(result.expectedDestinations.length, 1);
-  assert.match(result.unsignedTransactionFingerprint, /^[a-f0-9]{64}$/);
-});
-
-test("builder rejects wrong mint, unknown program/instruction, writable account, signer, destination and token debit", () => {
-  const mutations: Array<(candidate: UnsignedBuildRequest) => void> = [
+test("authorization hash binds every critical field, order, blockhash and exact instruction bytes", () => {
+  const authorization = authorizationFixture();
+  const canonical = canonicalize(authorization);
+  assert.equal(
+    parseAndVerifyAuthorizationManifest(canonical, 1000).authorizationHash,
+    authorization.authorizationHash,
+  );
+  const mutations: Array<(candidate: Record<string, unknown>) => void> = [
     (value) => {
-      (value as { inputMint: string }).inputMint = C3_MAINNET.cbBtcMint;
+      value.wallet = vault;
     },
     (value) => {
-      (value.instructions[0] as { programId: string }).programId =
-        C3_MAINNET.jupiterProgram;
+      value.cluster = "devnet";
     },
     (value) => {
-      (value.instructions[0] as { kind: string }).kind = "unknown";
+      value.operation = "redemption_intent";
     },
     (value) => {
-      (value.instructions[0]!.accounts[1] as { address: string }).address =
-        C3_MAINNET.portalEthMint;
+      value.inputAmountBaseUnits = "1000001";
     },
     (value) => {
-      (value.instructions[0]!.accounts[1] as { signer: boolean }).signer = true;
+      value.recentBlockhash = wallet;
     },
     (value) => {
-      (value.instructions[0]!.tokenCredit as { owner: string }).owner =
-        C3_MAINNET.portalEthMint;
+      value.configurationVersion = "other";
     },
     (value) => {
-      (
-        value.instructions[0]!.tokenDebit as { amountBaseUnits: string }
-      ).amountBaseUnits = "1000001";
+      value.intentId = `c3-${"f".repeat(32)}`;
     },
     (value) => {
-      (value.instructions[0]!.tokenCredit as { mint: string }).mint =
-        C3_MAINNET.cbBtcMint;
+      value.staticAccounts = [...(value.staticAccounts as unknown[])].reverse();
     },
     (value) => {
-      (value as unknown as { expectedSigners: string[] }).expectedSigners.push(
-        vault,
-      );
+      const instructions = structuredClone(value.compiledInstructions) as Array<
+        Record<string, unknown>
+      >;
+      instructions[0]!.dataBase64 = "AQIDBQ==";
+      value.compiledInstructions = instructions;
     },
   ];
   for (const mutate of mutations) {
-    const candidate = structuredClone(request());
+    const candidate = structuredClone(authorization) as unknown as Record<
+      string,
+      unknown
+    >;
     mutate(candidate);
-    assert.throws(() => buildDisabledUnsignedPackage(candidate));
+    assert.throws(() =>
+      parseAndVerifyAuthorizationManifest(canonicalize(candidate), 1000),
+    );
   }
+  const omitted = structuredClone(authorization) as unknown as Record<
+    string,
+    unknown
+  >;
+  delete omitted.vault;
+  assert.throws(() =>
+    parseAndVerifyAuthorizationManifest(canonicalize(omitted), 1000),
+  );
+  assert.throws(() =>
+    parseAndVerifyAuthorizationManifest(JSON.stringify(authorization), 1000),
+  );
+  assert.throws(
+    () => parseAndVerifyAuthorizationManifest(canonical, 1010),
+    /expired/,
+  );
+  const duplicate = canonical.replace(
+    '{"allowedPrograms"',
+    '{"wallet":"duplicate","allowedPrograms"',
+  );
+  assert.throws(() => parseAndVerifyAuthorizationManifest(duplicate, 1000));
 });
 
-test("builder rejects stale evidence, below-minimum, float-like input, SOL transfer, unsafe close, hostile ALT and oversized transaction", () => {
-  const mutations: Array<(candidate: UnsignedBuildRequest) => void> = [
-    (value) => {
-      (value as { quoteExpiresAtUnix: number }).quoteExpiresAtUnix = 999;
-    },
-    (value) => {
-      (value as { inputAmountBaseUnits: string }).inputAmountBaseUnits =
-        "999999";
-    },
-    (value) => {
-      (value as { inputAmountBaseUnits: string }).inputAmountBaseUnits = "1.5";
-    },
-    (value) => {
-      (value.instructions[0] as { systemTransfer?: unknown }).systemTransfer = {
-        source: wallet,
-        destination: vault,
-        lamports: "1",
-      };
-    },
-    (value) => {
-      (value.instructions[0] as { closeAccount?: unknown }).closeAccount = {
-        account: vault,
-        refundDestination: wallet,
-        expectedEphemeralWsol: true,
-      };
-    },
-    (value) => {
-      (value as unknown as { lookupTables: unknown[] }).lookupTables = [
-        {
-          address: vault,
-          ownerProgram: C3_MAINNET.addressLookupTableProgram,
-          active: true,
-          addressesFingerprint: "a".repeat(64),
-          approvedFingerprint: "b".repeat(64),
-        },
-      ];
-    },
-    (value) => {
-      (
-        value as { estimatedTransactionBytes: number }
-      ).estimatedTransactionBytes = 1_233;
-    },
-  ];
-  for (const mutate of mutations) {
-    const candidate = structuredClone(request());
-    mutate(candidate);
-    assert.throws(() => buildDisabledUnsignedPackage(candidate));
-  }
-});
-
-test("secret-bearing errors are redacted", () => {
+test("secret-bearing operational errors are redacted", () => {
   const redacted = redactOperationalError(
     new Error(
       'Bearer abc123 x-api-key="secret456" https://user:pass@example.com',

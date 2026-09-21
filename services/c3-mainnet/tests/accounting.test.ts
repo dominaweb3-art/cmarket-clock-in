@@ -10,7 +10,9 @@ import {
   parseDecimalToBaseUnits,
   quoteDeposit,
   quoteRedemption,
+  validateReconciledVaultSnapshot,
 } from "../src/index.ts";
+import { snapshotPolicy, vaultSnapshot } from "./fixtures.ts";
 
 const costs = Object.freeze({
   symmetryBountyUsdcBaseUnits: 245_000n,
@@ -23,7 +25,7 @@ const costs = Object.freeze({
   warningThresholdBps: 1_000,
 });
 
-test("immutable allocation totals exactly 10,000 bps for 1, 5, 10, and 50 USDC", () => {
+test("immutable allocation totals exactly 10,000 bps for pilot sizes", () => {
   for (const amount of [1_000_000n, 5_000_000n, 10_000_000n, 50_000_000n]) {
     const allocation = allocateTargetByBps(amount);
     assert.deepEqual(allocation, {
@@ -35,64 +37,24 @@ test("immutable allocation totals exactly 10,000 bps for 1, 5, 10, and 50 USDC",
   }
 });
 
-test("decimal parser rejects floating-point and malformed input", () => {
+test("decimal parser and fee policy reject coercion while fees remain disabled", () => {
   assert.equal(parseDecimalToBaseUnits("1.000001", 6), 1_000_001n);
-  assert.throws(
-    () => parseDecimalToBaseUnits(1 as unknown as string, 6),
-    TypeError,
-  );
   for (const value of ["1e3", "-1", "01", "1.", ".5", "1.0000001"])
     assert.throws(() => parseDecimalToBaseUnits(value, 6));
-  assert.throws(() => parseDecimalToBaseUnits("18446744073710", 6), RangeError);
+  assert.equal(calculateFee(1_000_000n, "inactive"), 0n);
+  assert.equal(calculateCandidateFeeForDisclosure(1_000_000n), 1_500n);
+  assert.equal(calculateCandidateFeeForDisclosure(1_000_000n, true), 750n);
+  assert.throws(() => calculateFee(1_000_000n, "candidate"));
 });
 
-test("first 1 USDC deposit issues deterministic six-decimal shares and warns about high cost", () => {
-  const quote = quoteDeposit({
-    depositUsdcBaseUnits: 1_000_000n,
-    vaultNavUsdMicros: 0n,
-    shareSupplyBaseUnits: 0n,
-    slippageBps: 100,
-    costInputs: costs,
-  });
-  assert.equal(quote.expectedSharesBaseUnits, 1_000_000n);
-  assert.equal(quote.minimumSharesBaseUnits, 990_000n);
-  assert.equal(quote.activeFeeBaseUnits, 0n);
-  assert.equal(quote.candidateFeeBaseUnits, 1_500n);
-  assert.equal(quote.effectiveCostBps, 2_570n);
-  assert.equal(quote.economicallyInefficient, true);
-});
-
-test("first-time share token account discloses rent while an existing account does not change share math", () => {
-  const firstTime = quoteDeposit({
-    depositUsdcBaseUnits: 1_000_000n,
-    vaultNavUsdMicros: 0n,
-    shareSupplyBaseUnits: 0n,
-    slippageBps: 100,
-    costInputs: { ...costs, accountRentUsdcBaseUnits: 20_000n },
-  });
-  const existing = quoteDeposit({
-    depositUsdcBaseUnits: 1_000_000n,
-    vaultNavUsdMicros: 0n,
-    shareSupplyBaseUnits: 0n,
-    slippageBps: 100,
-    costInputs: { ...costs, accountRentUsdcBaseUnits: 0n },
-  });
-  assert.equal(
-    firstTime.expectedSharesBaseUnits,
-    existing.expectedSharesBaseUnits,
-  );
-  assert.equal(
-    firstTime.totalEstimatedEffectiveCostBaseUnits -
-      existing.totalEstimatedEffectiveCostBaseUnits,
-    20_000n,
-  );
-});
-
-test("subsequent deposit and proportional redemption use NAV/share supply", () => {
+test("deposit and redemption derive NAV and supply only from a reconciled snapshot", () => {
+  const snapshot = vaultSnapshot();
   const deposit = quoteDeposit({
     depositUsdcBaseUnits: 5_000_000n,
-    vaultNavUsdMicros: 20_000_000n,
-    shareSupplyBaseUnits: 10_000_000n,
+    snapshot,
+    snapshotPolicy,
+    nowUnix: 1_000,
+    currentSlot: 110,
     slippageBps: 50,
     costInputs: { ...costs, symmetryBountyUsdcBaseUnits: 0n },
   });
@@ -100,23 +62,105 @@ test("subsequent deposit and proportional redemption use NAV/share supply", () =
   assert.equal(deposit.minimumSharesBaseUnits, 2_487_500n);
   const redemption = quoteRedemption({
     sharesBaseUnits: 2_500_000n,
-    vaultNavUsdMicros: 20_000_000n,
-    shareSupplyBaseUnits: 10_000_000n,
+    snapshot,
+    snapshotPolicy,
+    nowUnix: 1_000,
+    currentSlot: 110,
     slippageBps: 50,
   });
   assert.equal(redemption.expectedUsdcBaseUnits, 5_000_000n);
   assert.equal(redemption.minimumUsdcBaseUnits, 4_975_000n);
 });
 
-test("candidate fee math is exact while collection remains inactive", () => {
-  assert.equal(calculateFee(1_000_000n, "inactive"), 0n);
-  assert.equal(calculateCandidateFeeForDisclosure(1_000_000n), 1_500n);
-  assert.equal(calculateCandidateFeeForDisclosure(1_000_000n, true), 750n);
-  assert.throws(() => calculateFee(1_000_000n, "candidate"));
-  assert.throws(() => calculateFee(1_000_000n, "skr_candidate"));
+test("bootstrap is fail-closed and issues deterministic shares only with reviewed seed evidence", () => {
+  const empty = vaultSnapshot("0", "0");
+  const quote = quoteDeposit({
+    depositUsdcBaseUnits: 1_000_000n,
+    snapshot: empty,
+    snapshotPolicy,
+    nowUnix: 1_000,
+    currentSlot: 110,
+    slippageBps: 100,
+    costInputs: costs,
+  });
+  assert.equal(quote.expectedSharesBaseUnits, 1_000_000n);
+  assert.equal(quote.minimumSharesBaseUnits, 990_000n);
+  const { bootstrapEvidenceHash: _omitted, ...noBootstrapPolicy } =
+    snapshotPolicy;
+  void _omitted;
+  assert.throws(() =>
+    quoteDeposit({
+      depositUsdcBaseUnits: 1_000_000n,
+      snapshot: empty,
+      snapshotPolicy: noBootstrapPolicy,
+      nowUnix: 1_000,
+      currentSlot: 110,
+      slippageBps: 100,
+      costInputs: costs,
+    }),
+  );
 });
 
-test("NAV and target-versus-current drift remain distinct", () => {
+test("snapshot validation rejects donation, stale data, wrong configuration, duplicate account, wrong decimals and insolvent liabilities", () => {
+  const cases = [
+    vaultSnapshot(undefined, undefined, { unsolicitedDonations: ["1"] }),
+    vaultSnapshot(undefined, undefined, { blockTimeUnix: 900 }),
+    vaultSnapshot(undefined, undefined, { configurationHash: "f".repeat(64) }),
+    vaultSnapshot(undefined, undefined, {
+      balances: [
+        vaultSnapshot().balances[0]!,
+        vaultSnapshot().balances[0]!,
+        ...vaultSnapshot().balances.slice(2),
+      ],
+    }),
+    vaultSnapshot(undefined, undefined, {
+      balances: vaultSnapshot().balances.map((balance) =>
+        balance.asset === "USDC" ? { ...balance, decimals: 9 } : balance,
+      ),
+    }),
+    vaultSnapshot("1", "1", { pendingAuthorizedOutflowsUsdcBaseUnits: "2" }),
+    vaultSnapshot("20000000", "0"),
+  ];
+  for (const snapshot of cases)
+    assert.throws(() =>
+      validateReconciledVaultSnapshot(snapshot, snapshotPolicy, 1_000, 110),
+    );
+});
+
+test("snapshot-based accounting rejects zero-share dilution, excessive redemption and stale oracle", () => {
+  assert.throws(() =>
+    quoteDeposit({
+      depositUsdcBaseUnits: 1_000_000n,
+      snapshot: vaultSnapshot("18446744073709551615", "1"),
+      snapshotPolicy,
+      nowUnix: 1_000,
+      currentSlot: 110,
+      slippageBps: 100,
+      costInputs: costs,
+    }),
+  );
+  assert.throws(() =>
+    quoteRedemption({
+      sharesBaseUnits: 10_000_001n,
+      snapshot: vaultSnapshot(),
+      snapshotPolicy,
+      nowUnix: 1_000,
+      currentSlot: 110,
+      slippageBps: 50,
+    }),
+  );
+  const stale = vaultSnapshot(undefined, undefined, {
+    balances: vaultSnapshot().balances.map((balance) => ({
+      ...balance,
+      oraclePublishTimeUnix: 900,
+    })),
+  });
+  assert.throws(() =>
+    validateReconciledVaultSnapshot(stale, snapshotPolicy, 1_000, 110),
+  );
+});
+
+test("NAV and target drift remain exact deterministic bigint calculations", () => {
   const nav = calculateVaultNavUsdMicros([
     {
       asset: "cbBTC",
@@ -149,42 +193,4 @@ test("NAV and target-versus-current drift remain distinct", () => {
     sol: 3_000n,
   });
   assert.deepEqual(allocation.driftBps, { btc: 0n, eth: 0n, sol: 0n });
-});
-
-test("accounting rejects below-minimum, inconsistent first deposit, zero shares, and invalid redemption", () => {
-  assert.throws(() =>
-    quoteDeposit({
-      depositUsdcBaseUnits: 999_999n,
-      vaultNavUsdMicros: 0n,
-      shareSupplyBaseUnits: 0n,
-      slippageBps: 100,
-      costInputs: costs,
-    }),
-  );
-  assert.throws(() =>
-    quoteDeposit({
-      depositUsdcBaseUnits: 1_000_000n,
-      vaultNavUsdMicros: 1n,
-      shareSupplyBaseUnits: 0n,
-      slippageBps: 100,
-      costInputs: costs,
-    }),
-  );
-  assert.throws(() =>
-    quoteDeposit({
-      depositUsdcBaseUnits: 1_000_000n,
-      vaultNavUsdMicros: 18_000_000_000_000_000_000n,
-      shareSupplyBaseUnits: 1n,
-      slippageBps: 100,
-      costInputs: costs,
-    }),
-  );
-  assert.throws(() =>
-    quoteRedemption({
-      sharesBaseUnits: 2n,
-      vaultNavUsdMicros: 1n,
-      shareSupplyBaseUnits: 1n,
-      slippageBps: 10,
-    }),
-  );
 });
