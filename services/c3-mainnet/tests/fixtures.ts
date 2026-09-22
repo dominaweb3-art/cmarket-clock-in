@@ -2,15 +2,15 @@ import { createHash } from "node:crypto";
 
 import {
   C3_MAINNET,
+  buildDisabledUnsignedPackage,
   canonicalize,
+  createAuthorizationContext,
   decodeBase58,
   deriveAssociatedTokenAddress,
   encodeBase58,
-  validateCanonicalV0Transaction,
   type C3AuthorizationManifest,
   type RawFinalizedTransaction,
   type ReconciledVaultSnapshot,
-  type TrustedOperationPolicy,
   type VaultSnapshotPolicy,
 } from "../src/index.ts";
 
@@ -88,143 +88,25 @@ export function makeV0Message(
   return Buffer.from(bytes).toString("base64");
 }
 
-export function trustedPolicy(
-  mutation: Partial<TrustedOperationPolicy> = {},
-): TrustedOperationPolicy {
-  return {
-    policySchemaVersion: "c3-operation-policy/v2",
-    configurationVersion: "c3-mainnet-deployment/v1",
-    configurationHash: "1".repeat(64),
-    cluster: "mainnet-beta",
-    genesisHash: C3_MAINNET.genesisHash,
+export function authorizationFixture(): C3AuthorizationManifest {
+  const context = createAuthorizationContext({
+    policyIdentifier: "c3.deposit-intent.disabled-validation.v1",
     operation: "deposit_intent",
     wallet,
-    feePayer: wallet,
-    vault,
-    shareMint,
-    inputMint: C3_MAINNET.usdcMint,
-    userInputTokenAccount: userUsdc,
-    vaultInputTokenAccount: vaultUsdc,
-    userShareTokenAccount: userShares,
     inputAmountBaseUnits: "1000000",
-    expectedOutputBaseUnits: "1000000",
-    minimumOutputBaseUnits: "990000",
-    feeBaseUnits: "0",
-    bountyBaseUnits: "0",
-    allowedPrograms: [C3_MAINNET.symmetryProgram],
-    approvedRoutePrograms: [],
-    instructions: [
-      {
-        programId: C3_MAINNET.symmetryProgram,
-        accountAddresses: [
-          wallet,
-          userUsdc,
-          vaultUsdc,
-          userShares,
-          C3_MAINNET.usdcMint,
-          shareMint,
-        ],
-        signerFlags: [true, false, false, false, false, false],
-        writableFlags: [true, true, true, true, false, false],
-        dataBase64: Buffer.from(Uint8Array.of(1, 2, 3, 4)).toString("base64"),
-      },
-    ],
-    expectedEffects: [
-      {
-        kind: "token_credit",
-        owner: wallet,
-        mint: shareMint,
-        amountBaseUnits: "1000000",
-        tokenAccount: userShares,
-      },
-      {
-        kind: "token_debit",
-        owner: wallet,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "1000000",
-        tokenAccount: userUsdc,
-      },
-      {
-        kind: "token_credit",
-        owner: vault,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "1000000",
-        tokenAccount: vaultUsdc,
-      },
-    ],
-    expectedDestinations: [userShares, vaultUsdc],
-    reconciliationPostConditions: [
-      "vault USDC credited",
-      "user C3 shares credited",
-    ],
-    quoteContextHash: "2".repeat(64),
-    quoteObservedAtUnix: 990,
-    quoteExpiresAtUnix: 1_010,
-    transactionExpiresAtUnix: 1_050,
-    lastValidBlockHeight: 123,
-    lookupTableContents: [],
-    evidenceHash: "3".repeat(64),
-    evidenceSource: "synthetic-test",
-    ...mutation,
-  };
-}
-
-export function authorizationFixture(): C3AuthorizationManifest {
-  const policy = trustedPolicy();
-  const decoded = validateCanonicalV0Transaction(policy, makeV0Message());
-  const payload: Omit<C3AuthorizationManifest, "authorizationHash"> = {
-    schemaVersion: "c3-authorization/v2",
-    executionCapability: false,
-    configurationVersion: policy.configurationVersion,
-    configurationHash: policy.configurationHash,
-    cluster: policy.cluster,
-    genesisHash: policy.genesisHash,
-    operation: policy.operation,
-    intentId: `c3-${"a".repeat(32)}`,
-    idempotencyKey: "b".repeat(64),
-    wallet,
-    vault,
-    shareMint,
-    inputMint: C3_MAINNET.usdcMint,
-    inputAmountBaseUnits: "1000000",
-    expectedOutputBaseUnits: "1000000",
-    minimumOutputBaseUnits: "990000",
-    feeBaseUnits: "0",
-    bountyBaseUnits: "0",
     slippageBps: 100,
-    quoteContextHash: policy.quoteContextHash,
-    quoteObservedAtUnix: 990,
-    quoteExpiresAtUnix: 1_010,
-    transactionExpiresAtUnix: 1_050,
-    recentBlockhash: decoded.recentBlockhash,
-    lastValidBlockHeight: 123,
-    canonicalV0MessageBase64: decoded.messageBase64,
-    canonicalV0MessageHash: decoded.messageHash,
-    wireBytes: decoded.wireBytes,
-    staticAccounts: decoded.staticAccounts,
-    loadedAccounts: decoded.loadedAccounts,
-    compiledInstructions: decoded.instructions,
-    lookupTables: decoded.lookupTables,
-    allowedPrograms: policy.allowedPrograms,
-    approvedRoutePrograms: [],
-    expectedEffects: [...policy.expectedEffects].sort((a, b) =>
-      a.tokenAccount.localeCompare(b.tokenAccount),
-    ),
-    expectedDestinations: policy.expectedDestinations,
-    reconciliationPostConditions: policy.reconciliationPostConditions,
-  };
-  return Object.freeze({
-    ...payload,
-    authorizationHash: createHash("sha256")
-      .update(canonicalize(payload))
-      .digest("hex"),
   });
+  return buildDisabledUnsignedPackage(
+    context.intentId,
+    makeV0Message(),
+    context.issuedAtUnix,
+  );
 }
 
 export function finalizedTransactionFixture(
+  authorization: C3AuthorizationManifest = authorizationFixture(),
   mutation: Partial<RawFinalizedTransaction> = {},
 ): RawFinalizedTransaction {
-  const authorization = authorizationFixture();
   return {
     signature: encodeBase58(
       Uint8Array.from({ length: 64 }, (_, index) => index + 1),
@@ -233,7 +115,7 @@ export function finalizedTransactionFixture(
     genesisHash: C3_MAINNET.genesisHash,
     confirmationStatus: "finalized",
     slot: 10,
-    blockTimeUnix: 1_000,
+    blockTimeUnix: authorization.issuedAtUnix,
     error: null,
     canonicalV0MessageHash: authorization.canonicalV0MessageHash,
     feePayer: wallet,
@@ -305,7 +187,7 @@ export function finalizedTransactionFixture(
     postLamports: ["995000"],
     shareSupplyBefore: "0",
     shareSupplyAfter: "1000000",
-    logs: ["synthetic parser fixture"],
+    logs: ["sanitized realistic parser fixture"],
     ...mutation,
   };
 }
@@ -334,14 +216,11 @@ export const snapshotPolicy: VaultSnapshotPolicy = {
   minimumBootstrapUsdcBaseUnits: "1000000",
 };
 
-export function vaultSnapshot(
-  navUsdcBaseUnits = "20000000",
-  shareSupplyBaseUnits = "10000000",
-  mutation: Partial<ReconciledVaultSnapshot> = {},
-): ReconciledVaultSnapshot {
-  return {
-    schemaVersion: "c3-vault-snapshot/v1",
-    cluster: "mainnet-beta",
+export function fabricatedVaultSnapshot(): ReconciledVaultSnapshot {
+  const snapshot = {
+    schemaVersion: "c3-vault-snapshot/v1" as const,
+    snapshotId: `c3-snapshot-${"1".repeat(32)}`,
+    cluster: "mainnet-beta" as const,
     genesisHash: C3_MAINNET.genesisHash,
     configurationHash: snapshotPolicy.configurationHash,
     slot: 100,
@@ -349,10 +228,10 @@ export function vaultSnapshot(
     vault,
     balances: [
       {
-        asset: "USDC",
+        asset: "USDC" as const,
         mint: C3_MAINNET.usdcMint,
         tokenAccount: vaultUsdc,
-        balanceBaseUnits: navUsdcBaseUnits,
+        balanceBaseUnits: "20000000",
         decimals: 6,
         priceUsdMicros: "1000000",
         oracleId: "usdc",
@@ -360,7 +239,7 @@ export function vaultSnapshot(
         oraclePublishTimeUnix: 990,
       },
       {
-        asset: "cbBTC",
+        asset: "cbBTC" as const,
         mint: C3_MAINNET.cbBtcMint,
         tokenAccount: C3_MAINNET.cbBtcMint,
         balanceBaseUnits: "0",
@@ -371,7 +250,7 @@ export function vaultSnapshot(
         oraclePublishTimeUnix: 990,
       },
       {
-        asset: "PortalETH",
+        asset: "PortalETH" as const,
         mint: C3_MAINNET.portalEthMint,
         tokenAccount: C3_MAINNET.portalEthMint,
         balanceBaseUnits: "0",
@@ -382,7 +261,7 @@ export function vaultSnapshot(
         oraclePublishTimeUnix: 990,
       },
       {
-        asset: "WSOL",
+        asset: "WSOL" as const,
         mint: C3_MAINNET.wrappedSolMint,
         tokenAccount: C3_MAINNET.wrappedSolMint,
         balanceBaseUnits: "0",
@@ -394,7 +273,7 @@ export function vaultSnapshot(
       },
     ],
     shareMint,
-    shareSupplyBaseUnits,
+    shareSupplyBaseUnits: "10000000",
     pendingAuthorizedInflowsUsdcBaseUnits: "0",
     pendingAuthorizedOutflowsUsdcBaseUnits: "0",
     pendingKeeperEffectsUsdcBaseUnits: "0",
@@ -402,7 +281,15 @@ export function vaultSnapshot(
     reservedBountyUsdcBaseUnits: "0",
     unsolicitedDonations: [],
     reconciliationEvidenceHash: "6".repeat(64),
-    productionEvidence: true,
-    ...mutation,
+    providerEvidenceFingerprints: ["7".repeat(64), "8".repeat(64)] as const,
+    snapshotFingerprint: "",
   };
+  const payload = { ...snapshot } as Record<string, unknown>;
+  delete payload.snapshotFingerprint;
+  return Object.freeze({
+    ...snapshot,
+    snapshotFingerprint: createHash("sha256")
+      .update(canonicalize(payload))
+      .digest("hex"),
+  });
 }

@@ -26,19 +26,21 @@ Fee collection and the SKR discount remain disabled. The 15/15/7.5 rate schedule
 
 The disabled builder accepts only canonical integer base-unit strings and a hash-bound deployment manifest. It validates cluster/genesis, operation-specific programs, signers, fee payer, writable accounts, debits, destinations, close-account semantics, lookup tables, quote/blockhash expiry, packet size, post-conditions, and two-provider reconciliation requirements. Its output is safe public authorization metadata and an unsigned transaction fingerprint, not a signed payload.
 
-The typed `ReadOnlySymmetryAdapter` boundary requires an authoritative source hash, account-layout hash, instruction-layout hash, dependency-safety review, exact program/global configuration, non-empty reviewed RPC account bytes, and strict vault/share/authority/balance checks. The concrete official decoder and its independent review evidence remain unresolved. Synthetic fixtures cannot satisfy readiness, and the Symmetry SDK remains excluded from the Android application.
+The closed Symmetry adapter registry accepts only source-controlled adapter identifiers. It exposes no production factory for caller-provided programs, descriptors, decoders, or fetch implementations. The registry is intentionally empty until official layouts, discriminators, validation rules, and dependency-safety evidence are independently reviewed. Synthetic fixtures cannot satisfy readiness, and the Symmetry SDK remains excluded from the Android application.
 
-## M3.1 security-remediation boundary
+## M3.3 sealed trust-boundary remediation
 
-The user request now contains only operation, immutable intent/idempotency identifiers, wallet, validated amount, bounded slippage, and current time. Signers, fee payer, vault, share mint, ATAs, programs, exact instruction bytes, writable flags, route registry, destinations, effects, and post-conditions must come from a verified deployment manifest and reviewed server evidence. The current proposed manifest has no reviewed operation policy, so the production builder remains NO-GO.
+The user request contains only a source-controlled operation-policy identifier, operation, wallet, validated amount, bounded slippage, and issue time. The service creates the intent ID, idempotency key, nonce, and expiry. Signers, fee payer, vault, share mint, ATAs, programs, exact instruction bytes, writable flags, routes, destinations, effects, and post-conditions resolve only from a versioned server registry. The registry supports disabled validation but cannot enable execution.
 
-Authorization uses schema `c3-authorization/v2` and SHA-256 over deterministic canonical bytes binding the complete decoded v0 message, recent blockhash, expiry, account order and flags, compiled instruction bytes, ALT indexes/content hashes, economic limits, routes, effects, and reconciliation conditions. Non-canonical JSON, omitted/unknown fields, alternate encodings, stale authorizations, and replay mutations fail closed.
+Authorization uses schema `c3-authorization/v3` and SHA-256 over deterministic canonical bytes binding the complete decoded v0 message, recent blockhash, expiry, account order and flags, compiled instruction bytes, ALT indexes/content hashes, economic limits, routes, effects, and reconciliation conditions. The expected hash is stored before verification and loaded by intent ID; caller-recalculated hashes cannot replace it. Non-canonical JSON, alternate encodings, stale authorizations, and immutable-context mutations fail closed.
 
 All intent changes use a mandatory state transition plus revision/state compare-and-swap. The included in-memory repository is explicitly non-production; readiness remains NO-GO until a durable transactional adapter passes restart, concurrency, quarantine, immutable signature, and immutable settlement-evidence checks.
 
 Reconciliation starts from a signature and immutable authorization, resolves two reviewed HTTPS providers from a server registry, reconstructs effects from raw finalized balances/instructions, and requires agreement. Matching synthetic fixtures are parser tests only and cannot settle a production intent. Concrete independently operated provider review records remain required.
 
-NAV/share quotes no longer accept free NAV or supply inputs. They require a fresh reconciled vault snapshot with exact accounts, mints, decimals, oracle identity/freshness, pending liabilities, donation policy, supply, and evidence hash. Bootstrap is fail-closed and requires reviewed seed evidence.
+NAV/share quotes no longer accept free NAV or supply inputs. They resolve a non-forgeable reconciled snapshot by ID from an internal repository, then revalidate exact accounts, mints, decimals, oracle identity/freshness, pending liabilities, donation policy, supply, provider evidence, and the canonical fingerprint. Deserialized branding does not survive restart. Bootstrap is fail-closed and requires reviewed seed evidence.
+
+The detailed trust model, official source pinning, recovery limits, and readiness categories are recorded in `docs/C3_MAINNET_TRUST_BOUNDARIES.md`.
 
 Keeper planning uses projected pooled NAV after authorized inflows, withdrawals, partial execution, fees, bounty, and dust. It never performs per-user three-leg swaps. Failed legs, stale oracles, and missing routes enter manual review.
 
@@ -82,7 +84,7 @@ From `apps/mobile`:
 - `npm run c3:mainnet:keeper-readiness`
 - `npm run c3:mainnet:deployment-readiness`
 
-All three are expected to exit nonzero now. They list missing public inputs and approval/credential names without values.
+All three are expected to exit nonzero now. They separately report internal security readiness, missing external configuration, and absent deployment authorization without printing values.
 
 ## Remaining gates
 

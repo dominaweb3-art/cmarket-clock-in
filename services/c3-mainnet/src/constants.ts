@@ -39,6 +39,7 @@ export const C3_MAINNET = Object.freeze({
   computeBudgetProgram: "ComputeBudget111111111111111111111111111111",
   addressLookupTableProgram: "AddressLookupTab1e1111111111111111111111111",
   jupiterProgram: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+  squadsV4Program: "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf",
   symmetryProgram: "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
   symmetryGlobalConfig: "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
 });

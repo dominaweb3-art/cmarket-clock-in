@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 
 import type { C3AuthorizationManifest, TrustedEffect } from "./builder.ts";
-import { C3_MAINNET } from "./constants.ts";
+import { C3_AMOUNTS, C3_MAINNET } from "./constants.ts";
 import { canonicalize } from "./manifest.ts";
+import { publicKeyBytes } from "./solana.ts";
 
 export type RawTokenBalance = Readonly<{
   tokenAccount: string;
@@ -53,63 +54,59 @@ export type RawFinalizedTransaction = Readonly<{
   logs: readonly string[];
 }>;
 
-export type ReviewedRpcProvider = Readonly<{
+type RegisteredRpcProvider = Readonly<{
   providerId: string;
   operatorId: string;
   endpoint: string;
   reviewEvidenceHash: string;
-  transportKind: "reviewed-https-json-rpc" | "synthetic-test";
-  fetchFinalizedTransaction(
-    signature: string,
-  ): Promise<RawFinalizedTransaction>;
+  transportKind: "https-json-rpc";
+  fetchFinalizedTransaction(signature: string): Promise<unknown>;
 }>;
 
-export class ReviewedRpcRegistry {
-  readonly #providers: readonly [ReviewedRpcProvider, ReviewedRpcProvider];
+const RPC_PROVIDER_REGISTRY: ReadonlyMap<
+  string,
+  readonly [RegisteredRpcProvider, RegisteredRpcProvider]
+> = new Map();
 
-  constructor(providers: readonly [ReviewedRpcProvider, ReviewedRpcProvider]) {
-    for (const provider of providers) {
-      const url = new URL(provider.endpoint);
-      if (
-        url.protocol !== "https:" ||
-        !provider.providerId ||
-        !provider.operatorId
-      )
-        throw new Error("RPC registry requires reviewed HTTPS providers.");
-      if (!/^[a-f0-9]{64}$/.test(provider.reviewEvidenceHash))
-        throw new Error("RPC provider review evidence is malformed.");
-    }
-    if (
-      providers[0].providerId === providers[1].providerId ||
-      providers[0].operatorId === providers[1].operatorId ||
-      new URL(providers[0].endpoint).host.toLowerCase() ===
-        new URL(providers[1].endpoint).host.toLowerCase()
-    )
-      throw new Error("RPC providers are not independently operated.");
-    this.#providers = Object.freeze([...providers]) as unknown as readonly [
-      ReviewedRpcProvider,
-      ReviewedRpcProvider,
-    ];
-  }
-
-  providers(): readonly [ReviewedRpcProvider, ReviewedRpcProvider] {
-    return this.#providers;
-  }
-
-  productionReady(): boolean {
-    return this.#providers.every(
-      (provider) => provider.transportKind === "reviewed-https-json-rpc",
-    );
-  }
+export function rpcProviderRegistryStatus(): Readonly<{
+  registryVersion: "c3-rpc-provider-registry/v1";
+  configuredRegistryIds: readonly string[];
+  productionReady: false;
+}> {
+  return Object.freeze({
+    registryVersion: "c3-rpc-provider-registry/v1",
+    configuredRegistryIds: Object.freeze([...RPC_PROVIDER_REGISTRY.keys()]),
+    productionReady: false,
+  });
 }
 
 export type VerifiedSettlementEvidence = Readonly<{
   signature: string;
   effectsFingerprint: string;
-  productionEvidence: true;
 }>;
 
 const verifiedSettlements = new WeakSet<object>();
+const verifiedVaultSnapshots = new WeakSet<object>();
+
+export type VerifiedVaultSnapshotEvidence = Readonly<{
+  snapshotFingerprint: string;
+  providerEvidenceFingerprints: readonly [string, string];
+}>;
+
+export function assertVerifiedVaultSnapshotEvidence(
+  evidence: VerifiedVaultSnapshotEvidence,
+): void {
+  if (
+    !verifiedVaultSnapshots.has(evidence) ||
+    !/^[a-f0-9]{64}$/.test(evidence.snapshotFingerprint) ||
+    evidence.providerEvidenceFingerprints.some(
+      (fingerprint) => !/^[a-f0-9]{64}$/.test(fingerprint),
+    )
+  )
+    throw new Error(
+      "Vault snapshot evidence was not produced by the sealed RPC quorum.",
+    );
+}
 
 export function assertVerifiedSettlementEvidence(
   evidence: VerifiedSettlementEvidence,
@@ -117,7 +114,6 @@ export function assertVerifiedSettlementEvidence(
 ): void {
   if (
     !verifiedSettlements.has(evidence) ||
-    evidence.productionEvidence !== true ||
     evidence.signature !== expectedSignature ||
     !/^[a-f0-9]{64}$/.test(evidence.effectsFingerprint)
   )
@@ -133,6 +129,8 @@ function canonicalBalanceMap(
   for (const balance of balances) {
     if (!/^(0|[1-9]\d*)$/.test(balance.amountBaseUnits))
       throw new Error("RPC token balance is malformed.");
+    if (BigInt(balance.amountBaseUnits) > C3_AMOUNTS.u64Max)
+      throw new Error("RPC token balance exceeds u64.");
     if (result.has(balance.tokenAccount))
       throw new Error("RPC token balances contain duplicate accounts.");
     result.set(balance.tokenAccount, balance);
@@ -142,6 +140,7 @@ function canonicalBalanceMap(
 
 function reconstructTokenEffects(
   transaction: RawFinalizedTransaction,
+  authorization: C3AuthorizationManifest,
 ): readonly TrustedEffect[] {
   const before = canonicalBalanceMap(transaction.preTokenBalances);
   const after = canonicalBalanceMap(transaction.postTokenBalances);
@@ -160,7 +159,15 @@ function reconstructTokenEffects(
     if (delta === 0n) continue;
     effects.push(
       Object.freeze({
-        kind: delta < 0n ? "token_debit" : "token_credit",
+        kind:
+          identity.mint === authorization.shareMint &&
+          identity.owner === authorization.wallet
+            ? delta < 0n
+              ? "share_burn"
+              : "share_mint"
+            : delta < 0n
+              ? "token_debit"
+              : "token_credit",
         owner: identity.owner,
         mint: identity.mint,
         amountBaseUnits: (delta < 0n ? -delta : delta).toString(),
@@ -187,7 +194,9 @@ function inspectRawTransaction(
   if (
     !Number.isSafeInteger(transaction.slot) ||
     transaction.slot <= 0 ||
-    !Number.isSafeInteger(transaction.blockTimeUnix)
+    !Number.isSafeInteger(transaction.blockTimeUnix) ||
+    transaction.blockTimeUnix < authorization.issuedAtUnix ||
+    transaction.blockTimeUnix > authorization.expiresAtUnix
   )
     throw new Error("Finalized transaction timing evidence is invalid.");
   if (
@@ -227,7 +236,7 @@ function inspectRawTransaction(
         "Finalized transaction contains a prohibited token effect.",
       );
   }
-  const effects = reconstructTokenEffects(transaction);
+  const effects = reconstructTokenEffects(transaction, authorization);
   if (canonicalize(effects) !== canonicalize(authorization.expectedEffects))
     throw new Error("Finalized token effects differ from authorization.");
   if (
@@ -238,9 +247,29 @@ function inspectRawTransaction(
     throw new Error("Lamport balance evidence is incomplete.");
   if (
     !/^(0|[1-9]\d*)$/.test(transaction.shareSupplyBefore) ||
-    !/^(0|[1-9]\d*)$/.test(transaction.shareSupplyAfter)
+    !/^(0|[1-9]\d*)$/.test(transaction.shareSupplyAfter) ||
+    BigInt(transaction.shareSupplyBefore) > C3_AMOUNTS.u64Max ||
+    BigInt(transaction.shareSupplyAfter) > C3_AMOUNTS.u64Max
   )
     throw new Error("Share-supply evidence is malformed.");
+  const shareSupplyBefore = BigInt(transaction.shareSupplyBefore);
+  const shareSupplyAfter = BigInt(transaction.shareSupplyAfter);
+  const expectedShareDelta = authorization.expectedEffects
+    .filter(
+      (effect) =>
+        effect.mint === authorization.shareMint &&
+        effect.owner === authorization.wallet &&
+        ["share_mint", "share_burn"].includes(effect.kind),
+    )
+    .reduce(
+      (sum, effect) =>
+        sum +
+        (effect.kind === "share_burn" ? -1n : 1n) *
+          BigInt(effect.amountBaseUnits),
+      0n,
+    );
+  if (shareSupplyAfter - shareSupplyBefore !== expectedShareDelta)
+    throw new Error("Share supply delta differs from authorization.");
   const effectsFingerprint = createHash("sha256")
     .update(
       canonicalize({
@@ -256,30 +285,228 @@ function inspectRawTransaction(
   return Object.freeze({ effectsFingerprint, evidenceFingerprint });
 }
 
+function parseRawFinalizedTransaction(value: unknown): RawFinalizedTransaction {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("RPC response is not an object.");
+  const record = value as Record<string, unknown>;
+  const required = [
+    "signature",
+    "cluster",
+    "genesisHash",
+    "confirmationStatus",
+    "slot",
+    "blockTimeUnix",
+    "error",
+    "canonicalV0MessageHash",
+    "feePayer",
+    "signers",
+    "staticAccounts",
+    "loadedAddresses",
+    "lookupTableContentsHash",
+    "outerInstructions",
+    "innerInstructions",
+    "preTokenBalances",
+    "postTokenBalances",
+    "preLamports",
+    "postLamports",
+    "shareSupplyBefore",
+    "shareSupplyAfter",
+    "logs",
+  ];
+  if (
+    Object.keys(record).length !== required.length ||
+    required.some((key) => !(key in record))
+  )
+    throw new Error("RPC response fields are missing or unexpected.");
+  for (const key of [
+    "signers",
+    "staticAccounts",
+    "loadedAddresses",
+    "outerInstructions",
+    "innerInstructions",
+    "preTokenBalances",
+    "postTokenBalances",
+    "preLamports",
+    "postLamports",
+    "logs",
+  ])
+    if (!Array.isArray(record[key]))
+      throw new Error(`RPC response ${key} is not an array.`);
+  for (const key of [
+    "signature",
+    "cluster",
+    "genesisHash",
+    "confirmationStatus",
+    "canonicalV0MessageHash",
+    "feePayer",
+    "lookupTableContentsHash",
+    "shareSupplyBefore",
+    "shareSupplyAfter",
+  ])
+    if (typeof record[key] !== "string")
+      throw new Error(`RPC response ${key} is not a string.`);
+  const requireStringArray = (key: string): readonly string[] => {
+    const values = record[key] as unknown[];
+    if (values.some((item) => typeof item !== "string"))
+      throw new Error(`RPC response ${key} contains a non-string value.`);
+    return values as string[];
+  };
+  for (const address of [
+    record.feePayer as string,
+    ...requireStringArray("signers"),
+    ...requireStringArray("staticAccounts"),
+    ...requireStringArray("loadedAddresses"),
+  ])
+    publicKeyBytes(address);
+  for (const key of ["preLamports", "postLamports"])
+    if (
+      requireStringArray(key).some(
+        (item) =>
+          !/^(0|[1-9]\d*)$/.test(item) || BigInt(item) > C3_AMOUNTS.u64Max,
+      )
+    )
+      throw new Error(`RPC response ${key} contains a malformed amount.`);
+  requireStringArray("logs");
+  const parseInstructions = (key: string): readonly RawObservedInstruction[] =>
+    (record[key] as unknown[]).map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new Error(
+          `RPC response ${key} contains a malformed instruction.`,
+        );
+      const instruction = item as Record<string, unknown>;
+      const allowed = new Set([
+        "programId",
+        "dataBase64",
+        "accounts",
+        "inner",
+        "decodedKind",
+      ]);
+      if (
+        Object.keys(instruction).some((field) => !allowed.has(field)) ||
+        typeof instruction.programId !== "string" ||
+        typeof instruction.dataBase64 !== "string" ||
+        !Array.isArray(instruction.accounts) ||
+        typeof instruction.inner !== "boolean" ||
+        instruction.accounts.some((account) => typeof account !== "string")
+      )
+        throw new Error(
+          `RPC response ${key} instruction fields are malformed.`,
+        );
+      publicKeyBytes(instruction.programId);
+      for (const account of instruction.accounts as string[])
+        publicKeyBytes(account);
+      const bytes = Buffer.from(instruction.dataBase64, "base64");
+      if (bytes.toString("base64") !== instruction.dataBase64)
+        throw new Error(
+          `RPC response ${key} instruction data is non-canonical.`,
+        );
+      if (
+        instruction.decodedKind !== undefined &&
+        ![
+          "transfer",
+          "transfer_checked",
+          "mint_to",
+          "burn",
+          "approve",
+          "revoke",
+          "set_authority",
+          "close_account",
+          "other",
+        ].includes(String(instruction.decodedKind))
+      )
+        throw new Error(`RPC response ${key} decoded kind is unsupported.`);
+      return structuredClone(instruction) as RawObservedInstruction;
+    });
+  const parseBalances = (key: string): readonly RawTokenBalance[] =>
+    (record[key] as unknown[]).map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new Error(`RPC response ${key} contains a malformed balance.`);
+      const balance = item as Record<string, unknown>;
+      if (
+        Object.keys(balance).length !== 4 ||
+        !["tokenAccount", "owner", "mint", "amountBaseUnits"].every(
+          (field) => typeof balance[field] === "string",
+        ) ||
+        !/^(0|[1-9]\d*)$/.test(String(balance.amountBaseUnits))
+      )
+        throw new Error(`RPC response ${key} balance fields are malformed.`);
+      for (const field of ["tokenAccount", "owner", "mint"])
+        publicKeyBytes(String(balance[field]));
+      return structuredClone(balance) as RawTokenBalance;
+    });
+  return Object.freeze({
+    ...(structuredClone(record) as RawFinalizedTransaction),
+    signers: Object.freeze([...requireStringArray("signers")]),
+    staticAccounts: Object.freeze([...requireStringArray("staticAccounts")]),
+    loadedAddresses: Object.freeze([...requireStringArray("loadedAddresses")]),
+    outerInstructions: Object.freeze(parseInstructions("outerInstructions")),
+    innerInstructions: Object.freeze(parseInstructions("innerInstructions")),
+    preTokenBalances: Object.freeze(parseBalances("preTokenBalances")),
+    postTokenBalances: Object.freeze(parseBalances("postTokenBalances")),
+    preLamports: Object.freeze([...requireStringArray("preLamports")]),
+    postLamports: Object.freeze([...requireStringArray("postLamports")]),
+    logs: Object.freeze([...requireStringArray("logs")]),
+  });
+}
+
+export function inspectSanitizedRpcFixture(
+  transaction: unknown,
+  authorization: C3AuthorizationManifest,
+): Readonly<{ effectsFingerprint: string; evidenceFingerprint: string }> {
+  return inspectRawTransaction(
+    parseRawFinalizedTransaction(transaction),
+    authorization,
+  );
+}
+
 export async function reconcileFinalizedSignature(
   signature: string,
   authorization: C3AuthorizationManifest,
-  registry: ReviewedRpcRegistry,
+  registryId: string,
 ): Promise<
   Readonly<{
     settled: boolean;
     reason: string;
-    productionEvidence: boolean;
     effectsFingerprint?: string;
     verifiedSettlement?: VerifiedSettlementEvidence;
   }>
 > {
   if (!/^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(signature))
     throw new Error("Transaction signature is malformed.");
-  const providers = registry.providers();
-  const raw = await Promise.all(
+  const providers = RPC_PROVIDER_REGISTRY.get(registryId);
+  if (!providers)
+    throw new Error(
+      "External configuration missing: unknown sealed RPC registry identifier.",
+    );
+  const endpoints = providers.map((provider) => new URL(provider.endpoint));
+  if (
+    providers.some(
+      (provider) =>
+        provider.transportKind !== "https-json-rpc" ||
+        !/^[a-f0-9]{64}$/.test(provider.reviewEvidenceHash),
+    ) ||
+    providers[0].providerId === providers[1].providerId ||
+    providers[0].operatorId === providers[1].operatorId ||
+    endpoints[0]!.host.toLowerCase() === endpoints[1]!.host.toLowerCase() ||
+    endpoints.some((endpoint) => endpoint.protocol !== "https:")
+  )
+    throw new Error("Sealed RPC registry is not independently operated.");
+  const responses = await Promise.all(
     providers.map((provider) => provider.fetchFinalizedTransaction(signature)),
   );
+  let raw: readonly RawFinalizedTransaction[];
+  try {
+    raw = responses.map(parseRawFinalizedTransaction);
+  } catch (error) {
+    return Object.freeze({
+      settled: false,
+      reason: error instanceof Error ? error.message : "raw RPC parse failed",
+    });
+  }
   if (raw.some((transaction) => transaction.signature !== signature))
     return Object.freeze({
       settled: false,
       reason: "RPC returned the wrong signature",
-      productionEvidence: false,
     });
   let first: ReturnType<typeof inspectRawTransaction>;
   let second: ReturnType<typeof inspectRawTransaction>;
@@ -290,7 +517,6 @@ export async function reconcileFinalizedSignature(
     return Object.freeze({
       settled: false,
       reason: error instanceof Error ? error.message : "raw evidence rejected",
-      productionEvidence: false,
     });
   }
   if (
@@ -300,24 +526,15 @@ export async function reconcileFinalizedSignature(
     return Object.freeze({
       settled: false,
       reason: "independent RPC evidence disagrees",
-      productionEvidence: false,
-    });
-  if (!registry.productionReady())
-    return Object.freeze({
-      settled: false,
-      reason: "synthetic evidence cannot settle production intent",
-      productionEvidence: false,
     });
   const verifiedSettlement = Object.freeze({
     signature,
     effectsFingerprint: first.effectsFingerprint,
-    productionEvidence: true as const,
   });
   verifiedSettlements.add(verifiedSettlement);
   return Object.freeze({
     settled: true,
     reason: "two reviewed independent providers agree on reconstructed effects",
-    productionEvidence: true,
     effectsFingerprint: first.effectsFingerprint,
     verifiedSettlement,
   });

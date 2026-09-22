@@ -33,7 +33,6 @@ export type IntentTransitionPatch = Readonly<{
   verifiedSettlement?: VerifiedSettlementEvidence;
   partialCompletionHash?: string;
   manualReviewReason?: string;
-  recoveryAttempts?: number;
 }>;
 
 export interface IntentRepository {
@@ -47,7 +46,7 @@ export interface IntentRepository {
     updatedAtUnix: number,
     patch?: IntentTransitionPatch,
   ): PersistedIntent;
-  read(intentId: string): PersistedIntent | undefined;
+  read(intentId: string, nowUnix: number): PersistedIntent | undefined;
 }
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -199,7 +198,6 @@ export class InMemoryIntentRepository implements IntentRepository {
       "verifiedSettlement",
       "partialCompletionHash",
       "manualReviewReason",
-      "recoveryAttempts",
     ]);
     if (Object.keys(patch).some((key) => !allowedPatchKeys.has(key)))
       throw new Error(
@@ -219,6 +217,25 @@ export class InMemoryIntentRepository implements IntentRepository {
         "Settlement evidence is only valid for the settled transition.",
       );
     }
+    const terminal = ["settled", "manual_review", "cancelled", "expired"];
+    if (terminal.includes(current.state))
+      throw new Error("Terminal or quarantined intent cannot transition.");
+    const expired = updatedAtUnix >= current.expiresAtUnix;
+    const expiryTransitionAllowed =
+      (["draft", "awaiting_wallet"].includes(current.state) &&
+        nextState === "expired") ||
+      (current.submittedSignature !== undefined &&
+        nextState === "manual_review");
+    if (expired && !expiryTransitionAllowed)
+      throw new Error("Expired intent cannot advance or retry.");
+    const recoveryTransition =
+      current.state === "failed_recoverable" && nextState === "keeper_pending";
+    if (recoveryTransition) {
+      if (current.recoveryAttempts >= 3)
+        throw new Error("Recovery attempt budget is exhausted.");
+      if (updatedAtUnix >= current.createdAtUnix + 86_400)
+        throw new Error("Recovery window exceeds 24 hours.");
+    }
     const { verifiedSettlement, ...storedPatch } = patch;
     const candidate: PersistedIntent = {
       ...current,
@@ -229,6 +246,9 @@ export class InMemoryIntentRepository implements IntentRepository {
       state: nextState,
       revision: current.revision + 1,
       updatedAtUnix,
+      recoveryAttempts: recoveryTransition
+        ? current.recoveryAttempts + 1
+        : current.recoveryAttempts,
     };
     if (
       current.authorizationManifest &&
@@ -263,14 +283,17 @@ export class InMemoryIntentRepository implements IntentRepository {
       candidate.expiresAtUnix !== current.expiresAtUnix
     )
       throw new Error("Immutable intent fields changed.");
-    if (candidate.recoveryAttempts < current.recoveryAttempts)
-      throw new Error("Recovery attempts cannot decrease.");
+    if (
+      candidate.recoveryAttempts !==
+      current.recoveryAttempts + (recoveryTransition ? 1 : 0)
+    )
+      throw new Error("Recovery attempts must be incremented atomically.");
     validatePersistedIntent(candidate);
     this.#records.set(intentId, structuredClone(candidate));
     return structuredClone(candidate);
   }
 
-  read(intentId: string): PersistedIntent | undefined {
+  read(intentId: string, nowUnix: number): PersistedIntent | undefined {
     const record = this.#records.get(intentId);
     if (!record) return undefined;
     try {
@@ -283,6 +306,19 @@ export class InMemoryIntentRepository implements IntentRepository {
       );
       throw new Error("Corrupt persisted intent was quarantined.");
     }
+    if (!Number.isSafeInteger(nowUnix) || nowUnix < record.createdAtUnix)
+      throw new Error("Intent read time is invalid.");
+    if (
+      nowUnix >= record.expiresAtUnix &&
+      !["settled", "manual_review", "cancelled", "expired"].includes(
+        record.state,
+      )
+    )
+      throw new Error(
+        "Expired intent requires an explicit terminal transition.",
+      );
+    if (record.recoveryAttempts >= 3 && record.state === "failed_recoverable")
+      throw new Error("Recovery attempt budget is exhausted.");
     return structuredClone(record);
   }
 

@@ -1,5 +1,7 @@
 import { C3_ALLOCATION, C3_AMOUNTS } from "./constants.ts";
 
+const U128_MAX = (1n << 128n) - 1n;
+
 export function parseDecimalToBaseUnits(
   value: string,
   decimals: number,
@@ -24,6 +26,52 @@ export function assertU64(value: bigint, label: string): bigint {
     throw new RangeError(`${label} is outside the unsigned 64-bit range.`);
   }
   return value;
+}
+
+export function checkedAddU64(
+  left: bigint,
+  right: bigint,
+  label: string,
+): bigint {
+  assertU64(left, `${label} left operand`);
+  assertU64(right, `${label} right operand`);
+  return assertU64(left + right, label);
+}
+
+export function checkedSubU64(
+  left: bigint,
+  right: bigint,
+  label: string,
+): bigint {
+  assertU64(left, `${label} left operand`);
+  assertU64(right, `${label} right operand`);
+  if (right > left) throw new RangeError(`${label} would underflow u64.`);
+  return left - right;
+}
+
+export function checkedMulU64(
+  left: bigint,
+  right: bigint,
+  label: string,
+): bigint {
+  assertU64(left, `${label} left operand`);
+  assertU64(right, `${label} right operand`);
+  return assertU64(left * right, label);
+}
+
+export function checkedMulDivFloorU64(
+  value: bigint,
+  multiplier: bigint,
+  divisor: bigint,
+  label: string,
+): bigint {
+  if (divisor <= 0n) throw new RangeError(`${label} divisor must be positive.`);
+  assertU64(value, `${label} value`);
+  assertU64(multiplier, `${label} multiplier`);
+  const product = value * multiplier;
+  if (product > U128_MAX)
+    throw new RangeError(`${label} intermediate product exceeds u128.`);
+  return assertU64(product / divisor, label);
 }
 
 export function mulDivFloor(

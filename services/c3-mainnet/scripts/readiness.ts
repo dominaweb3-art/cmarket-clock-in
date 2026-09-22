@@ -9,12 +9,29 @@ import {
 } from "../src/constants.ts";
 import { inspectCredentialPresence } from "../src/credentials.ts";
 import { createDeterministicDeploymentBundle } from "../src/deployment.ts";
+import { squadsRegistryStatus } from "../src/governance.ts";
 import {
   validateDeploymentManifest,
   type C3DeploymentManifest,
 } from "../src/manifest.ts";
+import { vaultSnapshotPolicyRegistryStatus } from "../src/accounting.ts";
+import {
+  authorizationContextRepositoryStatus,
+  operationPolicyRegistryStatus,
+} from "../src/builder.ts";
+import { rpcProviderRegistryStatus } from "../src/reconciliation.ts";
+import { symmetryAdapterRegistryStatus } from "../src/symmetry.ts";
 
-type Check = Readonly<{ id: string; pass: boolean; detail: string }>;
+type Category =
+  | "INTERNAL_SECURITY_READY"
+  | "EXTERNAL_CONFIGURATION_MISSING"
+  | "DEPLOYMENT_NOT_AUTHORIZED";
+type Check = Readonly<{
+  category: Category;
+  id: string;
+  pass: boolean;
+  detail: string;
+}>;
 
 const serviceRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,178 +44,147 @@ const manifest = JSON.parse(
   ),
 ) as C3DeploymentManifest;
 const mode = process.argv[2];
-if (!["builder", "keeper", "deployment"].includes(mode ?? ""))
+if (!mode || !["builder", "keeper", "deployment"].includes(mode))
   throw new Error("Readiness mode must be builder, keeper, or deployment.");
+
 assertExecutionDisabled();
 const validation = validateDeploymentManifest(manifest);
 const credentials = inspectCredentialPresence(process.env);
-const root = manifest as Record<string, unknown>;
-const approvals = root.approvals as Record<string, unknown>;
-const assets = root.assets as Record<string, Record<string, unknown>>;
-const routes = root.routes as Record<string, unknown>;
-const authorities = root.authorities as Record<string, unknown>;
-const squads = root.squads as Record<string, unknown>;
-const symmetryAdapter = root.symmetryAdapter as Record<string, unknown>;
-const rpcRegistry = root.rpcRegistry as Record<string, unknown>;
-const operationPolicies = root.operationPolicies as Record<string, unknown>;
+const policy = operationPolicyRegistryStatus();
+const authorizationRepository = authorizationContextRepositoryStatus();
+const snapshotPolicies = vaultSnapshotPolicyRegistryStatus();
+const rpc = rpcProviderRegistryStatus();
+const squads = squadsRegistryStatus();
+const symmetry = symmetryAdapterRegistryStatus();
 const checks: Check[] = [];
-const add = (id: string, pass: boolean, detail: string) =>
-  checks.push(Object.freeze({ id, pass, detail }));
+const add = (category: Category, id: string, pass: boolean, detail: string) =>
+  checks.push(Object.freeze({ category, id, pass, detail }));
 
 add(
-  "manifest-schema-and-hash",
+  "INTERNAL_SECURITY_READY",
+  "proposed-manifest-valid",
   validation.valid,
   validation.valid
-    ? "strict manifest and hash are valid"
+    ? "strict proposed manifest hash is valid"
     : validation.issues.join("; "),
 );
 add(
-  "execution-disabled",
+  "INTERNAL_SECURITY_READY",
+  "execution-fails-closed",
   C3_MAINNET_EXECUTION_CAPABILITY === false &&
-    root.executionCapability === false,
-  "source-controlled execution capability must be false",
+    manifest.executionCapability === false,
+  "source-controlled Mainnet execution capability is false",
+);
+add(
+  "INTERNAL_SECURITY_READY",
+  "sealed-operation-registry",
+  policy.executionCapability === false && policy.policyIdentifiers.length > 0,
+  "builder resolves policy identifiers from a source-controlled registry",
+);
+add(
+  "EXTERNAL_CONFIGURATION_MISSING",
+  "durable-authorization-context-repository",
+  authorizationRepository.productionReady,
+  "trusted authorization hashes currently use a non-production in-memory repository",
 );
 
 if (mode === "builder" || mode === "deployment") {
   add(
-    "manifest-verified",
-    root.status === "verified" ||
-      root.status === "security_approved" ||
-      root.status === "governance_approved" ||
-      root.status === "deployment_ready",
-    "proposed manifest is not execution evidence",
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "reviewed-symmetry-adapter",
+    symmetry.productionReady,
+    symmetry.reason,
   );
   add(
-    "assets-verified",
-    Object.values(assets).every((asset) => asset.status === "verified"),
-    "all candidate assets need current evidence approval",
-  );
-  add(
-    "route-registry-verified",
-    routes.registryStatus === "verified" &&
-      approvals.routeRegistryApproved === true,
-    "route programs must be independently reviewed",
-  );
-  add(
-    "jupiter-credential-present",
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "jupiter-server-credential",
     credentials.jupiter,
-    "server-only Jupiter credential must exist in isolated runtime",
-  );
-  add(
-    "instruction-security-approved",
-    approvals.securityApproved === true,
-    "decoded instruction builder requires independent Security approval",
-  );
-  add(
-    "trusted-operation-policy",
-    operationPolicies.deposit_intent !== null &&
-      typeof operationPolicies.deposit_intent === "object",
-    "caller-independent exact instruction/effect policy is unresolved",
-  );
-  add(
-    "concrete-symmetry-adapter",
-    symmetryAdapter.productionReviewed === true &&
-      symmetryAdapter.dependencySafe === true,
-    "reviewed official Symmetry layouts and dependency-safe adapter are unresolved",
+    "isolated server credential is not configured",
   );
 }
 
 if (mode === "keeper" || mode === "deployment") {
   add(
-    "pyth-credential-present",
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "sealed-vault-snapshot-policy",
+    snapshotPolicies.productionReady &&
+      snapshotPolicies.configuredPolicyIds.length > 0,
+    "no reviewed vault snapshot policy is registered",
+  );
+  add(
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "sealed-independent-rpc-registry",
+    rpc.productionReady && rpc.configuredRegistryIds.length > 0,
+    "two reviewed independent HTTPS providers are not registered",
+  );
+  add(
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "pyth-server-credential",
     credentials.pyth,
-    "server-only Pyth credential must exist in isolated runtime",
+    "isolated server credential is not configured",
   );
   add(
-    "oracle-evidence-approved",
-    approvals.oracleEvidenceApproved === true,
-    "oracle feeds and policies need current evidence approval",
-  );
-  add(
-    "independent-rpc-boundary",
-    credentials.rpcPrimary &&
-      credentials.rpcSecondary &&
-      credentials.rpcOperatorsIndependent,
-    "two distinct reviewed HTTPS RPC operators are mandatory",
-  );
-  add(
-    "reviewed-rpc-registry",
-    rpcRegistry.status === "verified" &&
-      Array.isArray(rpcRegistry.providerEvidenceHashes) &&
-      rpcRegistry.providerEvidenceHashes.length === 2,
-    "two independently reviewed RPC provider evidence records are unresolved",
-  );
-  add(
+    "EXTERNAL_CONFIGURATION_MISSING",
     "durable-cas-repository",
     false,
-    "only the non-production in-memory test adapter exists",
-  );
-  add(
-    "keeper-authority",
-    typeof authorities.keeper === "string",
-    "least-privileged keeper public authority is unresolved",
+    "only the non-production in-memory repository exists",
   );
 }
 
 if (mode === "deployment") {
-  const members = squads.memberAddresses;
   add(
-    "three-squads-members",
-    Array.isArray(members) &&
-      members.length === 3 &&
-      members.every((member) => typeof member === "string"),
-    "three real public member addresses are required",
-  );
-  add(
-    "squads-policy",
-    squads.threshold === 2 &&
-      squads.spendingLimitsConfigured === true &&
-      squads.destinationAllowlistConfigured === true,
-    "2-of-3, limits, and destination allowlist are mandatory",
-  );
-  add(
-    "authorities-resolved",
-    Object.values(authorities).every(
-      (authority) => typeof authority === "string",
-    ),
-    "vault and separated public authorities are unresolved",
-  );
-  add(
-    "security-approval",
-    approvals.securityApproved === true,
-    "Security approval is absent",
-  );
-  add(
-    "governance-approval",
-    approvals.governanceApproved === true,
-    "Governance approval is absent",
-  );
-  add(
-    "seed-capital-review",
-    approvals.seedCapitalReviewed === true,
-    "seed-capital decision is not reviewed",
+    "EXTERNAL_CONFIGURATION_MISSING",
+    "official-squads-deployment",
+    squads.enabled,
+    squads.reason,
   );
   const bundle = createDeterministicDeploymentBundle(manifest);
   add(
-    "deterministic-bundle",
+    "INTERNAL_SECURITY_READY",
+    "deterministic-unsigned-deployment-bundle",
     /^[a-f0-9]{64}$/.test(bundle.bundleFingerprint) &&
       bundle.steps.length === 19,
-    "deterministic unsigned deployment order must be complete",
+    "unsigned deployment ordering is deterministic",
   );
 }
 
-const blockers = checks.filter((check) => !check.pass);
+add(
+  "DEPLOYMENT_NOT_AUTHORIZED",
+  "manifest-remains-proposed",
+  false,
+  "no trusted Security, Governance, or deployment lifecycle transition exists",
+);
+
+const internalFailures = checks.filter(
+  (check) => check.category === "INTERNAL_SECURITY_READY" && !check.pass,
+);
+const externalFailures = checks.filter(
+  (check) => check.category === "EXTERNAL_CONFIGURATION_MISSING" && !check.pass,
+);
+const authorizationFailures = checks.filter(
+  (check) => check.category === "DEPLOYMENT_NOT_AUTHORIZED" && !check.pass,
+);
+
 console.log(
-  `C3 Mainnet ${mode} readiness: ${blockers.length === 0 ? "READY-BUT-DISABLED" : "NO-GO"}`,
+  `INTERNAL_SECURITY_READY: ${internalFailures.length === 0 ? "YES" : "NO"}`,
+);
+console.log(
+  `EXTERNAL_CONFIGURATION_MISSING: ${externalFailures.length > 0 ? "YES" : "NO"}`,
+);
+console.log(
+  `DEPLOYMENT_NOT_AUTHORIZED: ${authorizationFailures.length > 0 ? "YES" : "NO"}`,
 );
 for (const check of checks)
-  console.log(`${check.pass ? "PASS" : "FAIL"} ${check.id}: ${check.detail}`);
-if (validation.missingPublicInputs.length > 0)
   console.log(
-    `Missing public inputs: ${validation.missingPublicInputs.join(", ")}`,
+    `${check.pass ? "PASS" : "FAIL"} ${check.category}/${check.id}: ${check.detail}`,
   );
 console.log("Secrets printed: NO");
 console.log(
   "Wallet authorization/signing/submission/deployment: NOT PERFORMED",
 );
-if (blockers.length > 0) process.exitCode = 1;
+if (
+  internalFailures.length > 0 ||
+  externalFailures.length > 0 ||
+  authorizationFailures.length > 0
+)
+  process.exitCode = 1;

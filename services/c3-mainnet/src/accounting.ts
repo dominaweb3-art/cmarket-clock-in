@@ -1,9 +1,25 @@
+import { createHash } from "node:crypto";
+
 import { C3_ALLOCATION, C3_AMOUNTS, C3_FEES } from "./constants.ts";
-import { absolute, assertU64, mulDivCeil, mulDivFloor } from "./math.ts";
+import { canonicalize } from "./manifest.ts";
+import {
+  absolute,
+  assertU64,
+  checkedAddU64,
+  checkedMulDivFloorU64,
+  checkedSubU64,
+  mulDivCeil,
+  mulDivFloor,
+} from "./math.ts";
+import {
+  assertVerifiedVaultSnapshotEvidence,
+  type VerifiedVaultSnapshotEvidence,
+} from "./reconciliation.ts";
 import type { C3AssetId } from "./registry.ts";
 
 export type ReconciledVaultSnapshot = Readonly<{
   schemaVersion: "c3-vault-snapshot/v1";
+  snapshotId: string;
   cluster: "mainnet-beta";
   genesisHash: string;
   configurationHash: string;
@@ -30,7 +46,8 @@ export type ReconciledVaultSnapshot = Readonly<{
   reservedBountyUsdcBaseUnits: string;
   unsolicitedDonations: readonly string[];
   reconciliationEvidenceHash: string;
-  productionEvidence: boolean;
+  providerEvidenceFingerprints: readonly [string, string];
+  snapshotFingerprint: string;
 }>;
 
 export type VaultSnapshotPolicy = Readonly<{
@@ -49,6 +66,71 @@ export type VaultSnapshotPolicy = Readonly<{
 
 const INTEGER = /^(0|[1-9]\d*)$/;
 const HASH = /^[a-f0-9]{64}$/;
+const trustedSnapshots = new WeakSet<object>();
+const VAULT_SNAPSHOT_POLICY_REGISTRY: ReadonlyMap<string, VaultSnapshotPolicy> =
+  new Map();
+const snapshotRepository = new Map<
+  string,
+  Readonly<{ snapshot: ReconciledVaultSnapshot; policy: VaultSnapshotPolicy }>
+>();
+
+function computeSnapshotFingerprint(snapshot: ReconciledVaultSnapshot): string {
+  const payload = { ...snapshot } as Record<string, unknown>;
+  delete payload.snapshotFingerprint;
+  return createHash("sha256").update(canonicalize(payload)).digest("hex");
+}
+
+export function acceptVerifiedVaultSnapshot(
+  snapshot: ReconciledVaultSnapshot,
+  policyIdentifier: string,
+  evidence: VerifiedVaultSnapshotEvidence,
+  nowUnix: number,
+  currentSlot: number,
+): string {
+  const policy = VAULT_SNAPSHOT_POLICY_REGISTRY.get(policyIdentifier);
+  if (!policy)
+    throw new Error(
+      "Unknown sealed vault snapshot policy; external configuration is missing.",
+    );
+  assertVerifiedVaultSnapshotEvidence(evidence);
+  if (
+    evidence.snapshotFingerprint !== snapshot.snapshotFingerprint ||
+    canonicalize(evidence.providerEvidenceFingerprints) !==
+      canonicalize(snapshot.providerEvidenceFingerprints)
+  )
+    throw new Error("Vault snapshot does not match sealed quorum evidence.");
+  trustedSnapshots.add(snapshot);
+  try {
+    validateReconciledVaultSnapshot(snapshot, policy, nowUnix, currentSlot);
+  } catch (error) {
+    trustedSnapshots.delete(snapshot);
+    throw error;
+  }
+  if (snapshotRepository.has(snapshot.snapshotId))
+    throw new Error("Vault snapshot identifier already exists.");
+  snapshotRepository.set(
+    snapshot.snapshotId,
+    Object.freeze({
+      snapshot: Object.freeze(snapshot),
+      policy: Object.freeze(policy),
+    }),
+  );
+  return snapshot.snapshotId;
+}
+
+export function vaultSnapshotPolicyRegistryStatus(): Readonly<{
+  registryVersion: "c3-vault-snapshot-policy-registry/v1";
+  configuredPolicyIds: readonly string[];
+  productionReady: false;
+}> {
+  return Object.freeze({
+    registryVersion: "c3-vault-snapshot-policy-registry/v1",
+    configuredPolicyIds: Object.freeze([
+      ...VAULT_SNAPSHOT_POLICY_REGISTRY.keys(),
+    ]),
+    productionReady: false,
+  });
+}
 
 function snapshotAmount(value: string, label: string): bigint {
   if (!INTEGER.test(value))
@@ -64,6 +146,7 @@ export function validateReconciledVaultSnapshot(
 ): Readonly<{ navUsdMicros: bigint; shareSupplyBaseUnits: bigint }> {
   if (
     snapshot.schemaVersion !== "c3-vault-snapshot/v1" ||
+    !/^c3-snapshot-[a-f0-9]{32,64}$/.test(snapshot.snapshotId) ||
     snapshot.cluster !== "mainnet-beta" ||
     snapshot.genesisHash !== "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh" ||
     snapshot.configurationHash !== policy.configurationHash ||
@@ -72,10 +155,14 @@ export function validateReconciledVaultSnapshot(
   )
     throw new Error("Vault snapshot identity does not match trusted policy.");
   if (
-    !snapshot.productionEvidence ||
-    !HASH.test(snapshot.reconciliationEvidenceHash)
+    !trustedSnapshots.has(snapshot) ||
+    !HASH.test(snapshot.reconciliationEvidenceHash) ||
+    !HASH.test(snapshot.snapshotFingerprint) ||
+    snapshot.snapshotFingerprint !== computeSnapshotFingerprint(snapshot) ||
+    snapshot.providerEvidenceFingerprints.length !== 2 ||
+    snapshot.providerEvidenceFingerprints.some((value) => !HASH.test(value))
   )
-    throw new Error("Vault snapshot lacks production reconciliation evidence.");
+    throw new Error("Vault snapshot lacks sealed reconciliation provenance.");
   if (
     !Number.isSafeInteger(snapshot.slot) ||
     snapshot.slot <= 0 ||
@@ -157,9 +244,17 @@ export function validateReconciledVaultSnapshot(
     snapshot.reservedBountyUsdcBaseUnits,
     "reserved bounty",
   );
-  if (outflows + fees + bounty > navUsdMicros + inflows + keeper)
+  const liabilities = [outflows, fees, bounty].reduce(
+    (sum, value) => checkedAddU64(sum, value, "snapshot liabilities"),
+    0n,
+  );
+  const available = [navUsdMicros, inflows, keeper].reduce(
+    (sum, value) => checkedAddU64(sum, value, "snapshot available NAV"),
+    0n,
+  );
+  if (liabilities > available)
     throw new Error("Vault snapshot pending liabilities exceed assets.");
-  navUsdMicros = navUsdMicros + inflows + keeper - outflows - fees - bounty;
+  navUsdMicros = checkedSubU64(available, liabilities, "snapshot net NAV");
   const shareSupplyBaseUnits = snapshotAmount(
     snapshot.shareSupplyBaseUnits,
     "share supply",
@@ -211,10 +306,18 @@ export function calculateVaultNavUsdMicros(
       throw new RangeError("Invalid asset decimals.");
     if (balance.priceUsdMicros <= 0n)
       throw new RangeError(`${balance.asset} price must be positive.`);
-    total += mulDivFloor(
-      balance.balanceBaseUnits,
-      balance.priceUsdMicros,
-      10n ** BigInt(balance.decimals),
+    total = checkedAddU64(
+      total,
+      assertU64(
+        checkedMulDivFloorU64(
+          balance.balanceBaseUnits,
+          balance.priceUsdMicros,
+          10n ** BigInt(balance.decimals),
+          `${balance.asset} priced value`,
+        ),
+        `${balance.asset} priced value`,
+      ),
+      "vault NAV",
     );
   }
   return total;
@@ -251,8 +354,7 @@ export function calculateCandidateFeeForDisclosure(
 export function quoteDeposit(
   input: Readonly<{
     depositUsdcBaseUnits: bigint;
-    snapshot: ReconciledVaultSnapshot;
-    snapshotPolicy: VaultSnapshotPolicy;
+    snapshotId: string;
     nowUnix: number;
     currentSlot: number;
     slippageBps: number;
@@ -268,6 +370,9 @@ export function quoteDeposit(
   economicallyInefficient: boolean;
 }> {
   const deposit = assertU64(input.depositUsdcBaseUnits, "deposit");
+  const stored = snapshotRepository.get(input.snapshotId);
+  if (!stored)
+    throw new Error("Trusted reconciled vault snapshot is unavailable.");
   if (deposit < C3_AMOUNTS.minimumPurchaseUsdcBaseUnits)
     throw new RangeError("Controlled pilot minimum is 1 USDC.");
   if (deposit > C3_AMOUNTS.maximumPilotPurchaseUsdcBaseUnits)
@@ -280,17 +385,17 @@ export function quoteDeposit(
     throw new RangeError("Slippage must be 0-100 bps.");
   const { navUsdMicros, shareSupplyBaseUnits } =
     validateReconciledVaultSnapshot(
-      input.snapshot,
-      input.snapshotPolicy,
+      stored.snapshot,
+      stored.policy,
       input.nowUnix,
       input.currentSlot,
     );
   if (
     shareSupplyBaseUnits === 0n &&
-    (!input.snapshotPolicy.bootstrapEvidenceHash ||
+    (!stored.policy.bootstrapEvidenceHash ||
       deposit <
         snapshotAmount(
-          input.snapshotPolicy.minimumBootstrapUsdcBaseUnits,
+          stored.policy.minimumBootstrapUsdcBaseUnits,
           "minimum bootstrap",
         ))
   )
@@ -323,7 +428,7 @@ export function quoteDeposit(
   ];
   for (const value of variableCosts) assertU64(value, "cost component");
   const totalEstimatedEffectiveCostBaseUnits = variableCosts.reduce(
-    (sum, value) => sum + value,
+    (sum, value) => checkedAddU64(sum, value, "estimated effective cost"),
     activeFeeBaseUnits,
   );
   const effectiveCostBps = mulDivCeil(
@@ -346,8 +451,7 @@ export function quoteDeposit(
 export function quoteRedemption(
   input: Readonly<{
     sharesBaseUnits: bigint;
-    snapshot: ReconciledVaultSnapshot;
-    snapshotPolicy: VaultSnapshotPolicy;
+    snapshotId: string;
     nowUnix: number;
     currentSlot: number;
     slippageBps: number;
@@ -358,10 +462,13 @@ export function quoteRedemption(
   activeFeeBaseUnits: bigint;
 }> {
   const shares = assertU64(input.sharesBaseUnits, "redemption shares");
+  const stored = snapshotRepository.get(input.snapshotId);
+  if (!stored)
+    throw new Error("Trusted reconciled vault snapshot is unavailable.");
   const { navUsdMicros: nav, shareSupplyBaseUnits: supply } =
     validateReconciledVaultSnapshot(
-      input.snapshot,
-      input.snapshotPolicy,
+      stored.snapshot,
+      stored.policy,
       input.nowUnix,
       input.currentSlot,
     );
@@ -394,7 +501,15 @@ export function calculateAllocationAndDrift(
   currentBps: Readonly<{ btc: bigint; eth: bigint; sol: bigint }>;
   driftBps: Readonly<{ btc: bigint; eth: bigint; sol: bigint }>;
 }> {
-  const total = values.btc + values.eth + values.sol;
+  const total = checkedAddU64(
+    checkedAddU64(
+      assertU64(values.btc, "BTC allocation value"),
+      assertU64(values.eth, "ETH allocation value"),
+      "BTC and ETH allocation total",
+    ),
+    assertU64(values.sol, "SOL allocation value"),
+    "allocation total",
+  );
   if (total <= 0n)
     throw new RangeError("Allocation requires positive vault value.");
   const btc = mulDivFloor(values.btc, 10_000n, total);

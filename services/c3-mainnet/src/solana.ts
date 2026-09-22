@@ -143,18 +143,52 @@ export function deriveAssociatedTokenAddress(
   ).address;
 }
 
+function encodeShortVector(value: number): Uint8Array {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0x1f_ffff)
+    throw new RangeError("Short vector value is outside the supported range.");
+  const encoded: number[] = [];
+  let remaining = value;
+  do {
+    let byte = remaining & 0x7f;
+    remaining = Math.floor(remaining / 128);
+    if (remaining > 0) byte |= 0x80;
+    encoded.push(byte);
+  } while (remaining > 0);
+  return Uint8Array.from(encoded);
+}
+
 function readShortVector(bytes: Uint8Array, cursor: { value: number }): number {
+  const start = cursor.value;
   let result = 0;
   let shift = 0;
   for (let count = 0; count < 3; count += 1) {
     if (cursor.value >= bytes.length)
       throw new Error("Truncated short vector.");
     const byte = bytes[cursor.value++]!;
-    result |= (byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) return result;
+    result += (byte & 0x7f) * 2 ** shift;
+    if ((byte & 0x80) === 0) {
+      const consumed = bytes.slice(start, cursor.value);
+      const canonical = encodeShortVector(result);
+      if (
+        consumed.length !== canonical.length ||
+        consumed.some((value, index) => value !== canonical[index])
+      )
+        throw new Error("Non-canonical short vector encoding.");
+      return result;
+    }
     shift += 7;
   }
-  throw new Error("Non-canonical short vector.");
+  throw new Error("Short vector is truncated, excessive, or overflowing.");
+}
+
+export function decodeCanonicalShortVector(bytes: Uint8Array): number {
+  if (!(bytes instanceof Uint8Array))
+    throw new TypeError("Short vector input must be bytes.");
+  const cursor = { value: 0 };
+  const value = readShortVector(bytes, cursor);
+  if (cursor.value !== bytes.length)
+    throw new Error("Short vector has trailing bytes.");
+  return value;
 }
 
 function slice(

@@ -4,7 +4,12 @@ import {
   assertExecutionDisabled,
 } from "./constants.ts";
 import { calculateAllocationAndDrift } from "./accounting.ts";
-import { assertU64, mulDivFloor } from "./math.ts";
+import {
+  assertU64,
+  checkedAddU64,
+  checkedSubU64,
+  mulDivFloor,
+} from "./math.ts";
 
 export const C3_KEEPER_PERMISSIONS = Object.freeze([
   "read_authorized_intents",
@@ -62,6 +67,9 @@ export function planAggregatedRebalance(
   assertExecutionDisabled();
   for (const [label, value] of Object.entries({
     ...input.settledValuesUsdMicros,
+    partialBtc: input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.btc,
+    partialEth: input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.eth,
+    partialSol: input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.sol,
     authorizedInflows: input.pendingFlows.authorizedInflowsUsdcBaseUnits,
     authorizedWithdrawals:
       input.pendingFlows.authorizedWithdrawalsUsdcBaseUnits,
@@ -79,29 +87,44 @@ export function planAggregatedRebalance(
       "Pending swap inputs cannot exceed authorized pooled inflows.",
     );
   const effectiveValues = {
-    btc:
-      input.settledValuesUsdMicros.btc +
+    btc: checkedAddU64(
+      input.settledValuesUsdMicros.btc,
       input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.btc,
-    eth:
-      input.settledValuesUsdMicros.eth +
+      "effective BTC value",
+    ),
+    eth: checkedAddU64(
+      input.settledValuesUsdMicros.eth,
       input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.eth,
-    sol:
-      input.settledValuesUsdMicros.sol +
+      "effective ETH value",
+    ),
+    sol: checkedAddU64(
+      input.settledValuesUsdMicros.sol,
       input.pendingFlows.partiallyCompletedAssetDeltasUsdMicros.sol,
+      "effective SOL value",
+    ),
   };
-  if (Object.values(effectiveValues).some((value) => value < 0n))
-    throw new Error("Partial execution cannot make a vault asset negative.");
   const allocation = calculateAllocationAndDrift(effectiveValues);
-  const liabilities =
-    input.pendingFlows.authorizedWithdrawalsUsdcBaseUnits +
-    input.pendingFlows.reservedFeesUsdcBaseUnits +
-    input.pendingFlows.reservedBountyUsdcBaseUnits +
-    input.pendingFlows.operationalDustUsdcBaseUnits;
-  const grossProjected =
-    allocation.total + input.pendingFlows.authorizedInflowsUsdcBaseUnits;
+  const liabilities = [
+    input.pendingFlows.authorizedWithdrawalsUsdcBaseUnits,
+    input.pendingFlows.reservedFeesUsdcBaseUnits,
+    input.pendingFlows.reservedBountyUsdcBaseUnits,
+    input.pendingFlows.operationalDustUsdcBaseUnits,
+  ].reduce(
+    (sum, value) => checkedAddU64(sum, value, "projected liabilities"),
+    0n,
+  );
+  const grossProjected = checkedAddU64(
+    allocation.total,
+    input.pendingFlows.authorizedInflowsUsdcBaseUnits,
+    "gross projected NAV",
+  );
   if (liabilities > grossProjected)
     throw new Error("Projected pooled liabilities exceed vault assets.");
-  const projectedTotal = grossProjected - liabilities;
+  const projectedTotal = checkedSubU64(
+    grossProjected,
+    liabilities,
+    "projected post-flow NAV",
+  );
   const base = {
     executionCapability: C3_MAINNET_EXECUTION_CAPABILITY,
     currentBps: allocation.currentBps,

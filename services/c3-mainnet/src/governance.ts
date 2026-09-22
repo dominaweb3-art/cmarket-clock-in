@@ -1,26 +1,40 @@
-import { createHash } from "node:crypto";
+import { C3_MAINNET } from "./constants.ts";
+import { publicKeyBytes } from "./solana.ts";
 
-import { canonicalize } from "./manifest.ts";
-import { findProgramAddress, publicKeyBytes } from "./solana.ts";
+export const SQUADS_V4_REGISTRY_ID = "squads-v4-official-64af7330";
 
-export type SquadsDerivationPolicy = Readonly<{
-  schemaVersion: "c3-squads-derivation/v1";
+export type SquadsRegistryEntry = Readonly<{
+  registryId: string;
   programId: string;
   sourceUrl: string;
-  sourceHash: string;
-  multisigSeedPrefixBase64: string;
-  vaultSeedPrefixBase64: string;
-  productionReviewed: boolean;
+  auditedCommit: string;
+  accountLayoutReviewComplete: false;
+  instructionReviewComplete: false;
+  enabled: false;
 }>;
+
+const SQUADS_REGISTRY: ReadonlyMap<string, SquadsRegistryEntry> = new Map([
+  [
+    SQUADS_V4_REGISTRY_ID,
+    Object.freeze({
+      registryId: SQUADS_V4_REGISTRY_ID,
+      programId: C3_MAINNET.squadsV4Program,
+      sourceUrl: "https://github.com/Squads-Protocol/v4",
+      auditedCommit: "64af7330413d5c85cbbccfd8c27a05d45b6e666f",
+      accountLayoutReviewComplete: false,
+      instructionReviewComplete: false,
+      enabled: false,
+    }),
+  ],
+]);
 
 export type SquadsOnChainEvidence = Readonly<{
   cluster: "mainnet-beta";
   programId: string;
+  programExecutable: boolean;
   multisigAddress: string;
   multisigAccountOwner: string;
   vaultAddress: string;
-  createKey: string;
-  vaultIndex: number;
   members: readonly Readonly<{
     address: string;
     role: "security" | "operations" | "governance";
@@ -33,144 +47,84 @@ export type SquadsOnChainEvidence = Readonly<{
   configurationAuthority: string;
   emergencyAuthority: string;
   observedSlot: number;
-  evidenceHash: string;
-  productionEvidence: boolean;
 }>;
 
-const DEFAULT_KEY = "11111111111111111111111111111111";
-const HASH = /^[a-f0-9]{64}$/;
+export function squadsRegistryStatus(): Readonly<{
+  registryId: string;
+  officialProgramId: string;
+  sourceUrl: string;
+  auditedCommit: string;
+  enabled: false;
+  reason: string;
+}> {
+  const entry = SQUADS_REGISTRY.get(SQUADS_V4_REGISTRY_ID)!;
+  return Object.freeze({
+    registryId: entry.registryId,
+    officialProgramId: entry.programId,
+    sourceUrl: entry.sourceUrl,
+    auditedCommit: entry.auditedCommit,
+    enabled: false,
+    reason:
+      "Official account layouts, discriminators, and the C Market deployment are not independently verified.",
+  });
+}
 
 export function validateSquadsEvidence(
+  registryId: string,
   evidence: SquadsOnChainEvidence,
-  policy: SquadsDerivationPolicy,
-  expected: Readonly<{
-    members: readonly string[];
-    multisigAddress: string;
-    vaultAddress: string;
-    timelockSeconds: number;
-    allowedDestinations: readonly string[];
-    configurationAuthority: string;
-    emergencyAuthority: string;
-    derivationPolicyHash: string;
-  }>,
 ): readonly string[] {
   const issues: string[] = [];
-  const policyHash = createHash("sha256")
-    .update(canonicalize(policy))
-    .digest("hex");
+  const registry = SQUADS_REGISTRY.get(registryId);
+  if (!registry) return Object.freeze(["Unknown Squads registry identifier."]);
+  if (!registry.enabled)
+    issues.push(
+      "Official Squads registry is disabled until layouts, discriminators, and deployment evidence are independently verified.",
+    );
   if (
-    policy.schemaVersion !== "c3-squads-derivation/v1" ||
-    !policy.productionReviewed ||
-    !policy.sourceUrl.startsWith("https://") ||
-    !HASH.test(policy.sourceHash) ||
-    policyHash !== expected.derivationPolicyHash
+    evidence.programId !== registry.programId ||
+    evidence.multisigAccountOwner !== registry.programId ||
+    !evidence.programExecutable
   )
     issues.push(
-      "Squads derivation policy is not independently reviewed and bound.",
+      "Squads program identity, owner, or executable status mismatch.",
     );
   try {
     for (const address of [
-      policy.programId,
       evidence.programId,
       evidence.multisigAddress,
       evidence.vaultAddress,
-      evidence.createKey,
       evidence.configurationAuthority,
       evidence.emergencyAuthority,
       ...evidence.members.map((member) => member.address),
-    ]) {
+    ])
       publicKeyBytes(address);
-      if (address === DEFAULT_KEY)
-        issues.push("Squads evidence contains the default public key.");
-    }
   } catch {
     issues.push("Squads evidence contains a malformed public key.");
   }
   const members = evidence.members.map((member) => member.address);
   if (members.length !== 3 || new Set(members).size !== 3)
-    issues.push("Squads requires exactly three distinct members.");
-  if (new Set(evidence.members.map((member) => member.role)).size !== 3)
-    issues.push("Squads members require distinct assigned roles.");
-  if (
-    canonicalize([...members].sort()) !==
-    canonicalize([...expected.members].sort())
-  )
-    issues.push("Squads members differ from approved configuration.");
+    issues.push("Squads evidence does not contain three unique members.");
   if (evidence.threshold !== 2)
     issues.push("Squads threshold must be exactly 2-of-3.");
-  if (
-    evidence.timelockSeconds !== expected.timelockSeconds ||
-    evidence.timelockSeconds <= 0
-  )
-    issues.push("Squads timelock does not match approved policy.");
-  if (
-    evidence.programId !== policy.programId ||
-    evidence.multisigAccountOwner !== policy.programId
-  )
-    issues.push("Squads program or account owner is not approved.");
+  if (evidence.timelockSeconds <= 0) issues.push("Squads timelock is missing.");
   if (evidence.multisigAddress === evidence.vaultAddress)
-    issues.push(
-      "Squads multisig configuration address cannot be its asset Vault.",
-    );
-  if (
-    members.includes(evidence.vaultAddress) ||
-    members.includes(evidence.multisigAddress)
-  )
-    issues.push(
-      "Member and governance account identities must remain separated.",
-    );
-  if (
-    !Number.isInteger(evidence.vaultIndex) ||
-    evidence.vaultIndex < 0 ||
-    evidence.vaultIndex > 255
-  )
-    issues.push("Squads Vault index is invalid.");
-  try {
-    const multisig = findProgramAddress(
-      [
-        Buffer.from(policy.multisigSeedPrefixBase64, "base64"),
-        publicKeyBytes(evidence.createKey),
-      ],
-      policy.programId,
-    ).address;
-    const vault = findProgramAddress(
-      [
-        Buffer.from(policy.vaultSeedPrefixBase64, "base64"),
-        publicKeyBytes(multisig),
-        Uint8Array.of(evidence.vaultIndex),
-      ],
-      policy.programId,
-    ).address;
-    if (
-      multisig !== evidence.multisigAddress ||
-      multisig !== expected.multisigAddress
-    )
-      issues.push("Squads multisig PDA derivation mismatch.");
-    if (vault !== evidence.vaultAddress || vault !== expected.vaultAddress)
-      issues.push("Squads Vault PDA derivation mismatch.");
-  } catch {
-    issues.push("Squads PDA derivation evidence is invalid.");
-  }
+    issues.push("Squads multisig and vault identities must be distinct.");
   if (!/^[1-9]\d*$/.test(evidence.spendingLimitUsdcBaseUnits))
     issues.push("Squads spending limit is missing or invalid.");
   if (
+    evidence.allowedDestinations.length === 0 ||
     new Set(evidence.allowedDestinations).size !==
-      evidence.allowedDestinations.length ||
-    canonicalize([...evidence.allowedDestinations].sort()) !==
-      canonicalize([...expected.allowedDestinations].sort())
+      evidence.allowedDestinations.length
   )
-    issues.push("Squads destination allowlist is missing or unapproved.");
-  if (
-    evidence.configurationAuthority !== expected.configurationAuthority ||
-    evidence.emergencyAuthority !== expected.emergencyAuthority
-  )
-    issues.push("Squads configuration or emergency authority mismatch.");
+    issues.push("Squads destination allowlist is missing or duplicated.");
+  if (evidence.configurationAuthority === evidence.emergencyAuthority)
+    issues.push(
+      "Squads configuration and emergency authorities are not separated.",
+    );
   if (
     !Number.isSafeInteger(evidence.observedSlot) ||
-    evidence.observedSlot <= 0 ||
-    !HASH.test(evidence.evidenceHash) ||
-    !evidence.productionEvidence
+    evidence.observedSlot <= 0
   )
-    issues.push("Squads on-chain production evidence is incomplete.");
+    issues.push("Squads observation slot is invalid.");
   return Object.freeze(issues);
 }
