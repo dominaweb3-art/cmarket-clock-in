@@ -8,6 +8,7 @@ import {
   assertExecutionDisabled,
 } from "./constants.ts";
 import { canonicalize } from "./manifest.ts";
+import { checkedMulDivFloorU64 } from "./math.ts";
 import {
   decodeVersionedMessage,
   deriveAssociatedTokenAddress,
@@ -203,6 +204,10 @@ const POLICY_REGISTRY: ReadonlyMap<string, PolicyRegistryEntry> = new Map([
 ]);
 
 const authorizationContexts = new Map<string, StoredAuthorizationContext>();
+const authorizationRecords = new Map<
+  string,
+  Readonly<{ canonicalJson: string; expectedHash: string }>
+>();
 
 function amount(value: string, label: string): bigint {
   if (!INTEGER.test(value))
@@ -326,8 +331,12 @@ function deriveRegisteredPolicy(
     context.issuedAtUnix,
   );
   const input = amount(context.inputAmountBaseUnits, "context input");
-  const minimum =
-    (input * BigInt(10_000 - context.slippageBps)) / BigInt(10_000);
+  const minimum = checkedMulDivFloorU64(
+    input,
+    BigInt(10_000 - context.slippageBps),
+    10_000n,
+    "authorization minimum output",
+  );
   const wallet = context.wallet;
   const vault = C3_MAINNET.symmetryGlobalConfig;
   const shareMint = C3_MAINNET.portalEthMint;
@@ -501,7 +510,7 @@ function validateTrustedPolicy(
   }
 }
 
-export function validateCanonicalV0Transaction(
+function validateCanonicalV0Transaction(
   policy: TrustedOperationPolicy,
   canonicalV0MessageBase64: string,
 ): DecodedV0Message {
@@ -616,7 +625,16 @@ export function buildDisabledUnsignedPackage(
       expectedMessageHash: decoded.messageHash,
     }),
   );
-  return Object.freeze({ ...payload, authorizationHash });
+  const manifest = { ...payload, authorizationHash };
+  const canonicalJson = canonicalize(manifest);
+  const previous = authorizationRecords.get(intentId);
+  if (previous && previous.canonicalJson !== canonicalJson)
+    throw new Error("Authorization replacement is forbidden.");
+  authorizationRecords.set(
+    intentId,
+    Object.freeze({ canonicalJson, expectedHash: authorizationHash }),
+  );
+  return structuredClone(manifest);
 }
 
 function safeHashEqual(left: string, right: string): boolean {
@@ -624,26 +642,27 @@ function safeHashEqual(left: string, right: string): boolean {
   return timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }
 
-export function parseAndVerifyAuthorizationManifest(
-  rawCanonicalJson: string,
+export function loadAuthorizationRecord(
   intentId: string,
-  nowUnix: number,
 ): C3AuthorizationManifest {
-  const context = loadContext(intentId, nowUnix);
+  const context = authorizationContexts.get(intentId);
+  if (!context) throw new Error("Trusted authorization context is missing.");
   if (!context.expectedAuthorizationHash || !context.expectedMessageHash)
     throw new Error(
       "Expected authorization hash is absent from trusted storage.",
     );
+  const stored = authorizationRecords.get(intentId);
+  if (!stored) throw new Error("Canonical authorization record is missing.");
   let value: unknown;
   try {
-    value = JSON.parse(rawCanonicalJson) as unknown;
+    value = JSON.parse(stored.canonicalJson) as unknown;
   } catch {
     throw new Error("Authorization manifest JSON is malformed.");
   }
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Authorization manifest must be an object.");
   const record = value as Record<string, unknown>;
-  if (rawCanonicalJson !== canonicalize(record))
+  if (stored.canonicalJson !== canonicalize(record))
     throw new Error("Authorization JSON is not canonical.");
   const suppliedHash = String(record.authorizationHash ?? "");
   const payload = { ...record };
@@ -653,7 +672,8 @@ export function parseAndVerifyAuthorizationManifest(
     .digest("hex");
   if (
     !safeHashEqual(suppliedHash, recomputedHash) ||
-    !safeHashEqual(suppliedHash, context.expectedAuthorizationHash)
+    !safeHashEqual(suppliedHash, context.expectedAuthorizationHash) ||
+    !safeHashEqual(suppliedHash, stored.expectedHash)
   )
     throw new Error("Authorization hash does not match trusted storage.");
   const manifest = record as C3AuthorizationManifest;
@@ -695,14 +715,19 @@ export function parseAndVerifyAuthorizationManifest(
     manifest.schemaVersion !== "c3-authorization/v3" ||
     manifest.executionCapability !== false ||
     manifest.genesisHash !== C3_MAINNET.genesisHash ||
-    manifest.canonicalV0MessageHash !== context.expectedMessageHash ||
-    nowUnix >= manifest.quoteExpiresAtUnix ||
-    nowUnix >= manifest.transactionExpiresAtUnix
+    manifest.canonicalV0MessageHash !== context.expectedMessageHash
   )
     throw new Error(
       "Authorization is unsupported, mutated, wrong-network, or expired.",
     );
-  return Object.freeze(manifest);
+  const messageBytes = Buffer.from(manifest.canonicalV0MessageBase64, "base64");
+  if (
+    messageBytes.toString("base64") !== manifest.canonicalV0MessageBase64 ||
+    createHash("sha256").update(messageBytes).digest("hex") !==
+      manifest.canonicalV0MessageHash
+  )
+    throw new Error("Stored unsigned message hash is inconsistent.");
+  return structuredClone(manifest);
 }
 
 export function operationPolicyRegistryStatus(): Readonly<{

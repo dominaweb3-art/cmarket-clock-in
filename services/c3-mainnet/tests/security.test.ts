@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -9,42 +8,21 @@ import {
   C3_MAINNET_EXECUTION_CAPABILITY,
   InMemoryManifestRepository,
   buildDisabledUnsignedPackage,
-  canonicalize,
   computeManifestHash,
   createAuthorizationContext,
   decodeCanonicalShortVector,
   decodeVersionedMessage,
   operationPolicyRegistryStatus,
-  parseAndVerifyAuthorizationManifest,
+  loadAuthorizationRecord,
   validateDeploymentManifest,
-  type C3AuthorizationManifest,
   type C3DeploymentManifest,
 } from "../src/index.ts";
 import {
   authorizationFixture,
   makeV0Message,
-  userShares,
   vault,
   wallet,
 } from "./fixtures.ts";
-
-function rehash(manifest: C3AuthorizationManifest): string {
-  const payload = { ...manifest } as Record<string, unknown>;
-  delete payload.authorizationHash;
-  return createHash("sha256").update(canonicalize(payload)).digest("hex");
-}
-
-function maliciousCanonical(
-  manifest: C3AuthorizationManifest,
-  mutation: Record<string, unknown>,
-): string {
-  const changed = { ...structuredClone(manifest), ...mutation } as Record<
-    string,
-    unknown
-  >;
-  changed.authorizationHash = rehash(changed as C3AuthorizationManifest);
-  return canonicalize(changed);
-}
 
 test("Mainnet capability is an immutable false constant", () => {
   assert.equal(C3_MAINNET_EXECUTION_CAPABILITY, false);
@@ -101,66 +79,17 @@ test("coordinated malicious destination and instruction are rejected", () => {
 
 test("valid authorization is externally bound to trusted storage", () => {
   const manifest = authorizationFixture();
-  assert.deepEqual(
-    parseAndVerifyAuthorizationManifest(
-      canonicalize(manifest),
-      manifest.intentId,
-      manifest.issuedAtUnix,
-    ),
-    manifest,
-  );
+  assert.deepEqual(loadAuthorizationRecord(manifest.intentId), manifest);
 });
 
-test("wallet mutation with attacker-recalculated hash is rejected", () => {
+test("returned authorization mutations cannot alter trusted storage", () => {
   const manifest = authorizationFixture();
-  assert.throws(
-    () =>
-      parseAndVerifyAuthorizationManifest(
-        maliciousCanonical(manifest, { wallet: C3_MAINNET.wrappedSolMint }),
-        manifest.intentId,
-        manifest.issuedAtUnix,
-      ),
-    /does not match trusted storage/,
-  );
-});
-
-test("every immutable authorization context field rejects recomputed hashes", () => {
-  const manifest = authorizationFixture();
-  const mutations: Record<string, unknown>[] = [
-    { intentId: `c3-${"a".repeat(48)}` },
-    { idempotencyKey: "b".repeat(64) },
-    { policyIdentifier: "caller-policy" },
-    { policyVersion: "999" },
-    { configurationVersion: "caller-config" },
-    { vaultIdentifier: "caller-vault" },
-    { cluster: "devnet" },
-    { operation: "redemption_intent" },
-    { wallet: C3_MAINNET.wrappedSolMint },
-    { inputAmountBaseUnits: "2000000" },
-    { slippageBps: 99 },
-    { nonce: "c".repeat(64) },
-    { issuedAtUnix: 999 },
-    { expiresAtUnix: 1_049 },
-    { recentBlockhash: C3_MAINNET.cbBtcMint },
-    {
-      canonicalV0MessageBase64: makeV0Message({
-        blockhash: C3_MAINNET.cbBtcMint,
-      }),
-    },
-    { staticAccounts: [] },
-    { loadedAccounts: [{ address: userShares }] },
-  ];
-  for (const mutation of mutations)
-    assert.throws(
-      () =>
-        parseAndVerifyAuthorizationManifest(
-          maliciousCanonical(manifest, mutation),
-          manifest.intentId,
-          manifest.issuedAtUnix,
-        ),
-      /does not match trusted storage/,
-      `mutation was not rejected: ${Object.keys(mutation)[0]}`,
-    );
+  const original = loadAuthorizationRecord(manifest.intentId);
+  (manifest as { wallet: string }).wallet = C3_MAINNET.wrappedSolMint;
+  (manifest.expectedEffects[0] as { amountBaseUnits: string }).amountBaseUnits =
+    "1";
+  (manifest.expectedDestinations as string[])[0] = C3_MAINNET.cbBtcMint;
+  assert.deepEqual(loadAuthorizationRecord(manifest.intentId), original);
 });
 
 test("authorization context expires before build or verification", () => {
@@ -199,7 +128,7 @@ test("shortvec rejects redundant, truncated, overflow, and trailing encodings", 
   );
   assert.throws(
     () => decodeCanonicalShortVector(Uint8Array.of(0xff, 0xff, 0xff)),
-    /excessive, or overflowing/,
+    /third byte|excessive, or overflowing/,
   );
   assert.throws(
     () => decodeCanonicalShortVector(Uint8Array.of(0, 0)),
@@ -258,6 +187,9 @@ test("test-only trust factories are absent from the production entrypoint", () =
     "ReadOnlySymmetryAdapter",
     "validateSymmetryDescriptor",
     "assertManifestLifecycleTransition",
+    "validateCanonicalV0Transaction",
+    "parseAndVerifyAuthorizationManifest",
+    "inspectSanitizedRpcFixture",
   ])
     assert.equal(names[forbidden], undefined, `${forbidden} leaked publicly`);
 });

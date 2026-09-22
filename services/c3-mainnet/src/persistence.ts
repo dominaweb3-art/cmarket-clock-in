@@ -1,4 +1,4 @@
-import type { C3AuthorizationManifest } from "./builder.ts";
+import { loadAuthorizationRecord } from "./builder.ts";
 import {
   assertIntentTransition,
   assertVerifiedSettlementEvidence,
@@ -20,7 +20,7 @@ export type PersistedIntent = Readonly<{
   updatedAtUnix: number;
   expiresAtUnix: number;
   recoveryAttempts: number;
-  authorizationManifest?: C3AuthorizationManifest;
+  authorizationHash?: string;
   submittedSignature?: string;
   settledEffectsHash?: string;
   partialCompletionHash?: string;
@@ -28,7 +28,6 @@ export type PersistedIntent = Readonly<{
 }>;
 
 export type IntentTransitionPatch = Readonly<{
-  authorizationManifest?: C3AuthorizationManifest;
   submittedSignature?: string;
   verifiedSettlement?: VerifiedSettlementEvidence;
   partialCompletionHash?: string;
@@ -83,6 +82,14 @@ export function validatePersistedIntent(value: PersistedIntent): void {
     value.recoveryAttempts > 3
   )
     throw new Error("Recovery attempts are invalid.");
+  if (
+    ["draft", "awaiting_wallet"].includes(value.state) &&
+    (value.authorizationHash !== undefined ||
+      value.submittedSignature !== undefined)
+  )
+    throw new Error(
+      "Pre-submission state cannot contain authorization or signature.",
+    );
   for (const fingerprint of [
     value.settledEffectsHash,
     value.partialCompletionHash,
@@ -101,9 +108,23 @@ export function validatePersistedIntent(value: PersistedIntent): void {
       "partially_completed",
       "settled",
     ].includes(value.state) &&
-    !value.authorizationManifest
+    !value.authorizationHash
   )
-    throw new Error("Submitted state lacks immutable authorization manifest.");
+    throw new Error("Submitted state lacks immutable authorization hash.");
+  if (value.authorizationHash !== undefined) {
+    if (!HASH.test(value.authorizationHash))
+      throw new Error("Persisted authorization hash is malformed.");
+    const authorization = loadAuthorizationRecord(value.intentId);
+    if (
+      authorization.authorizationHash !== value.authorizationHash ||
+      authorization.idempotencyKey !== value.idempotencyKey ||
+      authorization.configurationHash !== value.configurationHash ||
+      authorization.wallet !== value.wallet ||
+      authorization.operation !== value.operation ||
+      authorization.inputAmountBaseUnits !== value.inputAmountBaseUnits
+    )
+      throw new Error("Persisted authorization differs from trusted intent.");
+  }
   if (
     [
       "intent_submitted",
@@ -120,10 +141,6 @@ export function validatePersistedIntent(value: PersistedIntent): void {
     throw new Error("Settled state lacks independently reconciled effects.");
   if (value.state === "manual_review" && !value.manualReviewReason)
     throw new Error("Manual review lacks a reason.");
-}
-
-function same(value: unknown): string {
-  return JSON.stringify(value);
 }
 
 export class InMemoryIntentRepository implements IntentRepository {
@@ -162,6 +179,8 @@ export class InMemoryIntentRepository implements IntentRepository {
     validatePersistedIntent(record);
     if (record.state !== "draft" || record.revision !== 1)
       throw new Error("New intents must begin in draft at revision one.");
+    if (record.authorizationHash || record.submittedSignature)
+      throw new Error("New draft cannot inject authorization or signature.");
     if (
       this.#records.has(record.intentId) ||
       this.#idempotency.has(record.idempotencyKey)
@@ -193,7 +212,6 @@ export class InMemoryIntentRepository implements IntentRepository {
     )
       throw new Error("Transition timestamp is stale.");
     const allowedPatchKeys = new Set([
-      "authorizationManifest",
       "submittedSignature",
       "verifiedSettlement",
       "partialCompletionHash",
@@ -203,6 +221,18 @@ export class InMemoryIntentRepository implements IntentRepository {
       throw new Error(
         "Transition patch attempted to mutate an immutable field.",
       );
+    if (
+      patch.submittedSignature !== undefined &&
+      !(expectedState === "awaiting_wallet" && nextState === "intent_submitted")
+    )
+      throw new Error(
+        "Submitted signature may only be recorded on submission.",
+      );
+    if (
+      nextState === "intent_submitted" &&
+      patch.submittedSignature === undefined
+    )
+      throw new Error("Submission requires a signature.");
     if (nextState === "settled") {
       if (!patch.verifiedSettlement || !current.submittedSignature)
         throw new Error(
@@ -237,9 +267,18 @@ export class InMemoryIntentRepository implements IntentRepository {
         throw new Error("Recovery window exceeds 24 hours.");
     }
     const { verifiedSettlement, ...storedPatch } = patch;
+    const authorization =
+      nextState === "intent_submitted" || current.authorizationHash
+        ? loadAuthorizationRecord(intentId)
+        : undefined;
+    if (nextState === "intent_submitted" && !authorization)
+      throw new Error("Submitted intent lacks trusted authorization.");
     const candidate: PersistedIntent = {
       ...current,
       ...storedPatch,
+      ...(nextState === "intent_submitted"
+        ? { authorizationHash: authorization!.authorizationHash }
+        : {}),
       ...(verifiedSettlement
         ? { settledEffectsHash: verifiedSettlement.effectsFingerprint }
         : {}),
@@ -251,11 +290,10 @@ export class InMemoryIntentRepository implements IntentRepository {
         : current.recoveryAttempts,
     };
     if (
-      current.authorizationManifest &&
-      same(candidate.authorizationManifest) !==
-        same(current.authorizationManifest)
+      current.authorizationHash &&
+      candidate.authorizationHash !== current.authorizationHash
     )
-      throw new Error("Authorization manifest cannot be changed or deleted.");
+      throw new Error("Authorization hash cannot be changed or deleted.");
     if (
       current.submittedSignature &&
       candidate.submittedSignature !== current.submittedSignature

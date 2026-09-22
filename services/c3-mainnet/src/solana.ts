@@ -144,7 +144,7 @@ export function deriveAssociatedTokenAddress(
 }
 
 function encodeShortVector(value: number): Uint8Array {
-  if (!Number.isSafeInteger(value) || value < 0 || value > 0x1f_ffff)
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffff)
     throw new RangeError("Short vector value is outside the supported range.");
   const encoded: number[] = [];
   let remaining = value;
@@ -165,6 +165,10 @@ function readShortVector(bytes: Uint8Array, cursor: { value: number }): number {
     if (cursor.value >= bytes.length)
       throw new Error("Truncated short vector.");
     const byte = bytes[cursor.value++]!;
+    if (count === 2 && (byte & 0xfc) !== 0)
+      throw new Error(
+        "ShortU16 third byte exceeds its two data bits or continues.",
+      );
     result += (byte & 0x7f) * 2 ** shift;
     if ((byte & 0x80) === 0) {
       const consumed = bytes.slice(start, cursor.value);

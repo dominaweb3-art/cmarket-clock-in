@@ -65,7 +65,9 @@ export function checkedMulDivFloorU64(
   divisor: bigint,
   label: string,
 ): bigint {
-  if (divisor <= 0n) throw new RangeError(`${label} divisor must be positive.`);
+  assertU64(divisor, `${label} divisor`);
+  if (divisor === 0n)
+    throw new RangeError(`${label} divisor must be positive.`);
   assertU64(value, `${label} value`);
   assertU64(multiplier, `${label} multiplier`);
   const product = value * multiplier;
@@ -79,9 +81,7 @@ export function mulDivFloor(
   multiplier: bigint,
   divisor: bigint,
 ): bigint {
-  if (value < 0n || multiplier < 0n || divisor <= 0n)
-    throw new RangeError("Invalid unsigned ratio.");
-  return (value * multiplier) / divisor;
+  return checkedMulDivFloorU64(value, multiplier, divisor, "bounded ratio");
 }
 
 export function mulDivCeil(
@@ -89,9 +89,17 @@ export function mulDivCeil(
   multiplier: bigint,
   divisor: bigint,
 ): bigint {
-  if (value < 0n || multiplier < 0n || divisor <= 0n)
-    throw new RangeError("Invalid unsigned ratio.");
-  return (value * multiplier + divisor - 1n) / divisor;
+  assertU64(value, "bounded ceiling value");
+  assertU64(multiplier, "bounded ceiling multiplier");
+  assertU64(divisor, "bounded ceiling divisor");
+  if (divisor === 0n) throw new RangeError("Bounded ceiling divisor is zero.");
+  const product = value * multiplier;
+  if (product > U128_MAX)
+    throw new RangeError("Bounded ceiling intermediate exceeds u128.");
+  return assertU64(
+    product / divisor + (product % divisor === 0n ? 0n : 1n),
+    "bounded ceiling result",
+  );
 }
 
 export function allocateTargetByBps(

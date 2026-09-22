@@ -9,7 +9,6 @@ import {
   deriveAssociatedTokenAddress,
   encodeBase58,
   type C3AuthorizationManifest,
-  type RawFinalizedTransaction,
   type ReconciledVaultSnapshot,
   type VaultSnapshotPolicy,
 } from "../src/index.ts";
@@ -103,93 +102,66 @@ export function authorizationFixture(): C3AuthorizationManifest {
   );
 }
 
-export function finalizedTransactionFixture(
+export const fixtureSignature = encodeBase58(
+  Uint8Array.from({ length: 64 }, (_, index) => index + 1),
+);
+
+export function officialTransactionFixture(
   authorization: C3AuthorizationManifest = authorizationFixture(),
-  mutation: Partial<RawFinalizedTransaction> = {},
-): RawFinalizedTransaction {
+  mutation: Record<string, unknown> = {},
+) {
+  const message = Buffer.from(authorization.canonicalV0MessageBase64, "base64");
+  const signed = Buffer.concat([
+    Buffer.from([1]),
+    Buffer.from(decodeBase58(fixtureSignature)),
+    message,
+  ]);
+  const balance = (
+    accountIndex: number,
+    mint: string,
+    owner: string,
+    amount: string,
+  ) => ({
+    accountIndex,
+    mint,
+    owner,
+    uiTokenAmount: {
+      amount,
+      decimals: 6,
+      uiAmount: null,
+      uiAmountString: amount,
+    },
+  });
   return {
-    signature: encodeBase58(
-      Uint8Array.from({ length: 64 }, (_, index) => index + 1),
-    ),
-    cluster: C3_MAINNET.cluster,
-    genesisHash: C3_MAINNET.genesisHash,
-    confirmationStatus: "finalized",
     slot: 10,
-    blockTimeUnix: authorization.issuedAtUnix,
-    error: null,
-    canonicalV0MessageHash: authorization.canonicalV0MessageHash,
-    feePayer: wallet,
-    signers: [wallet],
-    staticAccounts: authorization.staticAccounts.map(
-      (account) => account.address,
-    ),
-    loadedAddresses: [],
-    lookupTableContentsHash: "0".repeat(64),
-    outerInstructions: [
-      {
-        programId: C3_MAINNET.symmetryProgram,
-        dataBase64: "AQIDBA==",
-        accounts: [wallet, userUsdc, vaultUsdc, userShares],
-        inner: false,
-        decodedKind: "other",
-      },
-    ],
-    innerInstructions: [
-      {
-        programId: C3_MAINNET.symmetryProgram,
-        dataBase64: "AQ==",
-        accounts: [userUsdc, vaultUsdc],
-        inner: true,
-        decodedKind: "transfer_checked",
-      },
-    ],
-    preTokenBalances: [
-      {
-        tokenAccount: userUsdc,
-        owner: wallet,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "2000000",
-      },
-      {
-        tokenAccount: vaultUsdc,
-        owner: vault,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "0",
-      },
-      {
-        tokenAccount: userShares,
-        owner: wallet,
-        mint: shareMint,
-        amountBaseUnits: "0",
-      },
-    ],
-    postTokenBalances: [
-      {
-        tokenAccount: userUsdc,
-        owner: wallet,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "1000000",
-      },
-      {
-        tokenAccount: vaultUsdc,
-        owner: vault,
-        mint: C3_MAINNET.usdcMint,
-        amountBaseUnits: "1000000",
-      },
-      {
-        tokenAccount: userShares,
-        owner: wallet,
-        mint: shareMint,
-        amountBaseUnits: "1000000",
-      },
-    ],
-    preLamports: ["1000000"],
-    postLamports: ["995000"],
-    shareSupplyBefore: "0",
-    shareSupplyAfter: "1000000",
-    logs: ["sanitized realistic parser fixture"],
+    blockTime: authorization.issuedAtUnix,
+    version: 0,
+    transaction: [signed.toString("base64"), "base64"],
+    meta: {
+      err: null,
+      fee: 5000,
+      preBalances: [1_000_000, 0, 0, 0, 0, 0, 0],
+      postBalances: [995_000, 0, 0, 0, 0, 0, 0],
+      loadedAddresses: { writable: [], readonly: [] },
+      innerInstructions: [{ index: 0, instructions: [] }],
+      preTokenBalances: [
+        balance(1, C3_MAINNET.usdcMint, wallet, "2000000"),
+        balance(2, C3_MAINNET.usdcMint, vault, "0"),
+        balance(3, shareMint, wallet, "0"),
+      ],
+      postTokenBalances: [
+        balance(1, C3_MAINNET.usdcMint, wallet, "1000000"),
+        balance(2, C3_MAINNET.usdcMint, vault, "1000000"),
+        balance(3, shareMint, wallet, "1000000"),
+      ],
+      logMessages: ["sanitized official RPC fixture"],
+    },
     ...mutation,
   };
+}
+
+export function officialStatusFixture() {
+  return { slot: 10, err: null, confirmationStatus: "finalized" };
 }
 
 export const snapshotPolicy: VaultSnapshotPolicy = {

@@ -2,16 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  C3_AMOUNTS,
   InMemoryIntentRepository,
-  inspectSanitizedRpcFixture,
+  inspectOfficialRpcEvidence,
   planAggregatedRebalance,
   reconcileFinalizedSignature,
   type PersistedIntent,
 } from "../src/index.ts";
 import {
   authorizationFixture,
-  finalizedTransactionFixture,
+  fixtureSignature,
+  officialStatusFixture,
+  officialTransactionFixture,
   wallet,
 } from "./fixtures.ts";
 
@@ -19,24 +20,6 @@ const authorizations = new Map<
   string,
   ReturnType<typeof authorizationFixture>
 >();
-
-function pending(overrides: Record<string, unknown> = {}) {
-  return {
-    authorizedInflowsUsdcBaseUnits: 2_000_000n,
-    authorizedWithdrawalsUsdcBaseUnits: 0n,
-    pendingSwapInputsUsdcBaseUnits: 1_000_000n,
-    partiallyCompletedAssetDeltasUsdMicros: {
-      btc: 0n,
-      eth: 0n,
-      sol: 0n,
-    },
-    failedLegPresent: false,
-    reservedFeesUsdcBaseUnits: 0n,
-    reservedBountyUsdcBaseUnits: 0n,
-    operationalDustUsdcBaseUnits: 0n,
-    ...overrides,
-  } as Parameters<typeof planAggregatedRebalance>[0]["pendingFlows"];
-}
 
 function draft(expiryOffsetSeconds = 50): PersistedIntent {
   const authorization = authorizationFixture();
@@ -65,7 +48,7 @@ function reachFailed(
 ) {
   const authorization = authorizations.get(record.intentId);
   if (!authorization) throw new Error("Test authorization fixture is missing.");
-  const signature = finalizedTransactionFixture(authorization).signature;
+  const signature = fixtureSignature;
   let current = repository.transition(
     record.intentId,
     1,
@@ -79,7 +62,7 @@ function reachFailed(
     "awaiting_wallet",
     "intent_submitted",
     record.createdAtUnix + 2,
-    { authorizationManifest: authorization, submittedSignature: signature },
+    { submittedSignature: signature },
   );
   return repository.transition(
     record.intentId,
@@ -90,47 +73,26 @@ function reachFailed(
   );
 }
 
-test("keeper produces only a disabled proposed rebalance", () => {
-  const plan = planAggregatedRebalance({
-    settledValuesUsdMicros: {
-      btc: 4_000_000n,
-      eth: 3_000_000n,
-      sol: 3_000_000n,
-    },
-    pendingFlows: pending(),
-    aggregationThresholdUsdcBaseUnits: 1_000_000n,
-    driftThresholdBps: 100,
-    minimumExecutableTradeUsdMicros: 1n,
-    intentExpired: false,
-    oracleVerified: true,
-    routeRegistryVerified: true,
-  });
-  assert.equal(plan.executionCapability, false);
-  assert.equal(plan.action, "proposed_rebalance");
-  assert.equal(plan.automaticRetry, false);
-  assert.equal(plan.automaticReversal, false);
-});
-
-test("keeper rejects a partial delta above u64", () => {
+test("keeper requires internally registered evidence before proposing a rebalance", () => {
   assert.throws(
     () =>
       planAggregatedRebalance({
-        settledValuesUsdMicros: { btc: 1n, eth: 1n, sol: 1n },
-        pendingFlows: pending({
-          partiallyCompletedAssetDeltasUsdMicros: {
-            btc: C3_AMOUNTS.u64Max + 1n,
-            eth: 0n,
-            sol: 0n,
-          },
-        }),
-        aggregationThresholdUsdcBaseUnits: 1n,
-        driftThresholdBps: 1,
-        minimumExecutableTradeUsdMicros: 1n,
-        intentExpired: false,
-        oracleVerified: true,
-        routeRegistryVerified: true,
+        oracleEvidenceId: "fabricated-oracle",
+        routeEvidenceId: "fabricated-route",
       }),
-    /unsigned 64-bit range/,
+    /EXTERNAL_CONFIGURATION_MISSING/,
+  );
+});
+
+test("keeper rejects caller-supplied monetary data and verification booleans", () => {
+  assert.throws(
+    () =>
+      planAggregatedRebalance({
+        oracleEvidenceId: "fabricated-oracle",
+        routeEvidenceId: "fabricated-route",
+        oracleVerified: true,
+      } as Parameters<typeof planAggregatedRebalance>[0]),
+    /identifiers only/,
   );
 });
 
@@ -250,28 +212,38 @@ test("caller-created RPC providers cannot satisfy production quorum", async () =
   const authorization = authorizationFixture();
   await assert.rejects(
     reconcileFinalizedSignature(
-      finalizedTransactionFixture(authorization).signature,
-      authorization,
+      fixtureSignature,
+      authorization.intentId,
       "caller-created-two-provider-registry",
     ),
     /unknown sealed RPC registry identifier/,
   );
 });
 
-test("sanitized raw RPC fixture is parsed internally", () => {
+test("official raw RPC fixture is reconstructed and incomplete mint evidence fails closed", () => {
   const authorization = authorizationFixture();
-  const result = inspectSanitizedRpcFixture(
-    finalizedTransactionFixture(authorization),
-    authorization,
-  );
-  assert.match(result.effectsFingerprint, /^[a-f0-9]{64}$/);
   assert.throws(
     () =>
-      inspectSanitizedRpcFixture(
-        { ...finalizedTransactionFixture(authorization), extra: true },
-        authorization,
+      inspectOfficialRpcEvidence(
+        officialTransactionFixture(authorization),
+        officialStatusFixture(),
+        fixtureSignature,
+        authorization.intentId,
       ),
-    /missing or unexpected/,
+    /share supply and SPL mint\/burn evidence are unavailable/,
+  );
+  assert.throws(
+    () =>
+      inspectOfficialRpcEvidence(
+        {
+          ...officialTransactionFixture(authorization),
+          transaction: ["AQ==", "base64"],
+        },
+        officialStatusFixture(),
+        fixtureSignature,
+        authorization.intentId,
+      ),
+    /signer count or size/,
   );
 });
 

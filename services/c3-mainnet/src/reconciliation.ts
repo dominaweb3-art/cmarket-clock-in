@@ -1,66 +1,29 @@
 import { createHash } from "node:crypto";
 
-import type { C3AuthorizationManifest, TrustedEffect } from "./builder.ts";
+import {
+  loadAuthorizationRecord,
+  type C3AuthorizationManifest,
+  type TrustedEffect,
+} from "./builder.ts";
 import { C3_AMOUNTS, C3_MAINNET } from "./constants.ts";
 import { canonicalize } from "./manifest.ts";
-import { publicKeyBytes } from "./solana.ts";
-
-export type RawTokenBalance = Readonly<{
-  tokenAccount: string;
-  owner: string;
-  mint: string;
-  amountBaseUnits: string;
-}>;
-
-export type RawObservedInstruction = Readonly<{
-  programId: string;
-  dataBase64: string;
-  accounts: readonly string[];
-  inner: boolean;
-  decodedKind?:
-    | "transfer"
-    | "transfer_checked"
-    | "mint_to"
-    | "burn"
-    | "approve"
-    | "revoke"
-    | "set_authority"
-    | "close_account"
-    | "other";
-}>;
-
-export type RawFinalizedTransaction = Readonly<{
-  signature: string;
-  cluster: string;
-  genesisHash: string;
-  confirmationStatus: "finalized" | "confirmed" | "processed" | "missing";
-  slot: number;
-  blockTimeUnix: number;
-  error: unknown;
-  canonicalV0MessageHash: string;
-  feePayer: string;
-  signers: readonly string[];
-  staticAccounts: readonly string[];
-  loadedAddresses: readonly string[];
-  lookupTableContentsHash: string;
-  outerInstructions: readonly RawObservedInstruction[];
-  innerInstructions: readonly RawObservedInstruction[];
-  preTokenBalances: readonly RawTokenBalance[];
-  postTokenBalances: readonly RawTokenBalance[];
-  preLamports: readonly string[];
-  postLamports: readonly string[];
-  shareSupplyBefore: string;
-  shareSupplyAfter: string;
-  logs: readonly string[];
-}>;
+import {
+  decodeBase58,
+  decodeVersionedMessage,
+  encodeBase58,
+  publicKeyBytes,
+} from "./solana.ts";
 
 type RegisteredRpcProvider = Readonly<{
   providerId: string;
   operatorId: string;
   endpoint: string;
+  cluster: "mainnet-beta";
+  genesisHash: string;
   reviewEvidenceHash: string;
   transportKind: "https-json-rpc";
   fetchFinalizedTransaction(signature: string): Promise<unknown>;
+  fetchSignatureStatus(signature: string): Promise<unknown>;
 }>;
 
 const RPC_PROVIDER_REGISTRY: ReadonlyMap<
@@ -84,23 +47,23 @@ export type VerifiedSettlementEvidence = Readonly<{
   signature: string;
   effectsFingerprint: string;
 }>;
-
-const verifiedSettlements = new WeakSet<object>();
-const verifiedVaultSnapshots = new WeakSet<object>();
-
 export type VerifiedVaultSnapshotEvidence = Readonly<{
   snapshotFingerprint: string;
   providerEvidenceFingerprints: readonly [string, string];
 }>;
+const verifiedSettlements = new WeakSet<object>();
+const verifiedVaultSnapshots = new WeakSet<object>();
+const HASH = /^[a-f0-9]{64}$/;
+const INTEGER = /^(0|[1-9]\d*)$/;
 
 export function assertVerifiedVaultSnapshotEvidence(
   evidence: VerifiedVaultSnapshotEvidence,
 ): void {
   if (
     !verifiedVaultSnapshots.has(evidence) ||
-    !/^[a-f0-9]{64}$/.test(evidence.snapshotFingerprint) ||
+    !HASH.test(evidence.snapshotFingerprint) ||
     evidence.providerEvidenceFingerprints.some(
-      (fingerprint) => !/^[a-f0-9]{64}$/.test(fingerprint),
+      (fingerprint) => !HASH.test(fingerprint),
     )
   )
     throw new Error(
@@ -115,353 +78,342 @@ export function assertVerifiedSettlementEvidence(
   if (
     !verifiedSettlements.has(evidence) ||
     evidence.signature !== expectedSignature ||
-    !/^[a-f0-9]{64}$/.test(evidence.effectsFingerprint)
+    !HASH.test(evidence.effectsFingerprint)
   )
     throw new Error(
       "Settlement evidence was not produced by independent reconciliation.",
     );
 }
 
-function canonicalBalanceMap(
-  balances: readonly RawTokenBalance[],
-): Map<string, RawTokenBalance> {
-  const result = new Map<string, RawTokenBalance>();
-  for (const balance of balances) {
-    if (!/^(0|[1-9]\d*)$/.test(balance.amountBaseUnits))
-      throw new Error("RPC token balance is malformed.");
-    if (BigInt(balance.amountBaseUnits) > C3_AMOUNTS.u64Max)
-      throw new Error("RPC token balance exceeds u64.");
-    if (result.has(balance.tokenAccount))
-      throw new Error("RPC token balances contain duplicate accounts.");
-    result.set(balance.tokenAccount, balance);
-  }
-  return result;
+function object(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error(`${label} is malformed.`);
+  return value as Record<string, unknown>;
 }
 
-function reconstructTokenEffects(
-  transaction: RawFinalizedTransaction,
+function array(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${label} is missing.`);
+  return value;
+}
+
+function safeNumber(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0)
+    throw new Error(`${label} is not a safe nonnegative integer.`);
+  return value as number;
+}
+
+function boundedAmount(value: unknown, label: string): bigint {
+  if (typeof value !== "string" || !INTEGER.test(value))
+    throw new Error(`${label} is not a canonical integer string.`);
+  const parsed = BigInt(value);
+  if (parsed > C3_AMOUNTS.u64Max) throw new Error(`${label} exceeds u64.`);
+  return parsed;
+}
+
+function canonicalBase64(value: unknown, label: string): Uint8Array {
+  if (
+    typeof value !== "string" ||
+    value.length > 4_000 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(value)
+  )
+    throw new Error(`${label} is malformed.`);
+  const bytes = Buffer.from(value, "base64");
+  if (bytes.toString("base64") !== value)
+    throw new Error(`${label} is not canonical base64.`);
+  return bytes;
+}
+
+function parseSignedTransaction(
+  raw: unknown,
+  signature: string,
+  authorization: C3AuthorizationManifest,
+) {
+  const pair = array(raw, "base64 transaction");
+  if (pair.length !== 2 || pair[1] !== "base64")
+    throw new Error(
+      "Only official base64 getTransaction encoding is accepted.",
+    );
+  const bytes = canonicalBase64(pair[0], "signed transaction");
+  if (bytes.length > 1_232 || bytes.length < 67 || bytes[0] !== 1)
+    throw new Error("Signed v0 transaction has invalid signer count or size.");
+  if (encodeBase58(bytes.subarray(1, 65)) !== signature)
+    throw new Error(
+      "RPC transaction signature does not match the requested signature.",
+    );
+  const message = bytes.subarray(65);
+  const messageBase64 = Buffer.from(message).toString("base64");
+  // The closed policy currently authorizes no ALTs. An ALT cannot be accepted
+  // until its full on-chain contents and activity are bound by a sealed registry.
+  if (authorization.lookupTables.length !== 0)
+    throw new Error(
+      "EXTERNAL_CONFIGURATION_MISSING: sealed ALT contents are unavailable.",
+    );
+  const decoded = decodeVersionedMessage(messageBase64, []);
+  if (
+    decoded.messageHash !== authorization.canonicalV0MessageHash ||
+    decoded.messageBase64 !== authorization.canonicalV0MessageBase64 ||
+    decoded.recentBlockhash !== authorization.recentBlockhash
+  )
+    throw new Error(
+      "Signed transaction message differs from the stored authorization.",
+    );
+  if (
+    decoded.requiredSignatures !== 1 ||
+    decoded.staticAccounts[0]?.address !== authorization.wallet ||
+    decoded.wireBytes !== bytes.length
+  )
+    throw new Error(
+      "Signed transaction signer or fee payer differs from authorization.",
+    );
+  if (
+    canonicalize(decoded.instructions) !==
+    canonicalize(authorization.compiledInstructions)
+  )
+    throw new Error("Signed outer instructions differ from authorization.");
+  return decoded;
+}
+
+type Balance = Readonly<{
+  tokenAccount: string;
+  owner: string;
+  mint: string;
+  amountBaseUnits: string;
+}>;
+
+function parseTokenBalances(
+  raw: unknown,
+  accounts: readonly string[],
+  label: string,
+): Map<string, Balance> {
+  const balances = new Map<string, Balance>();
+  for (const entry of array(raw, label)) {
+    const row = object(entry, label);
+    const index = safeNumber(row.accountIndex, `${label} account index`);
+    const tokenAccount = accounts[index];
+    if (!tokenAccount || balances.has(tokenAccount))
+      throw new Error(`${label} has an invalid or duplicate token account.`);
+    if (typeof row.mint !== "string" || typeof row.owner !== "string")
+      throw new Error(`${label} lacks mint or owner.`);
+    publicKeyBytes(row.mint);
+    publicKeyBytes(row.owner);
+    const ui = object(row.uiTokenAmount, `${label} uiTokenAmount`);
+    boundedAmount(ui.amount, `${label} token amount`);
+    const decimals = safeNumber(ui.decimals, `${label} decimals`);
+    if (decimals > 18) throw new Error("Token decimals exceed policy.");
+    balances.set(tokenAccount, {
+      tokenAccount,
+      owner: row.owner,
+      mint: row.mint,
+      amountBaseUnits: ui.amount as string,
+    });
+  }
+  return balances;
+}
+
+function reconstructEffects(
+  before: Map<string, Balance>,
+  after: Map<string, Balance>,
   authorization: C3AuthorizationManifest,
 ): readonly TrustedEffect[] {
-  const before = canonicalBalanceMap(transaction.preTokenBalances);
-  const after = canonicalBalanceMap(transaction.postTokenBalances);
-  const accounts = new Set([...before.keys(), ...after.keys()]);
   const effects: TrustedEffect[] = [];
-  for (const tokenAccount of [...accounts].sort()) {
-    const pre = before.get(tokenAccount);
-    const post = after.get(tokenAccount);
-    const identity = post ?? pre;
-    if (!identity) throw new Error("Token balance identity is missing.");
-    if (pre && post && (pre.owner !== post.owner || pre.mint !== post.mint))
-      throw new Error("Token account owner or mint changed unexpectedly.");
+  for (const account of [
+    ...new Set([...before.keys(), ...after.keys()]),
+  ].sort()) {
+    const pre = before.get(account);
+    const post = after.get(account);
+    if (!pre || !post || pre.owner !== post.owner || pre.mint !== post.mint)
+      throw new Error("Missing or changed token-account owner/mint evidence.");
     const delta =
-      BigInt(post?.amountBaseUnits ?? "0") -
-      BigInt(pre?.amountBaseUnits ?? "0");
+      boundedAmount(post.amountBaseUnits, "post amount") -
+      boundedAmount(pre.amountBaseUnits, "pre amount");
     if (delta === 0n) continue;
-    effects.push(
-      Object.freeze({
-        kind:
-          identity.mint === authorization.shareMint &&
-          identity.owner === authorization.wallet
-            ? delta < 0n
-              ? "share_burn"
-              : "share_mint"
-            : delta < 0n
-              ? "token_debit"
-              : "token_credit",
-        owner: identity.owner,
-        mint: identity.mint,
-        amountBaseUnits: (delta < 0n ? -delta : delta).toString(),
-        tokenAccount,
-      }),
-    );
+    effects.push({
+      kind:
+        pre.mint === authorization.shareMint &&
+        pre.owner === authorization.wallet
+          ? delta > 0n
+            ? "share_mint"
+            : "share_burn"
+          : delta > 0n
+            ? "token_credit"
+            : "token_debit",
+      owner: pre.owner,
+      mint: pre.mint,
+      amountBaseUnits: (delta > 0n ? delta : -delta).toString(),
+      tokenAccount: account,
+    });
   }
-  return Object.freeze(effects);
-}
-
-function inspectRawTransaction(
-  transaction: RawFinalizedTransaction,
-  authorization: C3AuthorizationManifest,
-): Readonly<{ effectsFingerprint: string; evidenceFingerprint: string }> {
-  if (
-    transaction.cluster !== C3_MAINNET.cluster ||
-    transaction.genesisHash !== C3_MAINNET.genesisHash ||
-    transaction.confirmationStatus !== "finalized" ||
-    transaction.error !== null
-  )
-    throw new Error(
-      "Transaction is not a successful finalized Mainnet transaction.",
-    );
-  if (
-    !Number.isSafeInteger(transaction.slot) ||
-    transaction.slot <= 0 ||
-    !Number.isSafeInteger(transaction.blockTimeUnix) ||
-    transaction.blockTimeUnix < authorization.issuedAtUnix ||
-    transaction.blockTimeUnix > authorization.expiresAtUnix
-  )
-    throw new Error("Finalized transaction timing evidence is invalid.");
-  if (
-    transaction.canonicalV0MessageHash !==
-      authorization.canonicalV0MessageHash ||
-    transaction.feePayer !== authorization.wallet ||
-    canonicalize(transaction.signers) !== canonicalize([authorization.wallet])
-  )
-    throw new Error(
-      "Finalized signer, fee payer, or message differs from authorization.",
-    );
-  const allowedPrograms = new Set(authorization.allowedPrograms);
-  const instructions = [
-    ...transaction.outerInstructions,
-    ...transaction.innerInstructions,
-  ];
-  if (instructions.length === 0)
-    throw new Error("Finalized instruction evidence is missing.");
-  for (const instruction of instructions) {
-    if (!allowedPrograms.has(instruction.programId))
-      throw new Error("Finalized transaction invoked an unknown program.");
-    if (
-      ["approve", "set_authority", "revoke"].includes(
-        instruction.decodedKind ?? "",
-      )
-    )
-      throw new Error(
-        "Finalized transaction changed token authority or delegation.",
-      );
-    if (
-      ["mint_to", "burn", "close_account"].includes(
-        instruction.decodedKind ?? "",
-      ) &&
-      instruction.programId !== C3_MAINNET.symmetryProgram
-    )
-      throw new Error(
-        "Finalized transaction contains a prohibited token effect.",
-      );
-  }
-  const effects = reconstructTokenEffects(transaction, authorization);
   if (canonicalize(effects) !== canonicalize(authorization.expectedEffects))
-    throw new Error("Finalized token effects differ from authorization.");
-  if (
-    transaction.preLamports.length !== transaction.postLamports.length ||
-    transaction.preLamports.some((value) => !/^(0|[1-9]\d*)$/.test(value)) ||
-    transaction.postLamports.some((value) => !/^(0|[1-9]\d*)$/.test(value))
-  )
-    throw new Error("Lamport balance evidence is incomplete.");
-  if (
-    !/^(0|[1-9]\d*)$/.test(transaction.shareSupplyBefore) ||
-    !/^(0|[1-9]\d*)$/.test(transaction.shareSupplyAfter) ||
-    BigInt(transaction.shareSupplyBefore) > C3_AMOUNTS.u64Max ||
-    BigInt(transaction.shareSupplyAfter) > C3_AMOUNTS.u64Max
-  )
-    throw new Error("Share-supply evidence is malformed.");
-  const shareSupplyBefore = BigInt(transaction.shareSupplyBefore);
-  const shareSupplyAfter = BigInt(transaction.shareSupplyAfter);
-  const expectedShareDelta = authorization.expectedEffects
-    .filter(
-      (effect) =>
-        effect.mint === authorization.shareMint &&
-        effect.owner === authorization.wallet &&
-        ["share_mint", "share_burn"].includes(effect.kind),
-    )
-    .reduce(
-      (sum, effect) =>
-        sum +
-        (effect.kind === "share_burn" ? -1n : 1n) *
-          BigInt(effect.amountBaseUnits),
-      0n,
+    throw new Error(
+      "Finalized token effects differ from stored authorization.",
     );
-  if (shareSupplyAfter - shareSupplyBefore !== expectedShareDelta)
-    throw new Error("Share supply delta differs from authorization.");
-  const effectsFingerprint = createHash("sha256")
-    .update(
-      canonicalize({
-        effects,
-        shareSupplyBefore: transaction.shareSupplyBefore,
-        shareSupplyAfter: transaction.shareSupplyAfter,
-      }),
-    )
-    .digest("hex");
-  const evidenceFingerprint = createHash("sha256")
-    .update(canonicalize(transaction))
-    .digest("hex");
-  return Object.freeze({ effectsFingerprint, evidenceFingerprint });
+  return effects;
 }
 
-function parseRawFinalizedTransaction(value: unknown): RawFinalizedTransaction {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("RPC response is not an object.");
-  const record = value as Record<string, unknown>;
-  const required = [
-    "signature",
-    "cluster",
-    "genesisHash",
-    "confirmationStatus",
-    "slot",
-    "blockTimeUnix",
-    "error",
-    "canonicalV0MessageHash",
-    "feePayer",
-    "signers",
-    "staticAccounts",
-    "loadedAddresses",
-    "lookupTableContentsHash",
-    "outerInstructions",
-    "innerInstructions",
-    "preTokenBalances",
-    "postTokenBalances",
-    "preLamports",
-    "postLamports",
-    "shareSupplyBefore",
-    "shareSupplyAfter",
-    "logs",
-  ];
+function inspectOfficialTransaction(
+  raw: unknown,
+  statusRaw: unknown,
+  signature: string,
+  intentId: string,
+): Readonly<{ effectsFingerprint: string; evidenceFingerprint: string }> {
+  const authorization = loadAuthorizationRecord(intentId);
+  const status = object(statusRaw, "getSignatureStatuses result");
   if (
-    Object.keys(record).length !== required.length ||
-    required.some((key) => !(key in record))
+    status.confirmationStatus !== "finalized" ||
+    status.err !== null ||
+    safeNumber(status.slot, "status slot") <= 0
   )
-    throw new Error("RPC response fields are missing or unexpected.");
-  for (const key of [
-    "signers",
-    "staticAccounts",
-    "loadedAddresses",
-    "outerInstructions",
-    "innerInstructions",
-    "preTokenBalances",
-    "postTokenBalances",
-    "preLamports",
-    "postLamports",
-    "logs",
-  ])
-    if (!Array.isArray(record[key]))
-      throw new Error(`RPC response ${key} is not an array.`);
-  for (const key of [
-    "signature",
-    "cluster",
-    "genesisHash",
-    "confirmationStatus",
-    "canonicalV0MessageHash",
-    "feePayer",
-    "lookupTableContentsHash",
-    "shareSupplyBefore",
-    "shareSupplyAfter",
-  ])
-    if (typeof record[key] !== "string")
-      throw new Error(`RPC response ${key} is not a string.`);
-  const requireStringArray = (key: string): readonly string[] => {
-    const values = record[key] as unknown[];
-    if (values.some((item) => typeof item !== "string"))
-      throw new Error(`RPC response ${key} contains a non-string value.`);
-    return values as string[];
-  };
-  for (const address of [
-    record.feePayer as string,
-    ...requireStringArray("signers"),
-    ...requireStringArray("staticAccounts"),
-    ...requireStringArray("loadedAddresses"),
-  ])
-    publicKeyBytes(address);
-  for (const key of ["preLamports", "postLamports"])
-    if (
-      requireStringArray(key).some(
-        (item) =>
-          !/^(0|[1-9]\d*)$/.test(item) || BigInt(item) > C3_AMOUNTS.u64Max,
-      )
+    throw new Error("Signature is not finalized without error.");
+  const transaction = object(raw, "getTransaction result");
+  if (transaction.version !== 0)
+    throw new Error("Only official version-0 transactions are accepted.");
+  const slot = safeNumber(transaction.slot, "transaction slot");
+  const blockTime = safeNumber(transaction.blockTime, "block time");
+  if (
+    slot !== status.slot ||
+    slot <= 0 ||
+    blockTime < authorization.issuedAtUnix ||
+    blockTime > authorization.expiresAtUnix
+  )
+    throw new Error(
+      "Finalized slot or block time disagrees with authorization.",
+    );
+  const decoded = parseSignedTransaction(
+    transaction.transaction,
+    signature,
+    authorization,
+  );
+  const meta = object(transaction.meta, "transaction meta");
+  if (meta.err !== null) throw new Error("Finalized transaction failed.");
+  const loaded = object(meta.loadedAddresses, "loaded addresses");
+  if (
+    array(loaded.writable, "loaded writable addresses").length !== 0 ||
+    array(loaded.readonly, "loaded readonly addresses").length !== 0
+  )
+    throw new Error("Unregistered ALT addresses are forbidden.");
+  const accounts = [...decoded.staticAccounts, ...decoded.loadedAccounts].map(
+    (item) => item.address,
+  );
+  const preLamports = array(meta.preBalances, "preBalances").map((value) =>
+    safeNumber(value, "pre lamports"),
+  );
+  const postLamports = array(meta.postBalances, "postBalances").map((value) =>
+    safeNumber(value, "post lamports"),
+  );
+  const fee = safeNumber(meta.fee, "transaction fee");
+  if (
+    preLamports.length !== accounts.length ||
+    postLamports.length !== accounts.length ||
+    preLamports[0]! - postLamports[0]! !== fee ||
+    preLamports
+      .slice(1)
+      .some((value, index) => value !== postLamports[index + 1])
+  )
+    throw new Error("Lamport changes exceed the authorized fee.");
+  const inner = array(meta.innerInstructions, "innerInstructions");
+  for (const group of inner) {
+    const instructionGroup = object(group, "inner group");
+    const parent = safeNumber(instructionGroup.index, "inner parent index");
+    if (parent >= decoded.instructions.length)
+      throw new Error("Inner instruction parent is invalid.");
+    for (const instruction of array(
+      instructionGroup.instructions,
+      "inner instructions",
+    )) {
+      const item = object(instruction, "inner instruction");
+      const programIndex = safeNumber(
+        item.programIdIndex,
+        "inner program index",
+      );
+      const program = accounts[programIndex];
+      if (!program || !authorization.allowedPrograms.includes(program))
+        throw new Error("Inner instruction invokes an unapproved program.");
+      for (const index of array(item.accounts, "inner accounts"))
+        if (!accounts[safeNumber(index, "inner account index")])
+          throw new Error("Inner instruction references an unknown account.");
+      if (typeof item.data !== "string" || decodeBase58(item.data).length === 0)
+        throw new Error("Inner instruction data is malformed.");
+    }
+  }
+  if (
+    inner.some(
+      (group) =>
+        array(object(group, "inner group").instructions, "inner instructions")
+          .length > 0,
     )
-      throw new Error(`RPC response ${key} contains a malformed amount.`);
-  requireStringArray("logs");
-  const parseInstructions = (key: string): readonly RawObservedInstruction[] =>
-    (record[key] as unknown[]).map((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item))
-        throw new Error(
-          `RPC response ${key} contains a malformed instruction.`,
-        );
-      const instruction = item as Record<string, unknown>;
-      const allowed = new Set([
-        "programId",
-        "dataBase64",
-        "accounts",
-        "inner",
-        "decodedKind",
-      ]);
-      if (
-        Object.keys(instruction).some((field) => !allowed.has(field)) ||
-        typeof instruction.programId !== "string" ||
-        typeof instruction.dataBase64 !== "string" ||
-        !Array.isArray(instruction.accounts) ||
-        typeof instruction.inner !== "boolean" ||
-        instruction.accounts.some((account) => typeof account !== "string")
-      )
-        throw new Error(
-          `RPC response ${key} instruction fields are malformed.`,
-        );
-      publicKeyBytes(instruction.programId);
-      for (const account of instruction.accounts as string[])
-        publicKeyBytes(account);
-      const bytes = Buffer.from(instruction.dataBase64, "base64");
-      if (bytes.toString("base64") !== instruction.dataBase64)
-        throw new Error(
-          `RPC response ${key} instruction data is non-canonical.`,
-        );
-      if (
-        instruction.decodedKind !== undefined &&
-        ![
-          "transfer",
-          "transfer_checked",
-          "mint_to",
-          "burn",
-          "approve",
-          "revoke",
-          "set_authority",
-          "close_account",
-          "other",
-        ].includes(String(instruction.decodedKind))
-      )
-        throw new Error(`RPC response ${key} decoded kind is unsupported.`);
-      return structuredClone(instruction) as RawObservedInstruction;
-    });
-  const parseBalances = (key: string): readonly RawTokenBalance[] =>
-    (record[key] as unknown[]).map((item) => {
-      if (!item || typeof item !== "object" || Array.isArray(item))
-        throw new Error(`RPC response ${key} contains a malformed balance.`);
-      const balance = item as Record<string, unknown>;
-      if (
-        Object.keys(balance).length !== 4 ||
-        !["tokenAccount", "owner", "mint", "amountBaseUnits"].every(
-          (field) => typeof balance[field] === "string",
-        ) ||
-        !/^(0|[1-9]\d*)$/.test(String(balance.amountBaseUnits))
-      )
-        throw new Error(`RPC response ${key} balance fields are malformed.`);
-      for (const field of ["tokenAccount", "owner", "mint"])
-        publicKeyBytes(String(balance[field]));
-      return structuredClone(balance) as RawTokenBalance;
-    });
+  )
+    throw new Error(
+      "EXTERNAL_CONFIGURATION_MISSING: sealed inner CPI semantics are unavailable.",
+    );
+  const before = parseTokenBalances(
+    meta.preTokenBalances,
+    accounts,
+    "preTokenBalances",
+  );
+  const after = parseTokenBalances(
+    meta.postTokenBalances,
+    accounts,
+    "postTokenBalances",
+  );
+  for (const balance of [
+    ...array(meta.preTokenBalances, "preTokenBalances"),
+    ...array(meta.postTokenBalances, "postTokenBalances"),
+  ]) {
+    const row = object(balance, "token balance");
+    const ui = object(row.uiTokenAmount, "token amount");
+    if (
+      row.mint === authorization.inputMint &&
+      ui.decimals !== C3_AMOUNTS.usdcDecimals
+    )
+      throw new Error("USDC decimals differ from the sealed policy.");
+    if (
+      row.mint === authorization.shareMint &&
+      ui.decimals !== C3_AMOUNTS.shareDecimals
+    )
+      throw new Error("Share decimals differ from the sealed policy.");
+  }
+  const effects = reconstructEffects(before, after, authorization);
+  const logs = array(meta.logMessages, "logMessages");
+  if (logs.some((log) => typeof log !== "string"))
+    throw new Error("Transaction logs are malformed.");
+  // A token balance delta alone does not prove a C3 share mint. A real
+  // Token Program mint instruction and supply reconciliation are required.
+  if (
+    effects.some(
+      (effect) => effect.kind === "share_mint" || effect.kind === "share_burn",
+    )
+  )
+    throw new Error(
+      "EXTERNAL_CONFIGURATION_MISSING: share supply and SPL mint/burn evidence are unavailable.",
+    );
   return Object.freeze({
-    ...(structuredClone(record) as RawFinalizedTransaction),
-    signers: Object.freeze([...requireStringArray("signers")]),
-    staticAccounts: Object.freeze([...requireStringArray("staticAccounts")]),
-    loadedAddresses: Object.freeze([...requireStringArray("loadedAddresses")]),
-    outerInstructions: Object.freeze(parseInstructions("outerInstructions")),
-    innerInstructions: Object.freeze(parseInstructions("innerInstructions")),
-    preTokenBalances: Object.freeze(parseBalances("preTokenBalances")),
-    postTokenBalances: Object.freeze(parseBalances("postTokenBalances")),
-    preLamports: Object.freeze([...requireStringArray("preLamports")]),
-    postLamports: Object.freeze([...requireStringArray("postLamports")]),
-    logs: Object.freeze([...requireStringArray("logs")]),
+    effectsFingerprint: createHash("sha256")
+      .update(canonicalize(effects))
+      .digest("hex"),
+    evidenceFingerprint: createHash("sha256")
+      .update(canonicalize({ raw, statusRaw }))
+      .digest("hex"),
   });
 }
 
-export function inspectSanitizedRpcFixture(
+// Read-only parser surface. It cannot create a trusted settlement receipt.
+export function inspectOfficialRpcEvidence(
   transaction: unknown,
-  authorization: C3AuthorizationManifest,
+  signatureStatus: unknown,
+  signature: string,
+  intentId: string,
 ): Readonly<{ effectsFingerprint: string; evidenceFingerprint: string }> {
-  return inspectRawTransaction(
-    parseRawFinalizedTransaction(transaction),
-    authorization,
+  return inspectOfficialTransaction(
+    transaction,
+    signatureStatus,
+    signature,
+    intentId,
   );
 }
 
 export async function reconcileFinalizedSignature(
   signature: string,
-  authorization: C3AuthorizationManifest,
+  intentId: string,
   registryId: string,
 ): Promise<
   Readonly<{
@@ -471,8 +423,9 @@ export async function reconcileFinalizedSignature(
     verifiedSettlement?: VerifiedSettlementEvidence;
   }>
 > {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(signature))
+  if (decodeBase58(signature).length !== 64)
     throw new Error("Transaction signature is malformed.");
+  loadAuthorizationRecord(intentId);
   const providers = RPC_PROVIDER_REGISTRY.get(registryId);
   if (!providers)
     throw new Error(
@@ -483,7 +436,9 @@ export async function reconcileFinalizedSignature(
     providers.some(
       (provider) =>
         provider.transportKind !== "https-json-rpc" ||
-        !/^[a-f0-9]{64}$/.test(provider.reviewEvidenceHash),
+        !HASH.test(provider.reviewEvidenceHash) ||
+        provider.cluster !== C3_MAINNET.cluster ||
+        provider.genesisHash !== C3_MAINNET.genesisHash,
     ) ||
     providers[0].providerId === providers[1].providerId ||
     providers[0].operatorId === providers[1].operatorId ||
@@ -491,32 +446,34 @@ export async function reconcileFinalizedSignature(
     endpoints.some((endpoint) => endpoint.protocol !== "https:")
   )
     throw new Error("Sealed RPC registry is not independently operated.");
-  const responses = await Promise.all(
-    providers.map((provider) => provider.fetchFinalizedTransaction(signature)),
+  const results = await Promise.all(
+    providers.map(async (provider) => ({
+      transaction: await provider.fetchFinalizedTransaction(signature),
+      status: await provider.fetchSignatureStatus(signature),
+    })),
   );
-  let raw: readonly RawFinalizedTransaction[];
+  let first: ReturnType<typeof inspectOfficialTransaction>;
+  let second: ReturnType<typeof inspectOfficialTransaction>;
   try {
-    raw = responses.map(parseRawFinalizedTransaction);
+    first = inspectOfficialTransaction(
+      results[0]!.transaction,
+      results[0]!.status,
+      signature,
+      intentId,
+    );
+    second = inspectOfficialTransaction(
+      results[1]!.transaction,
+      results[1]!.status,
+      signature,
+      intentId,
+    );
   } catch (error) {
     return Object.freeze({
       settled: false,
-      reason: error instanceof Error ? error.message : "raw RPC parse failed",
-    });
-  }
-  if (raw.some((transaction) => transaction.signature !== signature))
-    return Object.freeze({
-      settled: false,
-      reason: "RPC returned the wrong signature",
-    });
-  let first: ReturnType<typeof inspectRawTransaction>;
-  let second: ReturnType<typeof inspectRawTransaction>;
-  try {
-    first = inspectRawTransaction(raw[0]!, authorization);
-    second = inspectRawTransaction(raw[1]!, authorization);
-  } catch (error) {
-    return Object.freeze({
-      settled: false,
-      reason: error instanceof Error ? error.message : "raw evidence rejected",
+      reason:
+        error instanceof Error
+          ? error.message
+          : "official RPC evidence rejected",
     });
   }
   if (
