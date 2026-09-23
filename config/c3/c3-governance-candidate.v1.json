@@ -1,0 +1,447 @@
+{
+  "version": "c3-governance-candidate-v1",
+  "status": "candidate_disabled",
+  "cluster": "mainnet-beta",
+  "mainnetExecutionEnabled": false,
+  "allocationBps": { "BTC": 4000, "ETH": 3000, "SOL": 3000 },
+  "squads": {
+    "officialProgramIdForReviewOnly": "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf",
+    "reviewedRepositoryCommit": "af94153ff77a28b6effe46b9c94baaa93742b48c",
+    "multisigAddress": null,
+    "vaultAddress": null,
+    "treasuryAddress": null,
+    "configurationAuthority": "autonomous_multisig_proposed",
+    "spendingLimitsEnabled": false,
+    "members": [
+      { "role": "member_1", "status": "unconfigured", "address": null },
+      { "role": "member_2", "status": "unconfigured", "address": null },
+      { "role": "member_3", "status": "unconfigured", "address": null }
+    ],
+    "threshold": 2,
+    "deploymentStatus": "unconfigured"
+  },
+  "authorities": [
+    {
+      "id": "protocol_vault_configuration",
+      "responsibility": "Vault parameters and allowed operations",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "routine_configuration",
+      "permittedDestinations": [],
+      "prohibitedActions": ["unreviewed_program", "single_member_execution"],
+      "evidenceRequired": [
+        "official_symmetry_idl",
+        "finalized_governance_proposal"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "c3_asset_registry",
+      "responsibility": "Approved BTC, ETH and SOL representations",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "asset_mint_change",
+      "permittedDestinations": [],
+      "prohibitedActions": ["unreviewed_mint", "single_member_execution"],
+      "evidenceRequired": [
+        "issuer_and_mint_review",
+        "finalized_governance_proposal"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "target_weights",
+      "responsibility": "Immutable product target 4000/3000/3000 bps",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "target_weight_change",
+      "permittedDestinations": [],
+      "prohibitedActions": [
+        "change_without_product_version",
+        "single_member_execution"
+      ],
+      "evidenceRequired": ["product_version", "security_review"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "fee_configuration",
+      "responsibility": "Protocol, vault and C Market fee settings",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "fee_change",
+      "permittedDestinations": [],
+      "prohibitedActions": [
+        "fee_activation_without_approval",
+        "single_member_execution"
+      ],
+      "evidenceRequired": [
+        "fee_decision",
+        "security_review",
+        "finalized_governance_proposal"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "oracle_configuration",
+      "responsibility": "Verified price feeds and freshness controls",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "oracle_change",
+      "permittedDestinations": [],
+      "prohibitedActions": ["unreviewed_feed", "single_member_execution"],
+      "evidenceRequired": ["oracle_review", "security_review"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "keeper_operational_limits",
+      "responsibility": "Stage, value, expiry and bounty bounds",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "keeper_limit_change",
+      "permittedDestinations": [],
+      "prohibitedActions": ["keeper_custody", "keeper_config_change"],
+      "evidenceRequired": ["official_symmetry_idl", "keeper_policy_review"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "treasury",
+      "responsibility": "Allowed treasury custody and transfers",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "treasury_transfer",
+      "permittedDestinations": [],
+      "prohibitedActions": ["unrestricted_spend", "mobile_signer"],
+      "evidenceRequired": [
+        "destination_review",
+        "reconciliation",
+        "finalized_governance_proposal"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "emergency_pause",
+      "responsibility": "Stop new risk-taking operations",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "emergency_pause",
+      "permittedDestinations": [],
+      "prohibitedActions": ["single_member_pause", "unreviewed_unpause"],
+      "evidenceRequired": ["incident_record", "official_pause_mapping"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "recovery",
+      "responsibility": "Manual review and controlled unpause",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "emergency_unpause",
+      "permittedDestinations": [],
+      "prohibitedActions": ["automatic_retry", "unreconciled_unpause"],
+      "evidenceRequired": [
+        "incident_record",
+        "reconciliation",
+        "security_approval"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "upgrade_migration",
+      "responsibility": "Program upgrade or vault migration approval",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "upgrade_approval",
+      "permittedDestinations": [],
+      "prohibitedActions": ["unreviewed_binary", "single_member_execution"],
+      "evidenceRequired": [
+        "source_hash",
+        "independent_security_review",
+        "rollback_plan"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "pilot_allowlist",
+      "responsibility": "Reviewed pilot participant wallets",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "routine_configuration",
+      "permittedDestinations": [],
+      "prohibitedActions": ["public_access", "client_override"],
+      "evidenceRequired": ["pilot_approval", "wallet_ownership_check"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "pilot_cap_changes",
+      "responsibility": "Per-wallet and aggregate pilot caps",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "routine_configuration",
+      "permittedDestinations": [],
+      "prohibitedActions": ["uncapped_deposits", "client_override"],
+      "evidenceRequired": ["pilot_approval", "risk_review"],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    },
+    {
+      "id": "authority_rotation",
+      "responsibility": "Rotate compromised or retired authorities",
+      "proposedSquadsControlledAccount": "unconfigured",
+      "threshold": 2,
+      "timelockClass": "authority_rotation",
+      "permittedDestinations": [],
+      "prohibitedActions": [
+        "unilateral_config_authority",
+        "single_member_execution"
+      ],
+      "evidenceRequired": [
+        "member_identity_review",
+        "security_review",
+        "finalized_governance_proposal"
+      ],
+      "symmetryMappingStatus": "unverified",
+      "deploymentStatus": "unconfigured"
+    }
+  ],
+  "timelocks": [
+    {
+      "action": "emergency_pause",
+      "candidateDelaySeconds": 0,
+      "rationale": "Stop new risk after two approvals; separate enforceable path remains unverified",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "emergency_unpause",
+      "candidateDelaySeconds": 86400,
+      "rationale": "Require incident evidence, reconciliation and Security sign-off",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "routine_configuration",
+      "candidateDelaySeconds": 86400,
+      "rationale": "Review routine configuration before execution",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "fee_change",
+      "candidateDelaySeconds": 172800,
+      "rationale": "Expose economic changes to independent review",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "target_weight_change",
+      "candidateDelaySeconds": 604800,
+      "rationale": "A target change alters the product methodology",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "asset_mint_change",
+      "candidateDelaySeconds": 604800,
+      "rationale": "Issuer and mint substitution require extended review",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "oracle_change",
+      "candidateDelaySeconds": 172800,
+      "rationale": "Price-source replacement affects NAV and settlement",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "keeper_limit_change",
+      "candidateDelaySeconds": 86400,
+      "rationale": "Bounded operating changes need preflight",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "treasury_transfer",
+      "candidateDelaySeconds": 172800,
+      "rationale": "Destination and amount must be independently checked",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "vault_migration",
+      "candidateDelaySeconds": 604800,
+      "rationale": "Migration can redirect all positions",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "authority_rotation",
+      "candidateDelaySeconds": 172800,
+      "rationale": "Rotation requires independent identity verification",
+      "status": "pending_project_manager_approval"
+    },
+    {
+      "action": "upgrade_approval",
+      "candidateDelaySeconds": 604800,
+      "rationale": "Binary and source review before changing executable code",
+      "status": "pending_project_manager_approval"
+    }
+  ],
+  "timelockImplementation": "unverified_global_lock_cannot_enforce_per_action_matrix",
+  "pilot": {
+    "status": "candidate_disabled",
+    "allowlistedWallets": [],
+    "limits": {
+      "minimumSupervisedPurchase": {
+        "recommendation": 1,
+        "unit": "USDC",
+        "rationale": "Product pilot entry point, subject to actual cost proof",
+        "riskReduced": "unbounded_test_size",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumPerPurchase": {
+        "recommendation": 1,
+        "unit": "USDC",
+        "rationale": "First supervised cycle only",
+        "riskReduced": "single_intent_loss",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumPerWallet": {
+        "recommendation": 2,
+        "unit": "USDC",
+        "rationale": "Cap cumulative pilot exposure",
+        "riskReduced": "wallet_concentration",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumAggregateTvl": {
+        "recommendation": 3,
+        "unit": "USDC",
+        "rationale": "Permit only three one-dollar cycles initially",
+        "riskReduced": "aggregate_loss",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumDailyDeposits": {
+        "recommendation": 3,
+        "unit": "USDC",
+        "rationale": "One supervised cycle per planned participant",
+        "riskReduced": "rapid_inflow",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumDailyRedemptions": {
+        "recommendation": 3,
+        "unit": "USDC",
+        "rationale": "Bound liquidation workload",
+        "riskReduced": "rapid_outflow",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumOutstandingIntents": {
+        "recommendation": 1,
+        "unit": "count",
+        "rationale": "Reconcile one lifecycle before another",
+        "riskReduced": "concurrent_uncertainty",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumSlippage": {
+        "recommendation": 100,
+        "unit": "bps",
+        "rationale": "Hard quote/min-out bound, not a promise of fill",
+        "riskReduced": "price_execution_loss",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumRebalanceDeviation": {
+        "recommendation": 100,
+        "unit": "bps",
+        "rationale": "Pause rather than drift silently",
+        "riskReduced": "allocation_drift",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumOracleStaleness": {
+        "recommendation": 60,
+        "unit": "seconds",
+        "rationale": "Match the existing threat-model candidate",
+        "riskReduced": "stale_nav",
+        "status": "pending_project_manager_approval"
+      },
+      "maximumIntentLifetime": {
+        "recommendation": 900,
+        "unit": "seconds",
+        "rationale": "Bound uncertain intent exposure; verify Symmetry supports it",
+        "riskReduced": "stale_intent",
+        "status": "pending_project_manager_approval"
+      },
+      "minimumSolForFees": {
+        "recommendation": "0.02",
+        "unit": "SOL",
+        "rationale": "Conservative test-wallet buffer, not an estimated charge",
+        "riskReduced": "fee_starvation",
+        "status": "pending_project_manager_approval"
+      },
+      "pauseThreshold": {
+        "recommendation": "any_unexplained_token_effect_or_unreconciled_intent",
+        "unit": "condition",
+        "rationale": "Fail closed on first unexplained event",
+        "riskReduced": "continued_loss",
+        "status": "pending_project_manager_approval"
+      },
+      "manualReviewThreshold": {
+        "recommendation": "first_uncertain_signature_or_balance_mismatch",
+        "unit": "condition",
+        "rationale": "Never auto-retry uncertainty",
+        "riskReduced": "duplicate_execution",
+        "status": "pending_project_manager_approval"
+      },
+      "allowlistedWalletCount": {
+        "recommendation": 3,
+        "unit": "count",
+        "rationale": "Only named, verified pilot participants",
+        "riskReduced": "public_exposure",
+        "status": "pending_project_manager_approval"
+      },
+      "pilotDuration": {
+        "recommendation": 72,
+        "unit": "hours",
+        "rationale": "Bound the observation window before reapproval",
+        "riskReduced": "open_ended_pilot",
+        "status": "pending_project_manager_approval"
+      },
+      "successfulBuySellCycles": {
+        "recommendation": 3,
+        "unit": "count",
+        "rationale": "Require repeatable finalized buy and USDC-only sale",
+        "riskReduced": "single_demo_false_confidence",
+        "status": "pending_project_manager_approval"
+      }
+    }
+  },
+  "fees": {
+    "version": "c3-fees/product-candidate-v1",
+    "status": "candidate_disabled",
+    "buyBps": 15,
+    "sellBps": 15,
+    "verifiedSkrDiscountPercent": 50,
+    "discountedBps": 7.5,
+    "collectionEnabled": false,
+    "skrDiscountEnabled": false,
+    "historicalObsoleteProposals": ["60_bps_deposit", "10_bps_withdrawal"],
+    "approvalReferences": {
+      "projectManager": null,
+      "security": null,
+      "squads": null
+    }
+  },
+  "deployment": {
+    "status": "unconfigured",
+    "approved": false,
+    "vaultAddress": null,
+    "shareMintAddress": null,
+    "symmetryAuthorityMapping": "unverified",
+    "symmetryTechnicalResponse": "pending",
+    "timelockApprovalReference": null,
+    "pilotLimitApprovalReference": null,
+    "feeApprovalReference": null,
+    "securityApprovalReference": null,
+    "projectManagerApprovalReference": null,
+    "squadsCreationSignature": null,
+    "vaultDeploymentSignature": null
+  }
+}

@@ -26,6 +26,8 @@
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",
     "test:boundary": "npm run build && node --test tests/export-boundary.test.mjs",
     "test:symmetry-research": "node --experimental-strip-types --test research/symmetry-v3/*.test.ts",
+    "test:governance": "node --test tests/governance-readiness.test.mjs",
+    "c3:governance:readiness": "node scripts/governance-readiness.mjs",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",
     "c3:mainnet:deployment-readiness": "node --experimental-strip-types scripts/readiness.ts deployment"

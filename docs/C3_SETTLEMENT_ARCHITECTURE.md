@@ -1,5 +1,7 @@
 # C3 Settlement Architecture
 
+> **Historical Phase 5C design, superseded for the active C3 product.** The current candidate is a Symmetry V3 tokenized vault with 40/30/30 strategic targets and a supervised 1 USDC Mainnet pilot; see [current governance NO-GO](C3_GOVERNANCE_READINESS.md), [Symmetry evidence gate](C3_SYMMETRY_V3_EVIDENCE.md) and [transaction-evidence limits](C3_SYMMETRY_V3_TRANSACTION_EVIDENCE.md). The recommendations below describe an earlier alternative and do not authorize treasury settlement, a deployed vault, real funds or Mainnet execution.
+
 Status: Phase 5C Mainnet feasibility design only. This document does not enable settlement, change the mobile transaction, or authorize wallet activity.
 
 ## 1. Current truth and design decision

@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cmarket:c3-governance-candidate:v1",
+  "title": "C3 governance candidate, never executable",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "status",
+    "cluster",
+    "mainnetExecutionEnabled",
+    "allocationBps",
+    "squads",
+    "authorities",
+    "timelocks",
+    "timelockImplementation",
+    "pilot",
+    "fees",
+    "deployment"
+  ],
+  "properties": {
+    "version": { "const": "c3-governance-candidate-v1" },
+    "status": { "const": "candidate_disabled" },
+    "cluster": { "const": "mainnet-beta" },
+    "mainnetExecutionEnabled": { "const": false },
+    "allocationBps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["BTC", "ETH", "SOL"],
+      "properties": {
+        "BTC": { "const": 4000 },
+        "ETH": { "const": 3000 },
+        "SOL": { "const": 3000 }
+      }
+    },
+    "squads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "officialProgramIdForReviewOnly",
+        "reviewedRepositoryCommit",
+        "multisigAddress",
+        "vaultAddress",
+        "treasuryAddress",
+        "configurationAuthority",
+        "spendingLimitsEnabled",
+        "members",
+        "threshold",
+        "deploymentStatus"
+      ],
+      "properties": {
+        "officialProgramIdForReviewOnly": {
+          "const": "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
+        },
+        "reviewedRepositoryCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "multisigAddress": { "type": "null" },
+        "vaultAddress": { "type": "null" },
+        "treasuryAddress": { "type": "null" },
+        "configurationAuthority": { "const": "autonomous_multisig_proposed" },
+        "spendingLimitsEnabled": { "const": false },
+        "members": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/member" }
+        },
+        "threshold": { "const": 2 },
+        "deploymentStatus": { "const": "unconfigured" }
+      }
+    },
+    "authorities": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": { "$ref": "#/$defs/authority" }
+    },
+    "timelocks": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/timelock" }
+    },
+    "timelockImplementation": {
+      "const": "unverified_global_lock_cannot_enforce_per_action_matrix"
+    },
+    "pilot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "allowlistedWallets", "limits"],
+      "properties": {
+        "status": { "const": "candidate_disabled" },
+        "allowlistedWallets": { "type": "array", "maxItems": 0 },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimumSupervisedPurchase",
+            "maximumPerPurchase",
+            "maximumPerWallet",
+            "maximumAggregateTvl",
+            "maximumDailyDeposits",
+            "maximumDailyRedemptions",
+            "maximumOutstandingIntents",
+            "maximumSlippage",
+            "maximumRebalanceDeviation",
+            "maximumOracleStaleness",
+            "maximumIntentLifetime",
+            "minimumSolForFees",
+            "pauseThreshold",
+            "manualReviewThreshold",
+            "allowlistedWalletCount",
+            "pilotDuration",
+            "successfulBuySellCycles"
+          ],
+          "properties": {
+            "minimumSupervisedPurchase": { "$ref": "#/$defs/limit" },
+            "maximumPerPurchase": { "$ref": "#/$defs/limit" },
+            "maximumPerWallet": { "$ref": "#/$defs/limit" },
+            "maximumAggregateTvl": { "$ref": "#/$defs/limit" },
+            "maximumDailyDeposits": { "$ref": "#/$defs/limit" },
+            "maximumDailyRedemptions": { "$ref": "#/$defs/limit" },
+            "maximumOutstandingIntents": { "$ref": "#/$defs/limit" },
+            "maximumSlippage": { "$ref": "#/$defs/limit" },
+            "maximumRebalanceDeviation": { "$ref": "#/$defs/limit" },
+            "maximumOracleStaleness": { "$ref": "#/$defs/limit" },
+            "maximumIntentLifetime": { "$ref": "#/$defs/limit" },
+            "minimumSolForFees": { "$ref": "#/$defs/limit" },
+            "pauseThreshold": { "$ref": "#/$defs/limit" },
+            "manualReviewThreshold": { "$ref": "#/$defs/limit" },
+            "allowlistedWalletCount": { "$ref": "#/$defs/limit" },
+            "pilotDuration": { "$ref": "#/$defs/limit" },
+            "successfulBuySellCycles": { "$ref": "#/$defs/limit" }
+          }
+        }
+      }
+    },
+    "fees": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "status",
+        "buyBps",
+        "sellBps",
+        "verifiedSkrDiscountPercent",
+        "discountedBps",
+        "collectionEnabled",
+        "skrDiscountEnabled",
+        "historicalObsoleteProposals",
+        "approvalReferences"
+      ],
+      "properties": {
+        "version": { "const": "c3-fees/product-candidate-v1" },
+        "status": { "const": "candidate_disabled" },
+        "buyBps": { "const": 15 },
+        "sellBps": { "const": 15 },
+        "verifiedSkrDiscountPercent": { "const": 50 },
+        "discountedBps": { "const": 7.5 },
+        "collectionEnabled": { "const": false },
+        "skrDiscountEnabled": { "const": false },
+        "historicalObsoleteProposals": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "enum": ["60_bps_deposit", "10_bps_withdrawal"] }
+        },
+        "approvalReferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["projectManager", "security", "squads"],
+          "properties": {
+            "projectManager": { "type": "null" },
+            "security": { "type": "null" },
+            "squads": { "type": "null" }
+          }
+        }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "approved",
+        "vaultAddress",
+        "shareMintAddress",
+        "symmetryAuthorityMapping",
+        "symmetryTechnicalResponse",
+        "timelockApprovalReference",
+        "pilotLimitApprovalReference",
+        "feeApprovalReference",
+        "securityApprovalReference",
+        "projectManagerApprovalReference",
+        "squadsCreationSignature",
+        "vaultDeploymentSignature"
+      ],
+      "properties": {
+        "status": { "const": "unconfigured" },
+        "approved": { "const": false },
+        "vaultAddress": { "type": "null" },
+        "shareMintAddress": { "type": "null" },
+        "symmetryAuthorityMapping": { "const": "unverified" },
+        "symmetryTechnicalResponse": { "const": "pending" },
+        "timelockApprovalReference": { "type": "null" },
+        "pilotLimitApprovalReference": { "type": "null" },
+        "feeApprovalReference": { "type": "null" },
+        "securityApprovalReference": { "type": "null" },
+        "projectManagerApprovalReference": { "type": "null" },
+        "squadsCreationSignature": { "type": "null" },
+        "vaultDeploymentSignature": { "type": "null" }
+      }
+    }
+  },
+  "$defs": {
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "status", "address"],
+      "properties": {
+        "role": { "enum": ["member_1", "member_2", "member_3"] },
+        "status": { "enum": ["unconfigured", "configured"] },
+        "address": { "type": ["string", "null"] }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "responsibility",
+        "proposedSquadsControlledAccount",
+        "threshold",
+        "timelockClass",
+        "permittedDestinations",
+        "prohibitedActions",
+        "evidenceRequired",
+        "symmetryMappingStatus",
+        "deploymentStatus"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "responsibility": { "type": "string", "minLength": 3 },
+        "proposedSquadsControlledAccount": { "const": "unconfigured" },
+        "threshold": { "const": 2 },
+        "timelockClass": { "type": "string" },
+        "permittedDestinations": { "type": "array", "maxItems": 0 },
+        "prohibitedActions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "evidenceRequired": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "symmetryMappingStatus": { "const": "unverified" },
+        "deploymentStatus": { "const": "unconfigured" }
+      }
+    },
+    "timelock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "candidateDelaySeconds", "rationale", "status"],
+      "properties": {
+        "action": { "type": "string" },
+        "candidateDelaySeconds": { "type": "integer", "minimum": 0 },
+        "rationale": { "type": "string", "minLength": 3 },
+        "status": { "const": "pending_project_manager_approval" }
+      }
+    },
+    "limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommendation",
+        "unit",
+        "rationale",
+        "riskReduced",
+        "status"
+      ],
+      "properties": {
+        "recommendation": { "type": ["number", "string"] },
+        "unit": { "type": "string", "minLength": 3 },
+        "rationale": { "type": "string", "minLength": 3 },
+        "riskReduced": { "type": "string", "minLength": 3 },
+        "status": { "const": "pending_project_manager_approval" }
+      }
+    }
+  }
+}
