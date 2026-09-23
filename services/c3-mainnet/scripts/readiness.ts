@@ -14,12 +14,12 @@ import {
   validateDeploymentManifest,
   type C3DeploymentManifest,
 } from "../src/manifest.ts";
-import { vaultSnapshotPolicyRegistryStatus } from "../src/accounting.ts";
+import { vaultSnapshotPolicyRegistryStatus } from "../tests/support/synthetic-accounting.ts";
 import {
   authorizationContextRepositoryStatus,
   operationPolicyRegistryStatus,
-} from "../src/builder.ts";
-import { rpcProviderRegistryStatus } from "../src/reconciliation.ts";
+} from "../src/builder-status.ts";
+import { rpcProviderRegistryStatus } from "../tests/support/synthetic-reconciliation.ts";
 import { symmetryAdapterRegistryStatus } from "../src/symmetry.ts";
 
 type Category =
@@ -79,13 +79,13 @@ add(
   "INTERNAL_SECURITY_READY",
   "sealed-operation-registry",
   policy.executionCapability === false && policy.policyIdentifiers.length > 0,
-  "builder resolves policy identifiers from a source-controlled registry",
+  "production policy registry is empty until reviewed Symmetry evidence exists",
 );
 add(
   "EXTERNAL_CONFIGURATION_MISSING",
   "durable-authorization-context-repository",
   authorizationRepository.productionReady,
-  "a PostgreSQL foundation exists, but the sealed builder authorization context is still in memory and PostgreSQL integration is unvalidated",
+  "PostgreSQL builder context and signature recovery are validated, but executable authorization creation remains disabled pending a reviewed Symmetry policy",
 );
 
 if (mode === "builder" || mode === "deployment") {

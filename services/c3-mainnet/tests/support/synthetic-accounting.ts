@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { C3_ALLOCATION, C3_AMOUNTS, C3_FEES } from "./constants.ts";
-import { canonicalize } from "./manifest.ts";
+import { C3_ALLOCATION, C3_AMOUNTS, C3_FEES } from "../../src/constants.ts";
+import { canonicalize } from "../../src/manifest.ts";
 import {
   absolute,
   assertU64,
@@ -10,12 +10,12 @@ import {
   checkedSubU64,
   mulDivCeil,
   mulDivFloor,
-} from "./math.ts";
+} from "../../src/math.ts";
 import {
   assertVerifiedVaultSnapshotEvidence,
   type VerifiedVaultSnapshotEvidence,
-} from "./reconciliation.ts";
-import type { C3AssetId } from "./registry.ts";
+} from "./synthetic-reconciliation.ts";
+import type { C3AssetId } from "../../src/registry.ts";
 
 export type ReconciledVaultSnapshot = Readonly<{
   schemaVersion: "c3-vault-snapshot/v1";

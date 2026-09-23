@@ -13,6 +13,7 @@ import {
 } from "../src/migrations.ts";
 import { PostgresC3Repository } from "../src/postgres.ts";
 import { authorizationFixture, fixtureSignature, wallet } from "./fixtures.ts";
+import { seedSyntheticAuthorization } from "./support/seed-synthetic-authorization.ts";
 import { runPostgresMatrix } from "./postgres-matrix.ts";
 
 const testUrl = process.env.DATABASE_URL
@@ -61,7 +62,7 @@ async function createSubmitted(db: PostgresC3Repository, hours = 1) {
     }),
   );
   await db.transition(draft.intentId, 1n, "awaiting_wallet");
-  await db.createAuthorization(draft.intentId, 2n);
+  await seedSyntheticAuthorization(authorization);
   await db.transition(draft.intentId, 3n, "intent_submitted", {
     submittedSignature: fixtureSignature,
   });
@@ -125,6 +126,69 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
       const recovered = run("read", String(written.intentId));
       assert.equal(recovered.signaturePreserved, true);
       assert.equal(recovered.authorizationVerified, true);
+    },
+  );
+
+  await t.test(
+    "builder context and unresolved signature survive a full process restart without resubmission",
+    async () => {
+      const run = (mode: string, intentId?: string) => {
+        const result = spawnSync(
+          process.execPath,
+          [
+            "--experimental-strip-types",
+            "tests/postgres-process-worker.mjs",
+            mode,
+            ...(intentId ? [intentId] : []),
+          ],
+          {
+            cwd: new URL("..", import.meta.url),
+            env: process.env,
+            encoding: "utf8",
+          },
+        );
+        assert.equal(result.status, 0, "Independent process failed.");
+        return JSON.parse(result.stdout) as Record<string, unknown>;
+      };
+      const written = run("durable-write");
+      const intentId = String(written.intentId);
+      await assert.rejects(
+        db.buildProductionUnsigned(intentId),
+        /C3_PRODUCTION_POLICY_NOT_CONFIGURED/,
+      );
+      const beforeDuplicate = await db.readIntent(intentId);
+      const duplicate = await db.recordSubmittedSignature(
+        intentId,
+        4n,
+        fixtureSignature,
+      );
+      assert.equal(duplicate.revision, beforeDuplicate?.revision);
+      await assert.rejects(
+        db.requireSubmissionReconciliation(intentId, 3n),
+        /compare-and-swap conflict/,
+      );
+      const recovered = run("durable-recover", intentId);
+      assert.equal(recovered.signaturePreserved, true);
+      assert.equal(recovered.idempotent, true);
+      assert.equal((await db.readIntent(intentId))?.state, "manual_review");
+      const events = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_outbox_events WHERE intent_id=$1 AND payload->>'reasonCode'='reconciliation_required'",
+        [intentId],
+      );
+      const audit = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_audit_log WHERE intent_id=$1 AND safe_metadata->>'reasonCode'='reconciliation_required'",
+        [intentId],
+      );
+      assert.equal(events.rows[0]?.count, "1");
+      assert.equal(audit.rows[0]?.count, "1");
+      await assert.rejects(
+        db.recordSubmittedSignature(
+          intentId,
+          4n,
+          fixtureSignature.replace(/.$/, "2"),
+        ),
+        /Conflicting submitted signature/,
+      );
     },
   );
 
@@ -204,7 +268,7 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
         }),
       );
       await db.transition(draft.intentId, 1n, "awaiting_wallet");
-      await db.createAuthorization(draft.intentId, 2n);
+      await seedSyntheticAuthorization(authorization);
       const restarted = await PostgresC3Repository.fromServerEnvironment();
       try {
         const stored = await restarted.readAuthorization(draft.intentId);

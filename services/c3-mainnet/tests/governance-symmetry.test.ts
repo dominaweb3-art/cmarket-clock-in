@@ -9,7 +9,7 @@ import {
   symmetryAdapterRegistryStatus,
   validateSquadsEvidence,
   type SquadsOnChainEvidence,
-} from "../src/index.ts";
+} from "./support/index.ts";
 import { vault, wallet } from "./fixtures.ts";
 
 const expected = {

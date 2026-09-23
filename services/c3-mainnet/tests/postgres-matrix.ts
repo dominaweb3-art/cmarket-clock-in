@@ -12,6 +12,7 @@ import {
   type NewDurableIntent,
 } from "../src/postgres.ts";
 import { authorizationFixture, fixtureSignature, wallet } from "./fixtures.ts";
+import { seedSyntheticAuthorization } from "./support/seed-synthetic-authorization.ts";
 
 const h = (digit: string) => digit.repeat(64);
 function input(overrides: Partial<NewDurableIntent> = {}): NewDurableIntent {
@@ -43,7 +44,7 @@ async function authorized(db: PostgresC3Repository, expiresAt?: Date) {
     }),
   );
   await db.transition(draft.intentId, 1n, "awaiting_wallet");
-  await db.createAuthorization(draft.intentId, 2n);
+  await seedSyntheticAuthorization(record);
   return { intentId: draft.intentId, record };
 }
 

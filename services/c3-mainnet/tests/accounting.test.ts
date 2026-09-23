@@ -14,7 +14,7 @@ import {
   parseDecimalToBaseUnits,
   quoteDeposit,
   validateReconciledVaultSnapshot,
-} from "../src/index.ts";
+} from "./support/index.ts";
 import { fabricatedVaultSnapshot, snapshotPolicy } from "./fixtures.ts";
 
 test("decimal conversion and 40/30/30 allocation stay exact", () => {

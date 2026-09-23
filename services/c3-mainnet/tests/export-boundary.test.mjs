@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
 const manifest = JSON.parse(
@@ -39,4 +40,54 @@ test("compiled package exports only the read-only facade", async () => {
       /(?:from|require\()["'](?:react-native|expo|@solana-mobile)/,
     );
   }
+});
+
+test("production artifact and package physically exclude synthetic builder state", () => {
+  const build = JSON.parse(
+    readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8"),
+  );
+  assert.deepEqual(build.include, ["src/**/*.ts"]);
+  assert.ok(build.exclude.includes("tests"));
+  for (const name of readdirSync(new URL("../src/", import.meta.url))) {
+    if (!name.endsWith(".ts")) continue;
+    const source = readFileSync(
+      new URL(`../src/${name}`, import.meta.url),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      source,
+      /from\s+["'][^"']*(?:tests|support|fixture|synthetic)[^"']*["']/,
+    );
+  }
+  const names = readdirSync(new URL("../dist/", import.meta.url));
+  const forbidden =
+    /authorizationContexts|authorizationRecords|manifestEvidenceRegistry|InMemoryManifestRepository|snapshotRepository|c3\.deposit-intent\.disabled-validation|synthetic-(?:builder|accounting|persistence|reconciliation|keeper|manifest)|tests\/support|Uint8Array\.of\(1,\s*2,\s*3,\s*4\)/;
+  for (const name of names) {
+    assert.match(name, /\.(?:js|d\.ts)$/);
+    assert.doesNotMatch(name, /builder\.js|fixture|synthetic/);
+    assert.doesNotMatch(
+      readFileSync(new URL(`../dist/${name}`, import.meta.url), "utf8"),
+      forbidden,
+      `Synthetic implementation escaped into dist/${name}`,
+    );
+  }
+  const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], {
+    cwd: new URL("..", import.meta.url),
+    encoding: "utf8",
+  });
+  assert.equal(packed.status, 0, "npm pack dry-run failed");
+  const files = JSON.parse(packed.stdout)[0].files.map((entry) => entry.path);
+  assert.ok(files.includes("dist/postgres.js"));
+  assert.ok(files.includes("dist/public.js"));
+  assert.ok(files.every((file) => !/^(?:tests|scripts|src)\//.test(file)));
+  assert.ok(files.every((file) => !/synthetic|fixture|builder\.js/.test(file)));
+});
+
+test("production authorization creation cannot use synthetic memory or caller policy", async () => {
+  const { PostgresC3Repository } = await import("../dist/postgres.js");
+  const repository = Object.create(PostgresC3Repository.prototype);
+  await assert.rejects(
+    repository.createAuthorization("c3-" + "a".repeat(32), 2n),
+    /C3_PRODUCTION_POLICY_NOT_CONFIGURED/,
+  );
 });

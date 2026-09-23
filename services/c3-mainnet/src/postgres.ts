@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import pg, { type PoolClient } from "pg";
 
-import { loadAuthorizationRecord } from "./builder.ts";
+import { verifyDurableAuthorization } from "./authorization.ts";
 import {
   C3_AMOUNTS,
   C3_MAINNET,
@@ -10,12 +10,12 @@ import {
 } from "./constants.ts";
 import { canonicalize } from "./manifest.ts";
 import { assertC3SchemaCurrent } from "./migrations.ts";
-import {
-  assertIntentTransition,
-  assertVerifiedSettlementEvidence,
-  type IntentState,
-  type VerifiedSettlementEvidence,
-} from "./reconciliation.ts";
+import { assertIntentTransition, type IntentState } from "./intent-state.ts";
+
+type VerifiedSettlementEvidence = Readonly<{
+  signature: string;
+  effectsFingerprint: string;
+}>;
 
 const HASH = /^[a-f0-9]{64}$/;
 const KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -361,31 +361,189 @@ export class PostgresC3Repository {
       throw new Error(
         "Durable authorization is absent; manual review required.",
       );
-    let value: unknown;
-    try {
-      value = JSON.parse(row.canonical_json);
-    } catch {
-      throw new Error("Durable authorization JSON is corrupt.");
-    }
-    if (!value || typeof value !== "object" || Array.isArray(value))
-      throw new Error("Durable authorization is corrupt.");
-    const record = value as Record<string, unknown>;
-    const { authorizationHash, ...payload } = record;
+    const record = verifyDurableAuthorization(
+      row.canonical_json,
+      row.authorization_hash,
+      {
+        intentId,
+        idempotencyKey: row.idempotency_key,
+        configurationHash: row.configuration_hash,
+        wallet: row.wallet,
+        operation: row.operation,
+        inputAmountBaseUnits: row.input_amount,
+      },
+    );
+    return Object.freeze(record);
+  }
+
+  /** Inspect committed authorization data; never accept caller-provided policy or manifest. */
+  async inspectDurableBuilderContext(intentId: string): Promise<
+    Readonly<{
+      intentId: string;
+      authorizationHash: string;
+      messageHash: string;
+      policyIdentifier: string;
+      revision: bigint;
+    }>
+  > {
+    assertExecutionDisabled();
+    const intent = await this.readIntent(intentId);
+    if (!intent?.authorizationHash || !intent.authorizationId)
+      throw new Error("Durable builder authorization is missing.");
+    const record = await this.readAuthorization(intentId);
+    const message = record.canonicalV0MessageBase64;
+    const messageHash = record.canonicalV0MessageHash;
+    const expiry = record.expiresAtUnix;
+    const transactionExpiry = record.transactionExpiresAtUnix;
+    const now = await this.#pool.query<{ now: Date }>(
+      "SELECT clock_timestamp() AS now",
+    );
+    const serverNow = now.rows[0]?.now;
+    if (!serverNow) throw new Error("Database clock unavailable.");
     if (
-      canonicalize(record) !== row.canonical_json ||
-      authorizationHash !== row.authorization_hash ||
-      hash(payload) !== row.authorization_hash ||
-      record.intentId !== intentId ||
-      record.idempotencyKey !== row.idempotency_key ||
-      record.configurationHash !== row.configuration_hash ||
-      record.wallet !== row.wallet ||
-      record.operation !== row.operation ||
-      record.inputAmountBaseUnits !== row.input_amount
+      record.executionCapability !== false ||
+      record.cluster !== C3_MAINNET.cluster ||
+      record.wallet !== intent.wallet ||
+      record.configurationHash !== intent.configurationHash ||
+      record.inputAmountBaseUnits !== intent.inputAmountBaseUnits.toString() ||
+      record.authorizationHash !== intent.authorizationHash ||
+      typeof record.policyIdentifier !== "string" ||
+      typeof message !== "string" ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(message) ||
+      Buffer.from(message, "base64").toString("base64") !== message ||
+      typeof messageHash !== "string" ||
+      !HASH.test(messageHash) ||
+      createHash("sha256")
+        .update(Buffer.from(message, "base64"))
+        .digest("hex") !== messageHash ||
+      !Number.isSafeInteger(expiry) ||
+      !Number.isSafeInteger(transactionExpiry) ||
+      serverNow.getTime() >= Number(expiry) * 1_000 ||
+      serverNow.getTime() >= Number(transactionExpiry) * 1_000 ||
+      serverNow.getTime() >= intent.expiresAt.getTime()
     )
       throw new Error(
-        "Durable authorization fingerprint or intent binding differs; manual review required.",
+        "Durable builder authorization is inconsistent or expired.",
       );
-    return Object.freeze(record);
+    return Object.freeze({
+      intentId,
+      authorizationHash: intent.authorizationHash,
+      messageHash,
+      policyIdentifier: record.policyIdentifier,
+      revision: intent.revision,
+    });
+  }
+
+  /** No reviewed executable Symmetry policy is registered in production. */
+  async buildProductionUnsigned(intentId: string): Promise<never> {
+    assertExecutionDisabled();
+    await this.inspectDurableBuilderContext(intentId);
+    throw new Error("C3_PRODUCTION_POLICY_NOT_CONFIGURED");
+  }
+
+  /** A repeated callback with the same signature must not create another event. */
+  async recordSubmittedSignature(
+    intentId: string,
+    expectedRevision: bigint,
+    signature: string,
+  ): Promise<DurableIntent> {
+    assertExecutionDisabled();
+    if (!SIGNATURE.test(signature))
+      throw new Error("Malformed submitted signature.");
+    return this.#transaction(async (client) => {
+      const result = await client.query<IntentRow>(
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
+        [intentId],
+      );
+      const current = result.rows[0] && decodeIntent(result.rows[0]);
+      if (!current) throw new Error("Submitted intent is missing.");
+      if (current.submittedSignature) {
+        if (current.submittedSignature !== signature)
+          throw new Error(
+            "Conflicting submitted signature; manual review required.",
+          );
+        return current;
+      }
+      if (
+        current.revision !== expectedRevision ||
+        current.state !== "awaiting_wallet" ||
+        !current.authorizationHash
+      )
+        throw new Error("Wallet submission state is not ready.");
+      const authorization = await this.readAuthorization(intentId);
+      const now = await client.query<{ now: Date }>(
+        "SELECT clock_timestamp() AS now",
+      );
+      if (
+        !now.rows[0] ||
+        now.rows[0].now >= current.expiresAt ||
+        !Number.isSafeInteger(authorization.expiresAtUnix) ||
+        now.rows[0].now.getTime() >= Number(authorization.expiresAtUnix) * 1_000
+      )
+        throw new Error("Expired authorization cannot be submitted.");
+      const updated = await client.query<IntentRow>(
+        `UPDATE c3_intents SET state='intent_submitted',submitted_signature=$1,
+         revision=revision+1,updated_at=clock_timestamp()
+         WHERE intent_id=$2 AND revision=$3 AND state='awaiting_wallet' AND submitted_signature IS NULL
+         RETURNING ${INTENT_COLUMNS}`,
+        [signature, intentId, current.revision.toString()],
+      );
+      if (!updated.rows[0] || updated.rowCount !== 1)
+        throw new Error("Submitted signature compare-and-swap conflict.");
+      await this.#event(client, intentId, "state_transition", {
+        intentId,
+        revision: (current.revision + 1n).toString(),
+        state: "intent_submitted",
+        signature,
+      });
+      return decodeIntent(updated.rows[0]);
+    });
+  }
+
+  /** An uncertain callback is quarantined; this never submits or retries it. */
+  async requireSubmissionReconciliation(
+    intentId: string,
+    expectedRevision: bigint,
+  ): Promise<DurableIntent> {
+    assertExecutionDisabled();
+    return this.#transaction(async (client) => {
+      const result = await client.query<IntentRow>(
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
+        [intentId],
+      );
+      const current = result.rows[0] && decodeIntent(result.rows[0]);
+      if (!current?.submittedSignature || !current.authorizationHash)
+        throw new Error("Uncertain submission has no durable signature.");
+      if (
+        current.state === "manual_review" &&
+        current.manualReviewReason === "reconciliation_required"
+      )
+        return current;
+      if (current.state !== "intent_submitted")
+        throw new Error(
+          "Uncertain submission cannot be recovered from this state.",
+        );
+      if (current.revision !== expectedRevision)
+        throw new Error("Uncertain submission compare-and-swap conflict.");
+      await this.readAuthorization(intentId);
+      const updated = await client.query<IntentRow>(
+        `UPDATE c3_intents SET state='manual_review',manual_review_reason='reconciliation_required',
+         revision=revision+1,updated_at=clock_timestamp()
+         WHERE intent_id=$1 AND revision=$2 AND state='intent_submitted'
+         RETURNING ${INTENT_COLUMNS}`,
+        [intentId, current.revision.toString()],
+      );
+      if (!updated.rows[0] || updated.rowCount !== 1)
+        throw new Error("Uncertain submission compare-and-swap conflict.");
+      await this.#event(client, intentId, "state_transition", {
+        intentId,
+        revision: (current.revision + 1n).toString(),
+        state: "manual_review",
+        reasonCode: "reconciliation_required",
+        signature: current.submittedSignature,
+      });
+      return decodeIntent(updated.rows[0]);
+    });
   }
 
   async createAuthorization(
@@ -393,71 +551,9 @@ export class PostgresC3Repository {
     expectedRevision: bigint,
   ): Promise<string> {
     assertExecutionDisabled();
-    // Only the sealed builder can supply a trusted authorization. The repository
-    // never accepts an arbitrary policy or manifest from its caller.
-    const record: Record<string, unknown> = loadAuthorizationRecord(
-      intentId,
-    ) as unknown as Record<string, unknown>;
-    const canonicalJson = canonicalize(record);
-    const { authorizationHash, ...payload } = record;
-    if (
-      typeof authorizationHash !== "string" ||
-      !HASH.test(authorizationHash) ||
-      hash(payload) !== authorizationHash ||
-      canonicalize(record) !== canonicalJson
-    )
-      throw new Error("Authorization canonical hash is invalid.");
-    return this.#transaction(async (client) => {
-      const result = await client.query<IntentRow>(
-        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
-        [intentId],
-      );
-      const current = result.rows[0] && decodeIntent(result.rows[0]);
-      if (
-        !current ||
-        current.revision !== expectedRevision ||
-        current.state !== "awaiting_wallet" ||
-        current.authorizationHash
-      )
-        throw new Error("Authorization compare-and-swap conflict.");
-      if (
-        record.intentId !== intentId ||
-        record.idempotencyKey !== current.idempotencyKey ||
-        record.configurationHash !== current.configurationHash ||
-        record.wallet !== current.wallet ||
-        record.operation !== current.operation ||
-        record.inputAmountBaseUnits !== current.inputAmountBaseUnits.toString()
-      )
-        throw new Error("Authorization does not bind the durable intent.");
-      const authorizationId = randomUUID();
-      await client.query(
-        "INSERT INTO c3_authorizations (authorization_id,intent_id,intent_revision,authorization_hash,canonical_json) VALUES ($1,$2,$3,$4,$5)",
-        [
-          authorizationId,
-          intentId,
-          expectedRevision.toString(),
-          authorizationHash,
-          canonicalJson,
-        ],
-      );
-      const updated = await client.query(
-        "UPDATE c3_intents SET authorization_id=$1,authorization_hash=$2,revision=revision+1,updated_at=clock_timestamp() WHERE intent_id=$3 AND revision=$4 AND state='awaiting_wallet' AND authorization_id IS NULL",
-        [
-          authorizationId,
-          authorizationHash,
-          intentId,
-          expectedRevision.toString(),
-        ],
-      );
-      if (updated.rowCount !== 1)
-        throw new Error("Authorization compare-and-swap conflict.");
-      await this.#event(client, intentId, "authorization_created", {
-        intentId,
-        revision: (expectedRevision + 1n).toString(),
-        fingerprint: authorizationHash,
-      });
-      return authorizationId;
-    });
+    void intentId;
+    void expectedRevision;
+    throw new Error("C3_PRODUCTION_POLICY_NOT_CONFIGURED");
   }
 
   async transition(
@@ -646,56 +742,12 @@ export class PostgresC3Repository {
     expectedRevision: bigint,
     evidence: VerifiedSettlementEvidence,
   ): Promise<DurableIntent> {
-    return this.#transaction(async (client) => {
-      const result = await client.query<IntentRow>(
-        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
-        [intentId],
-      );
-      const current = result.rows[0] && decodeIntent(result.rows[0]);
-      if (
-        !current ||
-        current.revision !== expectedRevision ||
-        !current.submittedSignature
-      )
-        throw new Error("Settlement compare-and-swap conflict.");
-      assertIntentTransition(current.state, "settled");
-      assertVerifiedSettlementEvidence(evidence, current.submittedSignature);
-      const clock = await client.query<{ now: Date }>(
-        "SELECT clock_timestamp() AS now",
-      );
-      const serverNow = clock.rows[0]?.now;
-      if (!serverNow) throw new Error("Database clock unavailable.");
-      if (serverNow.getTime() >= current.expiresAt.getTime())
-        throw new Error("Expired settlement requires manual review.");
-      await client.query(
-        "INSERT INTO c3_evidence (evidence_id,intent_id,evidence_kind,fingerprint,signature) VALUES ($1,$2,'settlement',$3,$4)",
-        [
-          randomUUID(),
-          intentId,
-          evidence.effectsFingerprint,
-          evidence.signature,
-        ],
-      );
-      const updated = await client.query<IntentRow>(
-        `UPDATE c3_intents SET state='settled',revision=revision+1,updated_at=clock_timestamp(),settled_effects_hash=$1 WHERE intent_id=$2 AND revision=$3 AND state=$4 RETURNING ${INTENT_COLUMNS}`,
-        [
-          evidence.effectsFingerprint,
-          intentId,
-          expectedRevision.toString(),
-          current.state,
-        ],
-      );
-      if (updated.rowCount !== 1 || !updated.rows[0])
-        throw new Error("Settlement compare-and-swap conflict.");
-      await this.#event(client, intentId, "reconciliation_decision", {
-        intentId,
-        revision: (expectedRevision + 1n).toString(),
-        fingerprint: evidence.effectsFingerprint,
-        signature: evidence.signature,
-        state: "settled",
-      });
-      return decodeIntent(updated.rows[0]);
-    });
+    // No production reconciler or reviewed policy exists in this checkpoint.
+    // Test-only synthetic evidence must never authorize a durable settlement.
+    void intentId;
+    void expectedRevision;
+    void evidence;
+    throw new Error("C3_PRODUCTION_POLICY_NOT_CONFIGURED");
   }
 
   /** Outbox delivery is not a blockchain retry. Delivery claim is CAS-bounded. */

@@ -4,15 +4,15 @@ import {
   loadAuthorizationRecord,
   type C3AuthorizationManifest,
   type TrustedEffect,
-} from "./builder.ts";
-import { C3_AMOUNTS, C3_MAINNET } from "./constants.ts";
-import { canonicalize } from "./manifest.ts";
+} from "./synthetic-builder.ts";
+import { C3_AMOUNTS, C3_MAINNET } from "../../src/constants.ts";
+import { canonicalize } from "../../src/manifest.ts";
 import {
   decodeBase58,
   decodeVersionedMessage,
   encodeBase58,
   publicKeyBytes,
-} from "./solana.ts";
+} from "../../src/solana.ts";
 
 type RegisteredRpcProvider = Readonly<{
   providerId: string;

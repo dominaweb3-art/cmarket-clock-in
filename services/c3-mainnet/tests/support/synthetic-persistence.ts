@@ -1,10 +1,10 @@
-import { loadAuthorizationRecord } from "./builder.ts";
+import { loadAuthorizationRecord } from "./synthetic-builder.ts";
 import {
   assertIntentTransition,
   assertVerifiedSettlementEvidence,
   type IntentState,
   type VerifiedSettlementEvidence,
-} from "./reconciliation.ts";
+} from "./synthetic-reconciliation.ts";
 
 export type PersistedIntent = Readonly<{
   schemaVersion: "c3-intent/v2";

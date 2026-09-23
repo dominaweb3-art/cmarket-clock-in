@@ -10,5 +10,5 @@
     "declarationMap": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["tests", "scripts", "src/index.ts"]
+  "exclude": ["tests", "scripts"]
 }

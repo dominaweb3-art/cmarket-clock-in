@@ -11,7 +11,7 @@ import {
   type C3AuthorizationManifest,
   type ReconciledVaultSnapshot,
   type VaultSnapshotPolicy,
-} from "../src/index.ts";
+} from "./support/index.ts";
 
 export const wallet = C3_MAINNET.cbBtcMint;
 export const vault = C3_MAINNET.symmetryGlobalConfig;

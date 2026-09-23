@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import * as production from "../src/index.ts";
+import * as production from "../src/public.ts";
 import {
   C3_MAINNET,
   C3_MAINNET_EXECUTION_CAPABILITY,
@@ -16,7 +16,7 @@ import {
   loadAuthorizationRecord,
   validateDeploymentManifest,
   type C3DeploymentManifest,
-} from "../src/index.ts";
+} from "./support/index.ts";
 import {
   authorizationFixture,
   makeV0Message,

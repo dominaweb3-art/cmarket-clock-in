@@ -7,7 +7,7 @@ import {
   planAggregatedRebalance,
   reconcileFinalizedSignature,
   type PersistedIntent,
-} from "../src/index.ts";
+} from "./support/index.ts";
 import {
   authorizationFixture,
   fixtureSignature,

@@ -4,14 +4,14 @@ import {
   C3_MAINNET,
   C3_MAINNET_EXECUTION_CAPABILITY,
   assertExecutionDisabled,
-} from "./constants.ts";
-import { calculateAllocationAndDrift } from "./accounting.ts";
+} from "../../src/constants.ts";
+import { calculateAllocationAndDrift } from "./synthetic-accounting.ts";
 import {
   assertU64,
   checkedAddU64,
   checkedSubU64,
   checkedMulDivFloorU64,
-} from "./math.ts";
+} from "../../src/math.ts";
 
 type KeeperEvidence = Readonly<{
   evidenceId: string;

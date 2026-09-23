@@ -1,3 +1,4 @@
+/** Test-only synthetic builder. Never compile or package this module. */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import {
@@ -6,16 +7,16 @@ import {
   C3_MAINNET,
   C3_MAINNET_EXECUTION_CAPABILITY,
   assertExecutionDisabled,
-} from "./constants.ts";
-import { canonicalize } from "./manifest.ts";
-import { checkedMulDivFloorU64 } from "./math.ts";
+} from "../../src/constants.ts";
+import { canonicalize } from "../../src/manifest.ts";
+import { checkedMulDivFloorU64 } from "../../src/math.ts";
 import {
   decodeVersionedMessage,
   deriveAssociatedTokenAddress,
   publicKeyBytes,
   type DecodedV0Message,
   type LookupTableContents,
-} from "./solana.ts";
+} from "../../src/solana.ts";
 
 export type C3Operation =
   | "seed_deposit"

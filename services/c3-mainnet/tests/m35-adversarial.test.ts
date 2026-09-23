@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import * as builderModule from "../src/builder.ts";
-import * as publicModule from "../src/index.ts";
+import * as builderModule from "./support/synthetic-builder.ts";
+import * as publicModule from "../src/public.ts";
 import {
   C3_AMOUNTS,
   C3_MAINNET,
@@ -18,7 +18,7 @@ import {
   mulDivFloor,
   planAggregatedRebalance,
   type PersistedIntent,
-} from "../src/index.ts";
+} from "./support/index.ts";
 import {
   authorizationFixture,
   fixtureSignature,

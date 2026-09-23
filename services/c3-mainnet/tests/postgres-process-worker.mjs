@@ -3,6 +3,7 @@ import { PostgresC3Repository } from "../src/postgres.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { authorizationFixture, fixtureSignature } from "./fixtures.ts";
+import { seedSyntheticAuthorization } from "./support/seed-synthetic-authorization.ts";
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -30,7 +31,7 @@ try {
       expiresAt: new Date(Date.now() + 60_000),
     });
     await repository.transition(authorization.intentId, 1n, "awaiting_wallet");
-    await repository.createAuthorization(authorization.intentId, 2n);
+    await seedSyntheticAuthorization(authorization);
     await repository.transition(
       authorization.intentId,
       3n,
@@ -43,6 +44,67 @@ try {
       JSON.stringify({
         intentId: authorization.intentId,
         authorizationHash: authorization.authorizationHash,
+      }),
+    );
+  } else if (process.argv[2] === "durable-write") {
+    const authorization = authorizationFixture();
+    await repository.createIntent({
+      intentId: authorization.intentId,
+      idempotencyKey: authorization.idempotencyKey,
+      configurationVersion: authorization.configurationVersion,
+      configurationHash: authorization.configurationHash,
+      wallet: authorization.wallet,
+      operation: authorization.operation,
+      inputAmountBaseUnits: BigInt(authorization.inputAmountBaseUnits),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await repository.transition(authorization.intentId, 1n, "awaiting_wallet");
+    await seedSyntheticAuthorization(authorization);
+    const context = await repository.inspectDurableBuilderContext(
+      authorization.intentId,
+    );
+    if (context.authorizationHash !== authorization.authorizationHash)
+      throw new Error("Durable builder context differs from authorization.");
+    await repository.recordSubmittedSignature(
+      authorization.intentId,
+      3n,
+      fixtureSignature,
+    );
+    process.stdout.write(JSON.stringify({ intentId: authorization.intentId }));
+  } else if (process.argv[2] === "durable-recover") {
+    const intentId = process.argv[3];
+    const authorization = await repository.readAuthorization(intentId);
+    const context = await repository.inspectDurableBuilderContext(intentId);
+    const prior = await repository.readIntent(intentId);
+    if (
+      prior?.state !== "intent_submitted" ||
+      prior.submittedSignature !== fixtureSignature ||
+      context.authorizationHash !== authorization.authorizationHash
+    )
+      throw new Error("Durable submitted state was not recovered.");
+    const recovered = await repository.requireSubmissionReconciliation(
+      intentId,
+      4n,
+    );
+    const repeated = await repository.requireSubmissionReconciliation(
+      intentId,
+      4n,
+    );
+    if (
+      recovered.state !== "manual_review" ||
+      recovered.manualReviewReason !== "reconciliation_required" ||
+      recovered.submittedSignature !== fixtureSignature ||
+      recovered.revision !== repeated.revision
+    )
+      throw new Error(
+        "Durable recovery did not preserve signature or idempotency.",
+      );
+    process.stdout.write(
+      JSON.stringify({
+        intentId,
+        revision: recovered.revision.toString(),
+        signaturePreserved: true,
+        idempotent: true,
       }),
     );
   } else if (process.argv[2] === "read") {
