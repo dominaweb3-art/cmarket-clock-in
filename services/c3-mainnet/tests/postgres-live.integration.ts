@@ -8,10 +8,12 @@ import pg from "pg";
 import { C3_AMOUNTS } from "../src/constants.ts";
 import {
   applyC3SchemaMigration,
+  applyC3ManifestOrderingMigration,
   assertC3SchemaCurrent,
 } from "../src/migrations.ts";
 import { PostgresC3Repository } from "../src/postgres.ts";
 import { authorizationFixture, fixtureSignature, wallet } from "./fixtures.ts";
+import { runPostgresMatrix } from "./postgres-matrix.ts";
 
 const testUrl = process.env.DATABASE_URL
   ? new URL(process.env.DATABASE_URL)
@@ -70,18 +72,28 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
   t.after(async () => {
     await pool.end();
   });
-  const client = await pool.connect();
-  try {
-    assert.equal(await applyC3SchemaMigration(client), "applied");
-    assert.equal(await applyC3SchemaMigration(client), "already_applied");
-    await assertC3SchemaCurrent(pool);
-  } finally {
-    client.release();
-  }
-  const tables = await pool.query<{ tablename: string }>(
-    "SELECT tablename FROM pg_tables WHERE schemaname='c3' AND tablename LIKE 'c3_%'",
+  await t.test(
+    "M01 clean migration applies both versioned schemas",
+    async () => {
+      const client = await pool.connect();
+      try {
+        assert.equal(await applyC3SchemaMigration(client), "applied");
+        assert.equal(await applyC3SchemaMigration(client), "already_applied");
+        assert.equal(await applyC3ManifestOrderingMigration(client), "applied");
+        assert.equal(
+          await applyC3ManifestOrderingMigration(client),
+          "already_applied",
+        );
+        await assertC3SchemaCurrent(pool);
+      } finally {
+        client.release();
+      }
+      const tables = await pool.query<{ tablename: string }>(
+        "SELECT tablename FROM pg_tables WHERE schemaname='c3' AND tablename LIKE 'c3_%'",
+      );
+      assert.equal(tables.rows.length, 10);
+    },
   );
-  assert.equal(tables.rows.length, 10);
   const db = await PostgresC3Repository.fromServerEnvironment();
   t.after(async () => {
     await db.close();
@@ -670,4 +682,5 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
       );
     },
   );
+  await runPostgresMatrix(t, pool, db);
 });
