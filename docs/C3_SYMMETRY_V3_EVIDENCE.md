@@ -1,6 +1,6 @@
 # C3 / Symmetry V3: expediente de evidencia de producción
 
-**Clasificación:** SHARED. **Corte de investigación:** 2026-09-23 17:20:52 UTC. **Red:** Solana Mainnet. **Decisión:** `NO_GO_EXTERNAL_EVIDENCE_REQUIRED`. Esta es una investigación de lectura pública y un manifiesto **no ejecutable**, no una aprobación de inversión, despliegue, custodia ni política de transacciones. M4.1 pasó su puerta de infraestructura PostgreSQL (30/30 escenarios + 20 diagnósticos = 50/50), pero no existe una política Symmetry aprobada, una bóveda C3 ni capacidad Mainnet activa.
+**Clasificación:** SHARED. **Corte de investigación inicial:** 2026-09-23 17:20:52 UTC. **Red:** Solana Mainnet. **Decisión:** `NO_GO_EXTERNAL_EVIDENCE_REQUIRED`. Esta es una investigación de lectura pública y un manifiesto **no ejecutable**, no una aprobación de inversión, despliegue, custodia ni política de transacciones. M4.1 pasó su puerta de infraestructura PostgreSQL (30/30 escenarios + 20 diagnósticos = 50/50), pero no existe una política Symmetry aprobada, una bóveda C3 ni capacidad Mainnet activa.
 
 ## Fuentes y procedencia
 
@@ -59,4 +59,4 @@ El owner y las cifras RPC no prueban por sí mismos emisor jurídico, backing, c
 
 ## Condiciones de salida del NO-GO
 
-Pedir a Symmetry la [solicitud técnica preparada, aún no enviada](SYMMETRY_V3_TECHNICAL_REQUEST.md): fuente/commit exacto que corresponda a SDK, binario y programa; IDL y layouts completos; auditoría y remediaciones vinculadas al despliegue; autoridad/configuración/keeper; bóveda de tres activos con oráculos; ejemplos finalizados de depósito→mint y burn→USDC del **mismo tipo de vault**; cálculo de fees/bounty y prueba de mínimos/rutas a 1 USDC. Después, revisión independiente de Security y aprobación de Squads, sin habilitar ejecución en este expediente. Ningún dato observado autoriza hoy desplegar, cobrar, firmar, mover fondos o anunciar C3 funcional.
+El propietario informó que envió la [solicitud técnica](SYMMETRY_V3_TECHNICAL_REQUEST.md) el 2026-09-23 al contacto oficial de operaciones Symmetry; **se espera respuesta**, sin acuse o aprobación verificados. Se solicitaron fuente/commit, IDL/layouts, auditoría, gobernanza, oráculos, ejemplos finalizados del **mismo tipo de vault C3**, fees/bounty y rutas a 1 USDC. La [decodificación transaccional pública](C3_SYMMETRY_V3_TRANSACTION_EVIDENCE.md) añade evidencia histórica sin resolver la salida C3 exclusivamente a USDC. Después se requieren revisión independiente Security y aprobación Squads. Ningún dato observado autoriza hoy desplegar, cobrar, firmar, mover fondos o anunciar C3 funcional.

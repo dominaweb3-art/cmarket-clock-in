@@ -16,7 +16,7 @@
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "lint:check": "eslint src scripts tests",
+    "lint:check": "eslint src scripts tests research",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
@@ -25,6 +25,7 @@
     "test:security": "node --experimental-strip-types --test tests/security.test.ts",
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",
     "test:boundary": "npm run build && node --test tests/export-boundary.test.mjs",
+    "test:symmetry-research": "node --experimental-strip-types --test research/symmetry-v3/*.test.ts",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",
     "c3:mainnet:deployment-readiness": "node --experimental-strip-types scripts/readiness.ts deployment"

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
@@ -90,4 +90,68 @@ test("production authorization creation cannot use synthetic memory or caller po
     repository.createAuthorization("c3-" + "a".repeat(32), 2n),
     /C3_PRODUCTION_POLICY_NOT_CONFIGURED/,
   );
+});
+
+test("Symmetry transaction research is excluded from all production entrypoints", async () => {
+  const build = JSON.parse(
+    readFileSync(new URL("../tsconfig.build.json", import.meta.url), "utf8"),
+  );
+  assert.deepEqual(build.include, ["src/**/*.ts"]);
+  assert.ok(build.exclude.includes("tests"));
+  const names = readdirSync(new URL("../dist/", import.meta.url));
+  assert.ok(
+    names.every(
+      (name) =>
+        !/research|symmetry-v3|observed-transactions|fixture/.test(name),
+    ),
+  );
+  for (const name of names.filter((item) => /\.(?:js|d\.ts)$/.test(item))) {
+    const source = readFileSync(
+      new URL(`../dist/${name}`, import.meta.url),
+      "utf8",
+    );
+    assert.doesNotMatch(
+      source,
+      /research\/symmetry-v3|symmetry-v3-observed-transactions|decodePublicFixture|reconcileObservedCandidate/,
+    );
+  }
+  const constants = await import("../dist/constants.js");
+  assert.equal(constants.C3_MAINNET_EXECUTION_CAPABILITY, false);
+  const symmetry = await import("../dist/symmetry.js");
+  assert.deepEqual(
+    symmetry.symmetryAdapterRegistryStatus().enabledAdapterIds,
+    [],
+  );
+  const packed = spawnSync("npm", ["pack", "--dry-run", "--json"], {
+    cwd: new URL("..", import.meta.url),
+    encoding: "utf8",
+  });
+  assert.equal(packed.status, 0);
+  const files = JSON.parse(packed.stdout)[0].files.map((item) => item.path);
+  assert.ok(
+    files.every(
+      (file) => !/research|fixture|observed-transactions|\.map$/.test(file),
+    ),
+  );
+  assert.deepEqual(Object.keys(manifest.exports), ["."]);
+  const mobile = new URL("../../../apps/mobile/", import.meta.url);
+  const walk = (directory) =>
+    readdirSync(directory).flatMap((name) => {
+      if (["node_modules", ".expo", "android", "dist"].includes(name))
+        return [];
+      const item = new URL(
+        `${name}${statSync(new URL(name, directory)).isDirectory() ? "/" : ""}`,
+        directory,
+      );
+      return statSync(item).isDirectory()
+        ? walk(item)
+        : /\.(?:ts|tsx|js|jsx)$/.test(name)
+          ? [item]
+          : [];
+    });
+  for (const file of walk(mobile))
+    assert.doesNotMatch(
+      readFileSync(file, "utf8"),
+      /(?:from|require\()[^\n]*research\/symmetry-v3/,
+    );
 });

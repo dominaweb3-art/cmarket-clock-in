@@ -1,6 +1,6 @@
 # Technical request: Symmetry V3 integration for C Market C3
 
-Status: request prepared, **not sent**. Prepared 2026-09-22; updated with read-only evidence 2026-09-23. Mainnet execution remains disabled. Evidence and current NO-GO: [C3 Symmetry V3 evidence](C3_SYMMETRY_V3_EVIDENCE.md).
+Status: the project owner reports this request was **sent 2026-09-23 to the official Symmetry operations contact**; response pending. No acknowledgment or approval has been independently verified. Prepared 2026-09-22; updated with read-only evidence 2026-09-23. Mainnet execution remains disabled. Evidence and current NO-GO: [C3 Symmetry V3 evidence](C3_SYMMETRY_V3_EVIDENCE.md) and [public transaction decoder](C3_SYMMETRY_V3_TRANSACTION_EVIDENCE.md).
 
 ## Copy-paste message
 

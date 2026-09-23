@@ -1,0 +1,1511 @@
+{
+  "schemaVersion": 1,
+  "classification": "SHARED",
+  "status": "research",
+  "cluster": "mainnet-beta",
+  "programId": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+  "decision": "NO_GO_EXTERNAL_EVIDENCE_REQUIRED",
+  "sourceRpcUrls": [
+    "https://api.mainnet-beta.solana.com",
+    "https://solana-rpc.publicnode.com"
+  ],
+  "independentProductionQuorumProven": false,
+  "transactions": [
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "slot": 449616384,
+      "blockTime": 1790143464,
+      "retrievedAtUtc": "2026-09-23T19:53:16.789Z",
+      "primaryResponseSha256": "bb72aab59002553fab9a0e1fb3acbcb69e5c80eabe36f714b0049a15bbd703ae",
+      "secondaryResponseSha256": "bb72aab59002553fab9a0e1fb3acbcb69e5c80eabe36f714b0049a15bbd703ae",
+      "rawTransactionSha256": "b063124764b71ca877da91c2e355f817a2db81ff4a6783c8fc1bd5d27124053d",
+      "messageSha256": "ff1926f6bb029bccd592b8edd760b0dc2e34a88d33724d67797ab38a86866382",
+      "evidenceFingerprint": "b89c034629d935c20a5fca23c9a83a9ef87e0110bbe2afdeb450229ebfc769a7",
+      "wireBytes": 1208,
+      "feePayer": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+      "lookupTableCount": 0,
+      "outerInstructionCount": 9,
+      "innerInstructionCount": 4
+    },
+    {
+      "stage": "shareMint",
+      "signature": "4pNx6EWqdAdz5r68XqVF2xZsHbRThW8KNdog3Mr2qXDuB15uA48i9oVaDs31nEiQG1U7U223uURdfYQXJeFFcKfE",
+      "slot": 449618333,
+      "blockTime": 1790143980,
+      "retrievedAtUtc": "2026-09-23T19:53:17.941Z",
+      "primaryResponseSha256": "5ca61fc16817036ed2014d77016b2ab88fe31a281175ef79b2abc968bfc9b49b",
+      "secondaryResponseSha256": "5ca61fc16817036ed2014d77016b2ab88fe31a281175ef79b2abc968bfc9b49b",
+      "rawTransactionSha256": "ce1ea9d808e072715045a9779961d3cc4722acf2031f724e9f93e20a0c90e48e",
+      "messageSha256": "7686038272276ddbed66bb5410efa68bc98b5004bf719b7b6aa32394591832dc",
+      "evidenceFingerprint": "54cffd99fbc5a6f8f6c02c15b1f7d84d8f0c940c3a1b9e884d0f90bd77b6253d",
+      "wireBytes": 629,
+      "feePayer": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+      "lookupTableCount": 0,
+      "outerInstructionCount": 3,
+      "innerInstructionCount": 2
+    },
+    {
+      "stage": "shareBurn",
+      "signature": "5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW",
+      "slot": 449630630,
+      "blockTime": 1790147231,
+      "retrievedAtUtc": "2026-09-23T19:53:19.154Z",
+      "primaryResponseSha256": "13a1816e92c2d11bba0e7b22cf4d1f561b94a1f4234fcf73a797030fc1677b33",
+      "secondaryResponseSha256": "13a1816e92c2d11bba0e7b22cf4d1f561b94a1f4234fcf73a797030fc1677b33",
+      "rawTransactionSha256": "352ba6b21568715d745030af4d42ec1d507f55883c0906c894290e1ba6ba852b",
+      "messageSha256": "1944f7a2e153c73a4ea9ccbadddfc9fa8d3ecb7037ce4740d2cefeecf8702ada",
+      "evidenceFingerprint": "2c902db30e455d97e1071f6ace850559831932d9b2276e1831b8afee3038871d",
+      "wireBytes": 1072,
+      "feePayer": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+      "lookupTableCount": 0,
+      "outerInstructionCount": 10,
+      "innerInstructionCount": 5
+    },
+    {
+      "stage": "usdcRedeem",
+      "signature": "FXcx1hLT7fc2wHMvF2GMZQ2V7XdqU3BgDQY54nooCF2ovW5RndwV3eXAgPC5wRWTvGo2EM2axzEPr3pMtuUF1kj",
+      "slot": 449631412,
+      "blockTime": 1790147437,
+      "retrievedAtUtc": "2026-09-23T19:53:20.168Z",
+      "primaryResponseSha256": "2359425149b96dac5ed3e3a3233ae7205499ae5ce372dc8eb907dfa73e286704",
+      "secondaryResponseSha256": "2359425149b96dac5ed3e3a3233ae7205499ae5ce372dc8eb907dfa73e286704",
+      "rawTransactionSha256": "fe4b2ed3522e11bc18838329855d822263963784b524e4817975140fa31b1523",
+      "messageSha256": "2902c516b3a0697e21ed26aad48cdf237df1c966e74fb42911d9c8a75978f5ba",
+      "evidenceFingerprint": "8a8c99a6feeae7970a7a3723a737a128939e8c2b6ed0c79a1ec987542f5cd377",
+      "wireBytes": 572,
+      "feePayer": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+      "lookupTableCount": 0,
+      "outerInstructionCount": 4,
+      "innerInstructionCount": 1
+    }
+  ],
+  "observedSymmetryInstructions": [
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "location": "outer",
+      "outerIndex": 2,
+      "discriminatorHex": "7850f57bd495a32f",
+      "rawInstructionDataSha256": "9201b9a28d3f95e3803ca61bcc67592126216667f77ca143a1375bf2033b8e1c",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [0, 0, 2, 3, 4, 16, 17, 18, 13],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "index": 4,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 16,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "index": 17,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "SysvarRent111111111111111111111111111111111",
+          "index": 18,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 13,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: CreateRebalanceIntentHandler",
+      "candidateSemanticName": "CreateRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3775000",
+          "post": "25000",
+          "delta": "-3750000",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521947406",
+          "delta": "4349997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "24977046",
+          "post": "4977046",
+          "delta": "-20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20000000",
+          "delta": "20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-630619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3750000"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4349997"
+        }
+      ]
+    },
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "location": "outer",
+      "outerIndex": 3,
+      "discriminatorHex": "47ccf3b7d1766f5e",
+      "rawInstructionDataSha256": "f81e15653aaee4bdcff35d65afb0378e833386e012ae58bb6e9e67e56682713d",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [3],
+      "accounts": [
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        }
+      ],
+      "observedLog": "Program log: Instruction: ResizeRebalanceIntentHandler",
+      "candidateSemanticName": "ResizeRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3775000",
+          "post": "25000",
+          "delta": "-3750000",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521947406",
+          "delta": "4349997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "24977046",
+          "post": "4977046",
+          "delta": "-20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20000000",
+          "delta": "20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-630619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3750000"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4349997"
+        }
+      ]
+    },
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "location": "outer",
+      "outerIndex": 4,
+      "discriminatorHex": "7fd7296ef4b38307",
+      "rawInstructionDataSha256": "279f4045d002054e176be7cc0a1d5d10cafc3041b28c54b6d36aa867f563eb42",
+      "rawInstructionDataLength": 126,
+      "accountIndexes": [
+        0, 0, 2, 3, 4, 5, 6, 16, 19, 1, 7, 8, 9, 10, 15, 13, 14, 20
+      ],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "index": 4,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "index": 5,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "index": 6,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 16,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112",
+          "index": 19,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "index": 1,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "index": 7,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "index": 8,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "index": 9,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "index": 10,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+          "index": 15,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 13,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "index": 14,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "index": 20,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: InitRebalanceIntentHandler",
+      "candidateSemanticName": "InitRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3775000",
+          "post": "25000",
+          "delta": "-3750000",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521947406",
+          "delta": "4349997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "24977046",
+          "post": "4977046",
+          "delta": "-20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20000000",
+          "delta": "20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-630619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3750000"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4349997"
+        }
+      ]
+    },
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "location": "outer",
+      "outerIndex": 7,
+      "discriminatorHex": "585c9edb5347efa4",
+      "rawInstructionDataSha256": "a8cf0d5c53b0e6016d19a7f9f6e80986dfb0bcbbc7cd954979eb34c7dfe7a463",
+      "rawInstructionDataLength": 88,
+      "accountIndexes": [0, 2, 3, 14, 22, 20, 13, 23, 11, 12],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "index": 14,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "index": 22,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "index": 20,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 13,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "index": 23,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "index": 11,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "index": 12,
+          "signer": false,
+          "writable": true
+        }
+      ],
+      "observedLog": "Program log: Instruction: DepositTokensHandler",
+      "candidateSemanticName": "DepositTokensHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3775000",
+          "post": "25000",
+          "delta": "-3750000",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521947406",
+          "delta": "4349997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "24977046",
+          "post": "4977046",
+          "delta": "-20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20000000",
+          "delta": "20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-630619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3750000"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4349997"
+        }
+      ]
+    },
+    {
+      "stage": "usdcDeposit",
+      "signature": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+      "location": "outer",
+      "outerIndex": 8,
+      "discriminatorHex": "40eeabc687fd2509",
+      "rawInstructionDataSha256": "a62925b9b46a0e38dbe780c208ae5822f49c04789f770f93b37abb9aafd1a8f2",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [0, 3, 16],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 16,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: LockDepositsHandler",
+      "candidateSemanticName": "LockDepositsHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3775000",
+          "post": "25000",
+          "delta": "-3750000",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521947406",
+          "delta": "4349997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "24977046",
+          "post": "4977046",
+          "delta": "-20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20000000",
+          "delta": "20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-630619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3750000"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4349997"
+        }
+      ]
+    },
+    {
+      "stage": "shareMint",
+      "signature": "4pNx6EWqdAdz5r68XqVF2xZsHbRThW8KNdog3Mr2qXDuB15uA48i9oVaDs31nEiQG1U7U223uURdfYQXJeFFcKfE",
+      "location": "outer",
+      "outerIndex": 0,
+      "discriminatorHex": "a1cf302d079ce98f",
+      "rawInstructionDataSha256": "140a4517f1f9808705433ccba8824644d45c6bd6c425ac61a34f538bee01d5bb",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [0, 1, 2, 3, 4, 5, 9, 6, 7, 8, 10, 11, 12, 13],
+      "accounts": [
+        {
+          "address": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 1,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 4,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "index": 5,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 9,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "index": 6,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "index": 7,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+          "index": 8,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "index": 10,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "index": 11,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "index": 12,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 13,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: MintBasketHandler",
+      "candidateSemanticName": "MintBasketHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "20",
+          "delta": "20",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+          "delta": "-30000"
+        }
+      ]
+    },
+    {
+      "stage": "shareBurn",
+      "signature": "5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW",
+      "location": "outer",
+      "outerIndex": 4,
+      "discriminatorHex": "7850f57bd495a32f",
+      "rawInstructionDataSha256": "9201b9a28d3f95e3803ca61bcc67592126216667f77ca143a1375bf2033b8e1c",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [0, 0, 6, 8, 7, 20, 15, 16, 11],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 6,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 8,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "index": 7,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 20,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "Sysvar1nstructions1111111111111111111111111",
+          "index": 15,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "SysvarRent111111111111111111111111111111111",
+          "index": 16,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 11,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: CreateRebalanceIntentHandler",
+      "candidateSemanticName": "CreateRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3585000",
+          "post": "275000",
+          "delta": "-3310000",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521697406",
+          "delta": "4099997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "20",
+          "post": "0",
+          "delta": "-20",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-820619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3310000"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4099997"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        }
+      ]
+    },
+    {
+      "stage": "shareBurn",
+      "signature": "5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW",
+      "location": "outer",
+      "outerIndex": 5,
+      "discriminatorHex": "47ccf3b7d1766f5e",
+      "rawInstructionDataSha256": "f81e15653aaee4bdcff35d65afb0378e833386e012ae58bb6e9e67e56682713d",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [8],
+      "accounts": [
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 8,
+          "signer": false,
+          "writable": true
+        }
+      ],
+      "observedLog": "Program log: Instruction: ResizeRebalanceIntentHandler",
+      "candidateSemanticName": "ResizeRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3585000",
+          "post": "275000",
+          "delta": "-3310000",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521697406",
+          "delta": "4099997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "20",
+          "post": "0",
+          "delta": "-20",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-820619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3310000"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4099997"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        }
+      ]
+    },
+    {
+      "stage": "shareBurn",
+      "signature": "5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW",
+      "location": "outer",
+      "outerIndex": 6,
+      "discriminatorHex": "7fd7296ef4b38307",
+      "rawInstructionDataSha256": "367ce03aaec7b621aab0f3f803149c104ce95026538dede37808a2e942a06e78",
+      "rawInstructionDataLength": 126,
+      "accountIndexes": [
+        0, 0, 6, 8, 7, 4, 9, 20, 14, 2, 1, 3, 10, 5, 19, 11, 17, 18
+      ],
+      "accounts": [
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 6,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 8,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "index": 7,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "index": 4,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "index": 9,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+          "index": 20,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "So11111111111111111111111111111111111111112",
+          "index": 14,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "index": 1,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "index": 10,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "index": 5,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+          "index": 19,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 11,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "index": 17,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "index": 18,
+          "signer": false,
+          "writable": false
+        }
+      ],
+      "observedLog": "Program log: Instruction: InitRebalanceIntentHandler",
+      "candidateSemanticName": "InitRebalanceIntentHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "3585000",
+          "post": "275000",
+          "delta": "-3310000",
+          "incompleteSide": false
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "owner": "fJSm61znCYwaKUKusXCxmT5691W3QzdRxrmQ9MekJU9",
+          "mint": "So11111111111111111111111111111111111111112",
+          "decimals": 9,
+          "pre": "517597409",
+          "post": "521697406",
+          "delta": "4099997",
+          "incompleteSide": false
+        },
+        {
+          "account": "AQQM2SPg5zsteNtLBrSoEdS1hRNZKighdCzwnzHpzphP",
+          "owner": "H2Tw9zhzo1uhqzsyHhQNMCs14QVt3Tf1Y3j7wMkqsCgR",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "0",
+          "post": "0",
+          "delta": "0",
+          "incompleteSide": false
+        },
+        {
+          "account": "GJ33KzpktwTV1vavhDKdYJVTUnztbd3xUMdSV8zFAJmH",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+          "decimals": 6,
+          "pre": "20",
+          "post": "0",
+          "delta": "-20",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "delta": "-820619"
+        },
+        {
+          "account": "35T4fJeQ9e2QTFBQ8arP3NttYaDCtj95sDoTfdQjxikW",
+          "delta": "-3310000"
+        },
+        {
+          "account": "8UF6dpLjMRCpn8woGh1M4tzBDjQ4pV6ak3cZ2L9MsvNb",
+          "delta": "4099997"
+        },
+        {
+          "account": "AxVsnKm1dyDm4TUPeiEbkBd98uVEJuiAon6cefKV7Rt3",
+          "delta": "-98139898"
+        },
+        {
+          "account": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "delta": "98140520"
+        }
+      ]
+    },
+    {
+      "stage": "usdcRedeem",
+      "signature": "FXcx1hLT7fc2wHMvF2GMZQ2V7XdqU3BgDQY54nooCF2ovW5RndwV3eXAgPC5wRWTvGo2EM2axzEPr3pMtuUF1kj",
+      "location": "outer",
+      "outerIndex": 3,
+      "discriminatorHex": "5331700269c16a7e",
+      "rawInstructionDataSha256": "a0e62a8e3ee571cb1a8871bb3fc2e967dca90f85c1e2c9c133b59fa05509831d",
+      "rawInstructionDataLength": 8,
+      "accountIndexes": [0, 3, 4, 2, 10, 12, 7, 9, 8, 1, 5],
+      "accounts": [
+        {
+          "address": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+          "index": 0,
+          "signer": true,
+          "writable": true
+        },
+        {
+          "address": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "index": 3,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "F7hHNRkXAu6fCj6wvZhms7fUWxUrjYD3WS151xSNqBjZ",
+          "index": 4,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "index": 2,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          "index": 10,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          "index": 12,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+          "index": 7,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "11111111111111111111111111111111",
+          "index": 9,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "index": 8,
+          "signer": false,
+          "writable": false
+        },
+        {
+          "address": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "index": 1,
+          "signer": false,
+          "writable": true
+        },
+        {
+          "address": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "index": 5,
+          "signer": false,
+          "writable": true
+        }
+      ],
+      "observedLog": "Program log: Instruction: RedeemTokensHandler",
+      "candidateSemanticName": "RedeemTokensHandler",
+      "confidence": "transaction_correlated",
+      "stageTokenEffects": [
+        {
+          "account": "4PzfY9AeVRmFxVzF7r3UfyufywKNLUX7tSkZqZuooxzZ",
+          "owner": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "4977046",
+          "post": "24977046",
+          "delta": "20000000",
+          "incompleteSide": false
+        },
+        {
+          "account": "DzFZmcJvxKF71pXo9WKvgLf7m6XpudqmEq6qRvhmwHCt",
+          "owner": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+          "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "decimals": 6,
+          "pre": "20000000",
+          "post": "0",
+          "delta": "-20000000",
+          "incompleteSide": false
+        }
+      ],
+      "stageLamportEffects": [
+        {
+          "account": "GLq9gScm99eUypsc5a7WsP7rmsc3aAUfpzqmAPNqXvmq",
+          "delta": "-15000"
+        }
+      ]
+    }
+  ],
+  "observedPrograms": [
+    "11111111111111111111111111111111",
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+    "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "ComputeBudget111111111111111111111111111111",
+    "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95",
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  ],
+  "unclassifiedObservedPrograms": [
+    "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95"
+  ],
+  "sampleLifecycle": {
+    "classification": "PARTIALLY_VERIFIED_SAMPLE",
+    "c3UsdcOnlyRedemption": "UNVERIFIED",
+    "user": "8RZ4GrQDsctRGrW4tDZcYZRqFAW23eWkrVcJQ1DH7GyX",
+    "vault": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+    "usdcBaseUnits": "20000000",
+    "sharesBaseUnits": "20",
+    "observedStages": ["usdcDeposit", "shareMint", "shareBurn", "usdcRedeem"],
+    "missing": [
+      "Official IDL and account/PDA layouts",
+      "Proof of one shared intent across all four signatures",
+      "Complete intermediate auction/price/bounty transactions",
+      "Vault composition and C3-specific 40/30/30 proof",
+      "keep_tokens setting and USDC output selection",
+      "USDC-only redemption from multi-asset vault",
+      "Observed mint-supply delta at historical slots"
+    ]
+  },
+  "officialDiscriminatorsVerified": false,
+  "productionPolicyConfigured": false,
+  "unresolved": [
+    "Official IDL and account/PDA layouts",
+    "Proof of one shared intent across all four signatures",
+    "Complete intermediate auction/price/bounty transactions",
+    "Vault composition and C3-specific 40/30/30 proof",
+    "keep_tokens setting and USDC output selection",
+    "USDC-only redemption from multi-asset vault",
+    "Observed mint-supply delta at historical slots"
+  ]
+}
