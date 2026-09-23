@@ -9,6 +9,7 @@ import {
   assertExecutionDisabled,
 } from "./constants.ts";
 import { canonicalize } from "./manifest.ts";
+import { assertC3SchemaCurrent } from "./migrations.ts";
 import {
   assertIntentTransition,
   assertVerifiedSettlementEvidence,
@@ -52,6 +53,11 @@ type IntentRow = {
   updated_at: Date;
   expires_at: Date;
 };
+
+const INTENT_COLUMNS = `intent_id,idempotency_key,configuration_version,configuration_hash,
+  cluster,wallet,operation,input_amount,state,revision,authorization_id,authorization_hash,
+  submitted_signature,settled_effects_hash,partial_completion_hash,manual_review_reason,
+  recovery_attempts,created_at,updated_at,expires_at`;
 
 export type DurableIntent = Readonly<{
   intentId: string;
@@ -202,7 +208,7 @@ export class PostgresC3Repository {
     this.#pool = pool;
   }
 
-  static fromServerEnvironment(): PostgresC3Repository {
+  static async fromServerEnvironment(): Promise<PostgresC3Repository> {
     assertExecutionDisabled();
     const raw = process.env.DATABASE_URL;
     if (!raw) throw new Error("Server-side DATABASE_URL is missing.");
@@ -226,9 +232,21 @@ export class PostgresC3Repository {
       throw new Error(
         "Remote database requires independently verified TLS configuration.",
       );
-    return new PostgresC3Repository(
-      new pg.Pool({ connectionString: raw, max: 5 }),
-    );
+    const pool = new pg.Pool({
+      connectionString: raw,
+      max: 5,
+      options:
+        "-c search_path=c3,pg_catalog,pg_temp -c statement_timeout=10000 -c lock_timeout=3000 -c idle_in_transaction_session_timeout=15000",
+    });
+    try {
+      await assertC3SchemaCurrent(pool);
+      return new PostgresC3Repository(pool);
+    } catch {
+      await pool.end();
+      throw new Error(
+        "C3 database bootstrap failed; schema or connection unavailable.",
+      );
+    }
   }
 
   async close(): Promise<void> {
@@ -280,7 +298,7 @@ export class PostgresC3Repository {
     return this.#transaction(async (client) => {
       const inserted = await client.query<IntentRow>(
         `INSERT INTO c3_intents (intent_id,idempotency_key,configuration_version,configuration_hash,cluster,wallet,operation,input_amount,state,expires_at)
-         VALUES ($1,$2,$3,$4,'mainnet-beta',$5,$6,$7,'draft',$8) RETURNING *`,
+         VALUES ($1,$2,$3,$4,'mainnet-beta',$5,$6,$7,'draft',$8) RETURNING ${INTENT_COLUMNS}`,
         [
           input.intentId,
           input.idempotencyKey,
@@ -311,7 +329,7 @@ export class PostgresC3Repository {
     if (!INTENT_ID.test(intentId))
       throw new Error("Malformed intent identifier.");
     const result = await this.#pool.query<IntentRow>(
-      "SELECT * FROM c3_intents WHERE intent_id=$1",
+      `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1`,
       [intentId],
     );
     const row = result.rows[0];
@@ -391,7 +409,7 @@ export class PostgresC3Repository {
       throw new Error("Authorization canonical hash is invalid.");
     return this.#transaction(async (client) => {
       const result = await client.query<IntentRow>(
-        "SELECT * FROM c3_intents WHERE intent_id=$1 FOR UPDATE",
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
         [intentId],
       );
       const current = result.rows[0] && decodeIntent(result.rows[0]);
@@ -469,7 +487,7 @@ export class PostgresC3Repository {
       throw new Error("Transition patch contains an unknown field.");
     return this.#transaction(async (client) => {
       const result = await client.query<IntentRow>(
-        "SELECT * FROM c3_intents WHERE intent_id=$1 FOR UPDATE",
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
         [intentId],
       );
       const current = result.rows[0] && decodeIntent(result.rows[0]);
@@ -520,7 +538,7 @@ export class PostgresC3Repository {
       const updated = await client.query<IntentRow>(
         `UPDATE c3_intents SET state=$1,revision=revision+1,updated_at=clock_timestamp(),
          submitted_signature=COALESCE($2,submitted_signature),manual_review_reason=COALESCE($3,manual_review_reason)
-         WHERE intent_id=$4 AND revision=$5 AND state=$6 RETURNING *`,
+         WHERE intent_id=$4 AND revision=$5 AND state=$6 RETURNING ${INTENT_COLUMNS}`,
         [
           nextState,
           patch.submittedSignature ?? null,
@@ -549,7 +567,7 @@ export class PostgresC3Repository {
     assertHash(evidenceHash);
     return this.#transaction(async (client) => {
       const result = await client.query<IntentRow>(
-        "SELECT * FROM c3_intents WHERE intent_id=$1 FOR UPDATE",
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
         [intentId],
       );
       const current = result.rows[0] && decodeIntent(result.rows[0]);
@@ -578,7 +596,7 @@ export class PostgresC3Repository {
             ? "recovery_attempts_exhausted"
             : "recovery_window_expired";
         const reviewed = await client.query<IntentRow>(
-          "UPDATE c3_intents SET state='manual_review',revision=revision+1,updated_at=$1,manual_review_reason=$2 WHERE intent_id=$3 AND revision=$4 AND state='failed_recoverable' RETURNING *",
+          `UPDATE c3_intents SET state='manual_review',revision=revision+1,updated_at=$1,manual_review_reason=$2 WHERE intent_id=$3 AND revision=$4 AND state='failed_recoverable' RETURNING ${INTENT_COLUMNS}`,
           [serverNow, reasonCode, intentId, expectedRevision.toString()],
         );
         if (reviewed.rowCount !== 1 || !reviewed.rows[0])
@@ -593,7 +611,7 @@ export class PostgresC3Repository {
       }
       const attempt = current.recoveryAttempts + 1;
       const updated = await client.query<IntentRow>(
-        "UPDATE c3_intents SET state='keeper_pending',revision=revision+1,recovery_attempts=recovery_attempts+1,updated_at=$1 WHERE intent_id=$2 AND revision=$3 AND state='failed_recoverable' AND recovery_attempts=$4 RETURNING *",
+        `UPDATE c3_intents SET state='keeper_pending',revision=revision+1,recovery_attempts=recovery_attempts+1,updated_at=$1 WHERE intent_id=$2 AND revision=$3 AND state='failed_recoverable' AND recovery_attempts=$4 RETURNING ${INTENT_COLUMNS}`,
         [
           serverNow,
           intentId,
@@ -630,7 +648,7 @@ export class PostgresC3Repository {
   ): Promise<DurableIntent> {
     return this.#transaction(async (client) => {
       const result = await client.query<IntentRow>(
-        "SELECT * FROM c3_intents WHERE intent_id=$1 FOR UPDATE",
+        `SELECT ${INTENT_COLUMNS} FROM c3_intents WHERE intent_id=$1 FOR UPDATE`,
         [intentId],
       );
       const current = result.rows[0] && decodeIntent(result.rows[0]);
@@ -659,7 +677,7 @@ export class PostgresC3Repository {
         ],
       );
       const updated = await client.query<IntentRow>(
-        "UPDATE c3_intents SET state='settled',revision=revision+1,updated_at=clock_timestamp(),settled_effects_hash=$1 WHERE intent_id=$2 AND revision=$3 AND state=$4 RETURNING *",
+        `UPDATE c3_intents SET state='settled',revision=revision+1,updated_at=clock_timestamp(),settled_effects_hash=$1 WHERE intent_id=$2 AND revision=$3 AND state=$4 RETURNING ${INTENT_COLUMNS}`,
         [
           evidence.effectsFingerprint,
           intentId,

@@ -1,4 +1,6 @@
 -- Forward-only C3 state schema. No transaction payloads or wallet secrets.
+CREATE SCHEMA c3;
+SET LOCAL search_path = c3, pg_catalog, pg_temp;
 CREATE TABLE c3_intents (
   intent_id text PRIMARY KEY CHECK (intent_id ~ '^c3-[a-f0-9]{32,64}$'),
   idempotency_key text NOT NULL UNIQUE CHECK (idempotency_key ~ '^[a-f0-9]{64}$'),
@@ -80,8 +82,8 @@ CREATE TABLE c3_reconciled_snapshots (
   revision bigint NOT NULL DEFAULT 1 CHECK (revision > 0),
   snapshot_hash text NOT NULL CHECK (snapshot_hash ~ '^[a-f0-9]{64}$'),
   evidence_id uuid NOT NULL REFERENCES c3_evidence(evidence_id) ON DELETE RESTRICT,
-  nav_base_units numeric(39,0) NOT NULL CHECK (nav_base_units >= 0),
-  share_supply_base_units numeric(20,0) NOT NULL CHECK (share_supply_base_units >= 0),
+  nav_base_units numeric(39,0) NOT NULL CHECK (nav_base_units >= 0 AND nav_base_units <= 340282366920938463463374607431768211455),
+  share_supply_base_units numeric(20,0) NOT NULL CHECK (share_supply_base_units >= 0 AND share_supply_base_units <= 18446744073709551615),
   observed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (intent_id, snapshot_hash)
 );
@@ -132,18 +134,20 @@ CREATE TABLE c3_audit_log (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE FUNCTION c3_reject_immutable_change() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION c3.c3_reject_immutable_change() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, c3, pg_temp AS $$
 BEGIN RAISE EXCEPTION 'C3 immutable record cannot be updated or deleted'; END;
 $$;
-CREATE TRIGGER c3_authorizations_immutable BEFORE UPDATE OR DELETE ON c3_authorizations FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_idempotency_immutable BEFORE UPDATE OR DELETE ON c3_idempotency_keys FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_evidence_immutable BEFORE UPDATE OR DELETE ON c3_evidence FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_rpc_observations_immutable BEFORE UPDATE OR DELETE ON c3_rpc_observations FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_manifest_events_immutable BEFORE UPDATE OR DELETE ON c3_manifest_events FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_recovery_attempts_immutable BEFORE UPDATE OR DELETE ON c3_recovery_attempts FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
-CREATE TRIGGER c3_audit_immutable BEFORE UPDATE OR DELETE ON c3_audit_log FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
+CREATE TRIGGER c3_authorizations_immutable BEFORE UPDATE OR DELETE ON c3_authorizations FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_idempotency_immutable BEFORE UPDATE OR DELETE ON c3_idempotency_keys FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_evidence_immutable BEFORE UPDATE OR DELETE ON c3_evidence FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_rpc_observations_immutable BEFORE UPDATE OR DELETE ON c3_rpc_observations FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_manifest_events_immutable BEFORE UPDATE OR DELETE ON c3_manifest_events FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_recovery_attempts_immutable BEFORE UPDATE OR DELETE ON c3_recovery_attempts FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+CREATE TRIGGER c3_audit_immutable BEFORE UPDATE OR DELETE ON c3_audit_log FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
 
-CREATE FUNCTION c3_guard_intent_update() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION c3.c3_guard_intent_update() RETURNS trigger LANGUAGE plpgsql
+SET search_path = pg_catalog, c3, pg_temp AS $$
 BEGIN
   IF OLD.intent_id IS DISTINCT FROM NEW.intent_id OR OLD.idempotency_key IS DISTINCT FROM NEW.idempotency_key
     OR OLD.configuration_version IS DISTINCT FROM NEW.configuration_version OR OLD.configuration_hash IS DISTINCT FROM NEW.configuration_hash
@@ -162,5 +166,17 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-CREATE TRIGGER c3_intent_guard BEFORE UPDATE ON c3_intents FOR EACH ROW EXECUTE FUNCTION c3_guard_intent_update();
-CREATE TRIGGER c3_intent_no_delete BEFORE DELETE ON c3_intents FOR EACH ROW EXECUTE FUNCTION c3_reject_immutable_change();
+CREATE TRIGGER c3_intent_guard BEFORE UPDATE ON c3_intents FOR EACH ROW EXECUTE FUNCTION c3.c3_guard_intent_update();
+CREATE TRIGGER c3_intent_no_delete BEFORE DELETE ON c3_intents FOR EACH ROW EXECUTE FUNCTION c3.c3_reject_immutable_change();
+
+CREATE INDEX c3_evidence_intent_idx ON c3_evidence(intent_id);
+CREATE INDEX c3_rpc_observations_intent_idx ON c3_rpc_observations(intent_id);
+CREATE INDEX c3_rpc_observations_evidence_idx ON c3_rpc_observations(evidence_id) WHERE evidence_id IS NOT NULL;
+CREATE INDEX c3_snapshots_intent_idx ON c3_reconciled_snapshots(intent_id);
+CREATE INDEX c3_snapshots_evidence_idx ON c3_reconciled_snapshots(evidence_id);
+CREATE INDEX c3_manifest_events_intent_idx ON c3_manifest_events(intent_id) WHERE intent_id IS NOT NULL;
+CREATE INDEX c3_recovery_attempts_intent_idx ON c3_recovery_attempts(intent_id);
+CREATE INDEX c3_outbox_pending_idx ON c3_outbox_events(status,lease_until,created_at) WHERE status IN ('pending','processing');
+CREATE INDEX c3_outbox_intent_idx ON c3_outbox_events(intent_id);
+CREATE INDEX c3_audit_intent_idx ON c3_audit_log(intent_id) WHERE intent_id IS NOT NULL;
+CREATE INDEX c3_intents_recovery_idx ON c3_intents(state,updated_at) WHERE state IN ('failed_recoverable','manual_review');

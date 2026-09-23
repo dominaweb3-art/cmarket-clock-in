@@ -20,6 +20,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:postgres": "node scripts/test-postgres-local.mjs",
     "test:accounting": "node --experimental-strip-types --test tests/accounting.test.ts",
     "test:security": "node --experimental-strip-types --test tests/security.test.ts",
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",

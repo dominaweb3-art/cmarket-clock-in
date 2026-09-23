@@ -37,21 +37,21 @@ test("versioned SQL declares every required durable state table and immutable gu
   assert.equal(C3_MAINNET_EXECUTION_CAPABILITY, false);
 });
 
-test("server-only factory fails closed without or with malformed configuration", () => {
+test("server-only factory fails closed without or with malformed configuration", async () => {
   const original = process.env.DATABASE_URL;
   try {
     delete process.env.DATABASE_URL;
-    assert.throws(
-      () => PostgresC3Repository.fromServerEnvironment(),
+    await assert.rejects(
+      PostgresC3Repository.fromServerEnvironment(),
       /missing/,
     );
     process.env.DATABASE_URL = "invalid";
-    assert.throws(
-      () => PostgresC3Repository.fromServerEnvironment(),
+    await assert.rejects(
+      PostgresC3Repository.fromServerEnvironment(),
       /malformed/,
     );
     process.env.DATABASE_URL = "postgresql://example.invalid/c3";
-    assert.throws(() => PostgresC3Repository.fromServerEnvironment(), /TLS/);
+    await assert.rejects(PostgresC3Repository.fromServerEnvironment(), /TLS/);
   } finally {
     if (original === undefined) delete process.env.DATABASE_URL;
     else process.env.DATABASE_URL = original;
