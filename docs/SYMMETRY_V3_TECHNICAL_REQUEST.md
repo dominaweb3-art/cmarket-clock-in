@@ -1,6 +1,6 @@
 # Technical request: Symmetry V3 integration for C Market C3
 
-Status: request prepared, **not sent**. Date: 2026-09-22. Mainnet execution remains disabled.
+Status: request prepared, **not sent**. Prepared 2026-09-22; updated with read-only evidence 2026-09-23. Mainnet execution remains disabled. Evidence and current NO-GO: [C3 Symmetry V3 evidence](C3_SYMMETRY_V3_EVIDENCE.md).
 
 ## Copy-paste message
 
@@ -42,6 +42,12 @@ Please answer each item with a versioned URL, source file/commit, IDL entry, acc
 28. Must the user temporarily receive any BTC/ETH/SOL representation or approve additional swaps?
 29. How are partially settled withdrawals or failed liquidations represented and reconciled without automatic duplicate execution?
 30. Are custom vault withdrawal adapters supported? If yes, provide the audited interface, registry/allowlist rules, examples and governance process.
+
+## Follow-up on public Mainnet evidence (2026-09-23 UTC)
+
+Our independent `finalized` RPC checks found the documented V3 program executable at `BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate`, deployment slot `443194628`, programdata `5U2UnJKWK8woHwzud2soiJoD7nXxitNRLXBCAojeaETc`, and global config `BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd`. Programdata has an **active upgrade authority** `9A5V7smsUMRNNzvrawbDx3ZexZR3LY1bcEUXUiMJ2bxk`; please identify its controller, governance/timelock and incident/upgrade procedure. The npm registry gives `@symmetry-hq/sdk@1.0.22` a `gitHead` of `7f83eed9866c1833149fbfdcaa93bd5ba9eed0da` but no mapped public source repository or audited build. Please provide the exact source URL, commit and build provenance, and the audit report that matches the running program.
+
+Public examples show a [20 USDC deposit](https://explorer.solana.com/tx/mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x), [share mint](https://explorer.solana.com/tx/4pNx6EWqdAdz5r68XqVF2xZsHbRThW8KNdog3Mr2qXDuB15uA48i9oVaDs31nEiQG1U7U223uURdfYQXJeFFcKfE), [share burn](https://explorer.solana.com/tx/5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW) and [20 USDC redemption](https://explorer.solana.com/tx/FXcx1hLT7fc2wHMvF2GMZQ2V7XdqU3BgDQY54nooCF2ovW5RndwV3eXAgPC5wRWTvGo2EM2axzEPr3pMtuUF1kj) for a vault whose composition we cannot independently decode without the full official layout. Can you supply the vault's decoded composition and a comparable finalized sequence for a **cbBTC 40% / Portal ETH 30% / SOL or WSOL 30%** vault redeemed **exclusively to USDC**, including every keeper auction and output account? What setting controls the single output when `keep_tokens: []`, and can it be pinned to USDC? Can you prove no underlying token is skipped if the withdrawer lacks an ATA, especially when a keeper presents `redeemTokensTx`? Please provide exact share mint/burn/fee/bounty numbers, min-out/slippage, expiry/cancellation, partial-failure recovery and behavior at a 1 USDC deposit/redeem. Are the three asset oracles and auction routes actually available at this size? Which supported SDK integration avoids introducing a vulnerable `@solana/spl-token → @solana/buffer-layout-utils → bigint-buffer` path into our production graph?
 
 Please also confirm fee support and authorization for the **Product-approved candidate only**: 15 bps buy, 15 bps sell and a proposed 50% discount for independently verified SKR staking (effective 7.5 bps). Fee collection and discount are **disabled** pending Security review and Squads approval. Prior 60 bps deposit and 10 bps withdrawal figures are obsolete proposals, not active values.
 

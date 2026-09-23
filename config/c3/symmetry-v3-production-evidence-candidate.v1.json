@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "classification": "SHARED",
+  "status": "blocked",
+  "decision": "NO_GO_EXTERNAL_EVIDENCE_REQUIRED",
+  "retrievedAtUtc": "2026-09-23T17:20:52Z",
+  "cluster": "mainnet-beta",
+  "sources": {
+    "documentation": "https://docs.symmetry.fi/concepts/rebalancing",
+    "vaults": "https://docs.symmetry.fi/concepts/vaults",
+    "feesAndOracles": "https://docs.symmetry.fi/concepts/fees-and-oracles",
+    "sdkReference": "https://docs.symmetry.fi/sdk/reference",
+    "officialRepositoryOrganization": "https://github.com/symmetry-protocol",
+    "npmMetadata": "https://registry.npmjs.org/@symmetry-hq/sdk/1.0.22",
+    "coinbaseCbBtc": "https://www.coinbase.com/cbbtc",
+    "wormholeWrappedTokenModel": "https://wormhole.com/docs/products/token-transfers/wrapped-token-transfers/overview/",
+    "circleSupportedChains": "https://developers.circle.com/circle-mint/supported-chains-and-currencies",
+    "primaryRpc": "https://api.mainnet-beta.solana.com"
+  },
+  "package": {
+    "name": "@symmetry-hq/sdk",
+    "version": "1.0.22",
+    "tarballIntegritySha512": "sha512-yopoVu6VnFiktGsjgeJ2dbFX8pdciePK7BUFNbUYb5wAto6DQqVq6a51qE33dRT6BRkL/ANBpKZEJgqpJX+KMA==",
+    "registryGitHeadUnmapped": "7f83eed9866c1833149fbfdcaa93bd5ba9eed0da",
+    "verifiedPublicSourceCommit": null,
+    "completeOfficialIdl": null,
+    "auditedDeploymentMatch": null
+  },
+  "program": {
+    "id": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "executable": true,
+    "loader": "BPFLoaderUpgradeab1e11111111111111111111111",
+    "programDataAddress": "5U2UnJKWK8woHwzud2soiJoD7nXxitNRLXBCAojeaETc",
+    "deploymentSlot": 443194628,
+    "observedUpgradeAuthority": "9A5V7smsUMRNNzvrawbDx3ZexZR3LY1bcEUXUiMJ2bxk",
+    "programDataAuthorityOption": 1,
+    "globalConfig": "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
+    "finalizedObservationSlot": 449769289
+  },
+  "accountEvidenceSha256": {
+    "programAccount": "11af5910aa7768c1a2ec1e935e96269df99e0acf7fa97b80c50c5b890090c6c0",
+    "programDataAccount": "a5ab79dfdd53df903d18a5951446f1fd73646e6ed82851e9ee2d86d8e8f1201e",
+    "globalConfigAccount": "166bc36a99c1eaa482648c27bf91cadefd19233495efe1f2fa76c44584cc604e"
+  },
+  "publicExampleNotC3": {
+    "vaultAccount": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+    "vaultOwnerProgram": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
+    "shareMint": "9ihGfswnUZ6MysSR3KgmrZ57FXDVAiAQ6sEHwLuWwzJ4",
+    "shareMintAuthority": "AwDFvjEPPwdF1YgXV8asNt6LeEFDduinYneCn6mHDAsh",
+    "shareFreezeAuthority": null,
+    "shareDecimals": 6,
+    "compositionDecodedFromOfficialLayout": false
+  },
+  "targetBasket": {
+    "btcBps": 4000,
+    "ethBps": 3000,
+    "solBps": 3000,
+    "totalBps": 10000
+  },
+  "assetRegistry": {
+    "inputUsdc": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "decimals": 6,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    },
+    "btcCandidate": {
+      "symbol": "cbBTC",
+      "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+      "decimals": 8,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "symmetryC3Compatibility": "UNVERIFIED"
+    },
+    "ethCandidate": {
+      "symbol": "Portal ETH",
+      "mint": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+      "decimals": 8,
+      "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "symmetryC3Compatibility": "UNVERIFIED"
+    },
+    "sol": {
+      "finalAsset": "native SOL",
+      "internalWsolMint": "So11111111111111111111111111111111111111112",
+      "wsolDecimals": 9,
+      "symmetryC3Compatibility": "UNVERIFIED"
+    }
+  },
+  "documentedInstructions": [
+    "buyVaultTx",
+    "lockDepositsTx",
+    "updateTokenPricesTx",
+    "flashSwapTx",
+    "mintTx",
+    "sellVaultTx",
+    "redeemTokensTx",
+    "claimBountyTx"
+  ],
+  "accountLayoutReference": "https://docs.symmetry.fi/concepts/vaults",
+  "completeAccountAndInstructionLayoutsVerified": false,
+  "depositPath": "PARTIALLY_VERIFIED",
+  "c3UsdcOnlyRedemptionPath": "UNVERIFIED",
+  "redemptionClassification": "UNVERIFIED",
+  "publicTransactions": {
+    "usdcDeposit": "mHStwKXJJmzPVnxFnSJb1PeR7sCTGdqcsa3hCbRcvcnbRjYNKJuNbVccuLZkMbuRPxbBJpHQbgGWGK5vUQ2KN7x",
+    "shareMint": "4pNx6EWqdAdz5r68XqVF2xZsHbRThW8KNdog3Mr2qXDuB15uA48i9oVaDs31nEiQG1U7U223uURdfYQXJeFFcKfE",
+    "shareBurn": "5Kn15SfEwkiDoBpBcT7bZ3dCZ8Jr2tkpmS5NLWEyGqdgyBYwFeN1N853id37JXsbDm7Y83pEsfnZzdYBd2w8UQAW",
+    "usdcRedeem": "FXcx1hLT7fc2wHMvF2GMZQ2V7XdqU3BgDQY54nooCF2ovW5RndwV3eXAgPC5wRWTvGo2EM2axzEPr3pMtuUF1kj"
+  },
+  "unresolvedRequirements": [
+    "Public V3 source repository and commit matching the npm artifact and deployed program",
+    "Complete official V3 IDL, account layouts, discriminators and PDA specification",
+    "Auditor report scoped to the exact deployed program and remediation record",
+    "Controller, governance and emergency procedures for the active program upgrade authority",
+    "C3-specific three-asset vault configuration, asset oracles, liquidity and keeper bounds",
+    "End-to-end USDC-only C3 redemption including share burn, every swap, destination, fees and recovery",
+    "Review of SDK dependency chain and safe non-vulnerable production integration strategy",
+    "Security and Squads governance approval before any execution"
+  ]
+}
