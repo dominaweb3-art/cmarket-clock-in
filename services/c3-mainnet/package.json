@@ -3,7 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/public.d.ts",
+      "default": "./dist/public.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ],
   "scripts": {
+    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint:check": "eslint src scripts tests",
     "format": "prettier --write .",
@@ -12,15 +23,20 @@
     "test:accounting": "node --experimental-strip-types --test tests/accounting.test.ts",
     "test:security": "node --experimental-strip-types --test tests/security.test.ts",
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",
+    "test:boundary": "npm run build && node --test tests/export-boundary.test.mjs",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",
     "c3:mainnet:deployment-readiness": "node --experimental-strip-types scripts/readiness.ts deployment"
   },
   "devDependencies": {
     "@types/node": "26.6.2",
+    "@types/pg": "8.23.1",
     "eslint": "9.39.5",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.0"
+  },
+  "dependencies": {
+    "pg": "8.23.0"
   }
 }

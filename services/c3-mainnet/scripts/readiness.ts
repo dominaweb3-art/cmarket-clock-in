@@ -85,7 +85,7 @@ add(
   "EXTERNAL_CONFIGURATION_MISSING",
   "durable-authorization-context-repository",
   authorizationRepository.productionReady,
-  "trusted authorization hashes currently use a non-production in-memory repository",
+  "a PostgreSQL foundation exists, but the sealed builder authorization context is still in memory and PostgreSQL integration is unvalidated",
 );
 
 if (mode === "builder" || mode === "deployment") {
@@ -127,7 +127,7 @@ if (mode === "keeper" || mode === "deployment") {
     "EXTERNAL_CONFIGURATION_MISSING",
     "durable-cas-repository",
     false,
-    "only the non-production in-memory repository exists",
+    "the PostgreSQL CAS foundation is not integrated with the keeper or validated against disposable PostgreSQL",
   );
 }
 
