@@ -1,0 +1,156 @@
+{
+  "schemaVersion": "c3-oracle-nav-candidate/v1",
+  "classification": "SHARED",
+  "status": "blocked",
+  "mainnetExecutionEnabled": false,
+  "allocationBps": {
+    "cbBTC": 4000,
+    "PortalETH": 3000,
+    "WSOL": 3000,
+    "total": 10000
+  },
+  "policy": {
+    "maximumAgeSecondsCandidate": 60,
+    "maximumConfidenceBpsCandidate": 200,
+    "maximumDivergenceBpsCandidate": 100,
+    "minimumPublishedAt": "evaluation time minus 60 seconds; no future timestamps",
+    "normalization": "USD fixed-point 10^12, integer mantissa and exponent only",
+    "missingOrStaleOrDivergent": "NO-GO, circuit breaker; never use last good price for authorization",
+    "independence": "distinct reviewed oracle operators and underlying feeds; two RPCs of one feed do not qualify"
+  },
+  "assets": {
+    "USDC": {
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "decimals": 6,
+      "referenceFeedId": "eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a",
+      "pricing": "direct_reference_candidate",
+      "classification": "secondary_source_missing",
+      "pegRequired": false,
+      "priceEvidence": {
+        "sourceUrl": "https://docs.pyth.network/price-feeds/core/price-feeds",
+        "retrievedAt": null,
+        "cluster": "mainnet-beta",
+        "feedAccountId": null,
+        "exponent": null,
+        "confidence": null,
+        "publishTime": null,
+        "observedPrice": null,
+        "evidenceHash": null,
+        "directOrProxy": "direct_reference_candidate"
+      }
+    },
+    "cbBTC": {
+      "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+      "decimals": 8,
+      "referenceFeedId": "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43",
+      "pricing": "BTC/USD times cbBTC/BTC",
+      "classification": "proxy_requires_peg_evidence",
+      "pegRequired": true,
+      "priceEvidence": {
+        "sourceUrl": "https://docs.pyth.network/price-feeds/core/price-feeds",
+        "retrievedAt": null,
+        "cluster": "mainnet-beta",
+        "feedAccountId": null,
+        "exponent": null,
+        "confidence": null,
+        "publishTime": null,
+        "observedPrice": null,
+        "evidenceHash": null,
+        "directOrProxy": "proxy_requires_peg_evidence"
+      }
+    },
+    "PortalETH": {
+      "mint": "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+      "decimals": 8,
+      "referenceFeedId": "ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
+      "pricing": "ETH/USD times PortalETH/ETH",
+      "classification": "proxy_requires_peg_evidence",
+      "pegRequired": true,
+      "priceEvidence": {
+        "sourceUrl": "https://docs.pyth.network/price-feeds/core/price-feeds",
+        "retrievedAt": null,
+        "cluster": "mainnet-beta",
+        "feedAccountId": null,
+        "exponent": null,
+        "confidence": null,
+        "publishTime": null,
+        "observedPrice": null,
+        "evidenceHash": null,
+        "directOrProxy": "proxy_requires_peg_evidence"
+      }
+    },
+    "WSOL": {
+      "mint": "So11111111111111111111111111111111111111112",
+      "decimals": 9,
+      "referenceFeedId": "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+      "pricing": "SOL/USD for native SOL-equivalent wrapper",
+      "classification": "secondary_source_missing",
+      "pegRequired": false,
+      "priceEvidence": {
+        "sourceUrl": "https://docs.pyth.network/price-feeds/core/price-feeds",
+        "retrievedAt": null,
+        "cluster": "mainnet-beta",
+        "feedAccountId": null,
+        "exponent": null,
+        "confidence": null,
+        "publishTime": null,
+        "observedPrice": null,
+        "evidenceHash": null,
+        "directOrProxy": "direct_reference_candidate"
+      }
+    }
+  },
+  "evidence": {
+    "onChainMintSnapshot": "docs/C3_SYMMETRY_V3_EVIDENCE.md",
+    "latestReadOnlyRpcAttempt": "2026-09-23T23:55:49.950Z: official public Mainnet RPC returned HTTP 429 for four finalized getAccountInfo requests",
+    "latestUnauthenticatedHermesAttempt": "2026-09-24T00:01:08.845Z: official Hermes latest-price endpoint returned HTTP 401 unauthorized without a key",
+    "feedObservations": null,
+    "feedExponent": null,
+    "feedConfidence": null,
+    "feedPublicationTime": null,
+    "feedObservedPrice": null,
+    "feedEvidenceHash": null,
+    "directAssetFeedVerified": false,
+    "pegMarketEvidenceVerified": false,
+    "secondaryOracleVerified": false,
+    "issuerOriginForPortalMintVerified": false,
+    "pythAuthenticatedProductionAccessVerified": false,
+    "symmetryAccountingFormulaVerified": false,
+    "vaultAndShareMintVerified": false
+  },
+  "pilotCandidatesDisabled": {
+    "maximumWallets": 3,
+    "minimumPerWalletUsdc": "1",
+    "aggregateTvlCapUsdc": "3",
+    "maximumSlippageBps": 100,
+    "intentExpirySeconds": 900,
+    "buyFeeBps": "15",
+    "sellFeeBps": "15",
+    "verifiedSkrDiscountPercent": 50,
+    "verifiedSkrFeeBps": "7.5",
+    "feesEnabled": false,
+    "limitsEnabled": false
+  },
+  "requiredServerOnlyCredentialNames": ["C3_PYTH_API_KEY"],
+  "missingEvidence": [
+    "fresh authenticated Pyth BTC/USD, ETH/USD, SOL/USD and USDC/USD observations",
+    "cbBTC/BTC independently reviewed peg source",
+    "Portal ETH/ETH independently reviewed peg source and mint origin mapping",
+    "independent secondary oracle or approved manipulation-resistant on-chain TWAP for every required price",
+    "reviewed liquidity, operator, account, update cadence and divergence controls for secondary sources",
+    "Symmetry C3 vault balances and share supply",
+    "Symmetry-confirmed accounting and share formula",
+    "Security review and Squads governance approval"
+  ],
+  "readinessResult": "NO-GO",
+  "sources": [
+    "https://docs.pyth.network/price-feeds/core/price-feeds",
+    "https://docs.pyth.network/price-feeds/core/fetch-price-updates",
+    "https://docs.pyth.network/price-feeds/core/push-feeds/solana",
+    "https://www.coinbase.com/cbbtc",
+    "https://www.coinbase.com/cbbtc/proof-of-reserves",
+    "https://wormhole.com/docs/products/token-transfers/wrapped-token-transfers/overview/",
+    "https://wormhole.com/docs/reference/contract-addresses/",
+    "https://solana.com/docs/rpc/http/getaccountinfo"
+  ]
+}

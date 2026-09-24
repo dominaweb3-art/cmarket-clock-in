@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "C3 Oracle/NAV disabled research candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "classification",
+    "status",
+    "mainnetExecutionEnabled",
+    "allocationBps",
+    "policy",
+    "assets",
+    "evidence",
+    "pilotCandidatesDisabled",
+    "requiredServerOnlyCredentialNames",
+    "missingEvidence",
+    "readinessResult",
+    "sources"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "c3-oracle-nav-candidate/v1" },
+    "classification": { "const": "SHARED" },
+    "status": { "const": "blocked" },
+    "mainnetExecutionEnabled": { "const": false },
+    "allocationBps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cbBTC", "PortalETH", "WSOL", "total"],
+      "properties": {
+        "cbBTC": { "const": 4000 },
+        "PortalETH": { "const": 3000 },
+        "WSOL": { "const": 3000 },
+        "total": { "const": 10000 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": [
+        "maximumAgeSecondsCandidate",
+        "maximumConfidenceBpsCandidate",
+        "maximumDivergenceBpsCandidate",
+        "minimumPublishedAt",
+        "normalization",
+        "missingOrStaleOrDivergent",
+        "independence"
+      ],
+      "properties": {
+        "maximumAgeSecondsCandidate": { "const": 60 },
+        "maximumConfidenceBpsCandidate": { "const": 200 },
+        "maximumDivergenceBpsCandidate": { "const": 100 }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "required": ["USDC", "cbBTC", "PortalETH", "WSOL"],
+      "additionalProperties": false,
+      "properties": {
+        "USDC": { "$ref": "#/$defs/asset" },
+        "cbBTC": { "$ref": "#/$defs/asset" },
+        "PortalETH": { "$ref": "#/$defs/asset" },
+        "WSOL": { "$ref": "#/$defs/asset" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "feedObservations",
+        "feedExponent",
+        "feedConfidence",
+        "feedPublicationTime",
+        "feedObservedPrice",
+        "feedEvidenceHash",
+        "directAssetFeedVerified",
+        "pegMarketEvidenceVerified",
+        "secondaryOracleVerified",
+        "issuerOriginForPortalMintVerified",
+        "pythAuthenticatedProductionAccessVerified",
+        "symmetryAccountingFormulaVerified",
+        "vaultAndShareMintVerified"
+      ],
+      "properties": {
+        "feedObservations": { "type": "null" },
+        "feedExponent": { "type": "null" },
+        "feedConfidence": { "type": "null" },
+        "feedPublicationTime": { "type": "null" },
+        "feedObservedPrice": { "type": "null" },
+        "feedEvidenceHash": { "type": "null" }
+      }
+    },
+    "pilotCandidatesDisabled": {
+      "type": "object",
+      "required": [
+        "maximumWallets",
+        "minimumPerWalletUsdc",
+        "aggregateTvlCapUsdc",
+        "maximumSlippageBps",
+        "intentExpirySeconds",
+        "buyFeeBps",
+        "sellFeeBps",
+        "verifiedSkrDiscountPercent",
+        "verifiedSkrFeeBps",
+        "feesEnabled",
+        "limitsEnabled"
+      ],
+      "properties": {
+        "feesEnabled": { "const": false },
+        "limitsEnabled": { "const": false }
+      }
+    },
+    "requiredServerOnlyCredentialNames": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "missingEvidence": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "readinessResult": { "const": "NO-GO" },
+    "sources": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "pattern": "^https://" }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mint",
+        "decimals",
+        "referenceFeedId",
+        "pricing",
+        "classification",
+        "pegRequired",
+        "priceEvidence"
+      ],
+      "properties": {
+        "mint": { "type": "string" },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 9 },
+        "referenceFeedId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "pricing": { "type": "string" },
+        "classification": {
+          "enum": [
+            "direct_verified",
+            "proxy_requires_peg_evidence",
+            "secondary_source_missing",
+            "unsupported",
+            "unverified"
+          ]
+        },
+        "pegRequired": { "type": "boolean" },
+        "priceEvidence": { "$ref": "#/$defs/priceEvidence" }
+      }
+    },
+    "priceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceUrl",
+        "retrievedAt",
+        "cluster",
+        "feedAccountId",
+        "exponent",
+        "confidence",
+        "publishTime",
+        "observedPrice",
+        "evidenceHash",
+        "directOrProxy"
+      ],
+      "properties": {
+        "sourceUrl": { "type": "string", "pattern": "^https://" },
+        "retrievedAt": { "type": "null" },
+        "cluster": { "const": "mainnet-beta" },
+        "feedAccountId": { "type": "null" },
+        "exponent": { "type": "null" },
+        "confidence": { "type": "null" },
+        "publishTime": { "type": "null" },
+        "observedPrice": { "type": "null" },
+        "evidenceHash": { "type": "null" },
+        "directOrProxy": {
+          "enum": ["direct_reference_candidate", "proxy_requires_peg_evidence"]
+        }
+      }
+    }
+  }
+}
