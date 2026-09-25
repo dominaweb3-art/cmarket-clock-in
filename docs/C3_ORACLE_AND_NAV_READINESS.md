@@ -1,5 +1,24 @@
 # C3 oracle and NAV readiness — research-only, NO-GO
 
+## M4.4 authenticated Pyth evidence attempt — 2026-09-25 UTC
+
+The research-only command `npm run c3:oracle:evidence` in `services/c3-mainnet` used the short-lived Keychain-provided server credential against the [official upgraded Pyth Core Hermes endpoint](https://docs.pyth.network/price-feeds/core/upgrade/preparing). No credential, header, raw response, or transaction payload was stored. The authenticated catalog `GET https://pyth.dourolabs.app/hermes/v2/price_feeds` returned **HTTP 200** and exposed these exact feed IDs, symbols and public descriptions (asset class `Crypto`, quote currency `USD`):
+
+| Reference feed    | Catalog feed ID                                                    | Catalog description  |
+| ----------------- | ------------------------------------------------------------------ | -------------------- |
+| `Crypto.BTC/USD`  | `e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` | BITCOIN / US DOLLAR  |
+| `Crypto.ETH/USD`  | `ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace` | ETHEREUM / US DOLLAR |
+| `Crypto.SOL/USD`  | `ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` | SOLANA / US DOLLAR   |
+| `Crypto.USDC/USD` | `eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` | USD COIN / US DOLLAR |
+
+The catalog also returned candidate `Crypto.CBBTC/USD`, feed ID `2817d7bfe5c64b8ea956e9a26f573ef64e72e4d7891f2d6af9bcc93f7aff9a97`, description “COINBASE WRAPPED BITCOIN / US DOLLAR”. This **does not** prove the precise Solana cbBTC mint's backing, redeemability or live parity; it is a possible direct-price research candidate only. No exact Portal ETH/ETH or Portal ETH/USD symbol was identified in this catalog search. BTC/USD and ETH/USD remain underlying reference prices, **not** wrapper peg evidence.
+
+The first sequential authenticated `GET https://pyth.dourolabs.app/hermes/v2/updates/price/latest` for the four base IDs returned **HTTP 403**. There was no retry. The catalog being readable does not establish entitlement to price updates; the reason for 403 (product, feed permission, trial scope, expiry or other service policy) was **not** determined. [Pyth documents authentication for current Core price updates](https://docs.pyth.network/price-feeds/core/fetch-price-updates), while its [Pro entitlement FAQ](https://docs.pyth.network/price-feeds/pro/faq) lists potential 403 causes for Pro; those Pro causes are possibilities, not a diagnosis for this Core call. The credential's product entitlement and active trial limits remain unverified. No paid plan or billing change was made.
+
+**Live samples: 0/3 required per base feed.** There is no authenticated price, exponent, confidence interval, publish time, age, schema-version confirmation or public evidence fingerprint from a successful latest-price response. Thus 60-second freshness and 200-bps confidence cannot be marked passed. Three samples from one Pyth operator would not satisfy independent two-source or 100-bps divergence checks even if available. No authenticated prices were supplied to the isolated NAV calculator, so no synthetic-price NAV result was produced in this phase. Pending deposits, reserved withdrawals, fees, dust, actual vault balances and verified share supply remain mandatory future inputs. The historical fixtures below are not live evidence.
+
+**Decision: `BLOCKED_AUTHENTICATED_ORACLE_EVIDENCE`; overall C3 Mainnet execution `NO-GO`.** Next: inspect the Keychain credential's Pyth Terminal product/feed entitlements in the official account UI without exposing the key or changing billing; ask Pyth support why Core `/v2/updates/price/latest` returns 403. Only after legitimate entitlement is confirmed, rerun the read-only command for three samples. Separately obtain independent secondary oracle evidence, mint-specific cbBTC and Portal ETH peg evidence, actual deployed C3 vault balances/share supply, the official Symmetry NAV and USDC redemption policy, and Security/Squads approval. Do not enable Mainnet.
+
 Observed 2026-09-23/24 UTC. This is a SHARED, **non-executable candidate**. No C3 vault, share mint, live balances or live NAV exist. Mainnet execution remains disabled. Neither an off-chain price nor the research calculator may authorize a transaction. The immutable candidate manifest is [`config/c3/c3-oracle-nav-candidate.v1.json`](../config/c3/c3-oracle-nav-candidate.v1.json). `npm run c3:oracle:readiness` from `services/c3-mainnet` enumerates missing evidence and must report NO-GO.
 
 ## Verified assets versus unverified price claims

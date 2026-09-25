@@ -30,6 +30,7 @@
     "c3:governance:readiness": "node scripts/governance-readiness.mjs",
     "c3:oracle:readiness": "node scripts/oracle-readiness.mjs",
     "test:oracle-nav": "node --experimental-strip-types --test research/oracle-nav/*.test.ts",
+    "c3:oracle:evidence": "node --experimental-strip-types research/oracle-nav/pyth-evidence-cli.ts",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",
     "c3:mainnet:deployment-readiness": "node --experimental-strip-types scripts/readiness.ts deployment"
