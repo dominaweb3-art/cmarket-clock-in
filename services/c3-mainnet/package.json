@@ -26,6 +26,7 @@
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",
     "test:boundary": "npm run build && node --test tests/export-boundary.test.mjs",
     "test:symmetry-research": "node --experimental-strip-types --test research/symmetry-v3/*.test.ts",
+    "c3:symmetry:integration-readiness": "node --experimental-strip-types research/symmetry-v3/integration-readiness.ts",
     "test:governance": "node --test tests/governance-readiness.test.mjs",
     "c3:governance:readiness": "node scripts/governance-readiness.mjs",
     "c3:oracle:readiness": "node scripts/oracle-readiness.mjs",

@@ -2,6 +2,8 @@
 
 **Clasificación:** SHARED. **Corte de investigación inicial:** 2026-09-23 17:20:52 UTC. **Red:** Solana Mainnet. **Decisión:** `NO_GO_EXTERNAL_EVIDENCE_REQUIRED`. Esta es una investigación de lectura pública y un manifiesto **no ejecutable**, no una aprobación de inversión, despliegue, custodia ni política de transacciones. M4.1 pasó su puerta de infraestructura PostgreSQL (30/30 escenarios + 20 diagnósticos = 50/50), pero no existe una política Symmetry aprobada, una bóveda C3 ni capacidad Mainnet activa.
 
+**M4.5 (2026-09-25):** el [inventario y arnés SDK de investigación](C3_SYMMETRY_V3_INTEGRATION_HARNESS.md) corroboró el tarball exacto y construyó un depósito público sin firma. La comunicación Symmetry facilitada por el propietario menciona rescatar subyacentes o rebalancearlos a USDC y reclamar USDC; es comunicación del proveedor, **no** prueba de layout, parámetro de salida, mínimos, cuenta destino o ejecución C3. El SDK inspeccionado no ofrece `output_mint=USDC` explícito en `sellVaultTx`, por lo que no se construyó un rescate C3 candidato. La decisión NO-GO no cambia.
+
 ## Fuentes y procedencia
 
 | Fuente primaria (consultada 2026-09-23 UTC)                                    | Qué establece / límite                                                                                                                                                                                                       |

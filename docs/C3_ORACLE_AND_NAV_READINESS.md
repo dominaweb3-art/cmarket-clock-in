@@ -1,5 +1,7 @@
 # C3 oracle and NAV readiness — research-only, NO-GO
 
+**M4.5 integration boundary (2026-09-25):** The [isolated Symmetry SDK harness](C3_SYMMETRY_V3_INTEGRATION_HARNESS.md) proceeds without Pyth Hermes; the previous authenticated HTTP 403 remains unresolved but is not a prerequisite for **integration research**. Symmetry vault accounts, shares, intents and finalized effects are the intended operational position source after verification. Pyth remains an independent price/safety monitor; official Solana Pyth Push accounts could be evaluated later. No current authoritative C3 NAV or live price was calculated, and Mainnet C3 remains disabled.
+
 ## M4.4 authenticated Pyth evidence attempt — 2026-09-25 UTC
 
 The research-only command `npm run c3:oracle:evidence` in `services/c3-mainnet` used the short-lived Keychain-provided server credential against the [official upgraded Pyth Core Hermes endpoint](https://docs.pyth.network/price-feeds/core/upgrade/preparing). No credential, header, raw response, or transaction payload was stored. The authenticated catalog `GET https://pyth.dourolabs.app/hermes/v2/price_feeds` returned **HTTP 200** and exposed these exact feed IDs, symbols and public descriptions (asset class `Crypto`, quote currency `USD`):
