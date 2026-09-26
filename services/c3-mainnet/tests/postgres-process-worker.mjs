@@ -1,5 +1,6 @@
 /** Test-only process boundary for disposable PostgreSQL restart verification. */
 import { PostgresC3Repository } from "../src/postgres.ts";
+import { DisabledPilotRepository } from "../src/pilot-postgres.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { authorizationFixture, fixtureSignature } from "./fixtures.ts";
@@ -124,6 +125,23 @@ try {
         authorizationVerified: true,
       }),
     );
+  } else if (process.argv[2] === "pilot-read") {
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      const pilot = await DisabledPilotRepository.fromVerifiedPool(pool);
+      const intent = await pilot.readIntent(process.argv[3]);
+      if (
+        intent?.state !== "draft" ||
+        intent.revision !== 1n ||
+        intent.amountBaseUnits !== 1_000_000n
+      )
+        throw new Error("Pilot intent was not durable after process restart.");
+      process.stdout.write(
+        JSON.stringify({ durable: true, state: intent.state }),
+      );
+    } finally {
+      await pool.end();
+    }
   } else if (process.argv[2] === "snapshot-write") {
     const record = authorizationFixture();
     const intent = await repository.createIntent({

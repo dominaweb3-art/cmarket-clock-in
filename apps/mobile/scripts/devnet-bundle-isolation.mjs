@@ -22,6 +22,8 @@ const forbiddenProductionMarkers = [
   'C3_MAINNET_RPC_PRIMARY_URL',
   'C3_MAINNET_RPC_SECONDARY_URL',
   'c3-mainnet-services',
+  'C3 owner pilot',
+  'Experimental keep_tokens: [] redemption',
 ]
 
 async function walk(directory) {

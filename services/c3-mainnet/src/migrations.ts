@@ -4,12 +4,17 @@ import type { Pool, PoolClient } from "pg";
 
 const MIGRATION_ID = "0001_c3_state";
 const MANIFEST_MIGRATION_ID = "0002_c3_manifest_order";
+const PILOT_MIGRATION_ID = "0003_c3_owner_pilot";
 const MIGRATION_URL = new URL(
   "../migrations/0001_c3_state.sql",
   import.meta.url,
 );
 const MANIFEST_MIGRATION_URL = new URL(
   "../migrations/0002_c3_manifest_order.sql",
+  import.meta.url,
+);
+const PILOT_MIGRATION_URL = new URL(
+  "../migrations/0003_c3_owner_pilot.sql",
   import.meta.url,
 );
 
@@ -136,5 +141,70 @@ export async function assertC3SchemaCurrent(pool: Pool): Promise<void> {
       );
   } catch {
     throw new Error("C3 schema is absent or mismatched; bootstrap rejected.");
+  }
+}
+
+/** Explicit, forward-only pilot migration. Existing service bootstrap stays unchanged. */
+export async function applyC3PilotMigration(
+  client: PoolClient,
+): Promise<"applied" | "already_applied"> {
+  const pilot = await migrationText(PILOT_MIGRATION_URL);
+  const baseline = await migrationText();
+  const manifest = await migrationText(MANIFEST_MIGRATION_URL);
+  await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+  try {
+    await client.query("SELECT pg_advisory_xact_lock(304137, 1)");
+    const rows = await client.query<{
+      migration_id: string;
+      checksum_sha256: string;
+    }>(
+      "SELECT migration_id,checksum_sha256 FROM c3.schema_migrations WHERE migration_id IN ($1,$2,$3)",
+      [MIGRATION_ID, MANIFEST_MIGRATION_ID, PILOT_MIGRATION_ID],
+    );
+    const found = new Map(
+      rows.rows.map((row) => [row.migration_id, row.checksum_sha256]),
+    );
+    if (
+      found.get(MIGRATION_ID) !== baseline.checksum ||
+      found.get(MANIFEST_MIGRATION_ID) !== manifest.checksum
+    )
+      throw new Error("C3 prerequisite migration is absent or mismatched.");
+    if (found.has(PILOT_MIGRATION_ID)) {
+      if (found.get(PILOT_MIGRATION_ID) !== pilot.checksum)
+        throw new Error("C3 pilot migration checksum mismatch.");
+      await client.query("COMMIT");
+      return "already_applied";
+    }
+    await client.query(pilot.sql);
+    await client.query(
+      "INSERT INTO c3.schema_migrations (migration_id,checksum_sha256) VALUES ($1,$2)",
+      [PILOT_MIGRATION_ID, pilot.checksum],
+    );
+    await client.query("COMMIT");
+    return "applied";
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+/** Pilot repository must never start on an untracked or partially migrated schema. */
+export async function assertC3PilotSchemaCurrent(pool: Pool): Promise<void> {
+  await assertC3SchemaCurrent(pool);
+  const { checksum } = await migrationText(PILOT_MIGRATION_URL);
+  try {
+    const result = await pool.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3.schema_migrations WHERE migration_id=$1",
+      [PILOT_MIGRATION_ID],
+    );
+    if (
+      result.rows.length !== 1 ||
+      result.rows[0]?.checksum_sha256 !== checksum
+    )
+      throw new Error("C3 pilot migration mismatch.");
+  } catch {
+    throw new Error(
+      "C3 pilot schema is absent or mismatched; bootstrap rejected.",
+    );
   }
 }

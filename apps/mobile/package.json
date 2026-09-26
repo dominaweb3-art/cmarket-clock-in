@@ -26,6 +26,7 @@
     "c3:mainnet:deployment-readiness": "npm --prefix ../../services/c3-mainnet run c3:mainnet:deployment-readiness",
     "test:c3-mainnet-services": "npm --prefix ../../services/c3-mainnet test",
     "test:c3-mainnet-dollar-pilot": "node --experimental-strip-types ./scripts/c3-mainnet-dollar-pilot.test.mjs",
+    "test:c3-owner-pilot": "node --experimental-strip-types --test ./scripts/c3-owner-pilot.test.mjs",
     "ci": "tsc --noEmit && npm run lint:check && npm run format:check && npm run android:build",
     "dev": "expo start",
     "doctor": "npx -y expo-doctor@latest",

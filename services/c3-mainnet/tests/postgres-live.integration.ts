@@ -9,8 +9,11 @@ import { C3_AMOUNTS } from "../src/constants.ts";
 import {
   applyC3SchemaMigration,
   applyC3ManifestOrderingMigration,
+  applyC3PilotMigration,
   assertC3SchemaCurrent,
+  assertC3PilotSchemaCurrent,
 } from "../src/migrations.ts";
+import { DisabledPilotRepository } from "../src/pilot-postgres.ts";
 import { PostgresC3Repository } from "../src/postgres.ts";
 import { authorizationFixture, fixtureSignature, wallet } from "./fixtures.ts";
 import { seedSyntheticAuthorization } from "./support/seed-synthetic-authorization.ts";
@@ -99,6 +102,114 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
   t.after(async () => {
     await db.close();
   });
+
+  await t.test(
+    "owner pilot migration, durable draft, CAS and manual review remain disabled",
+    async () => {
+      const client = await pool.connect();
+      try {
+        assert.equal(await applyC3PilotMigration(client), "applied");
+        assert.equal(await applyC3PilotMigration(client), "already_applied");
+        await assertC3PilotSchemaCurrent(pool);
+      } finally {
+        client.release();
+      }
+      const pilot = await DisabledPilotRepository.fromVerifiedPool(pool);
+      const intentId = `c3p-${randomUUID().replaceAll("-", "")}`;
+      const first = await pilot.createDisabledDraft({
+        intentId,
+        kind: "deposit",
+        linkedDepositId: null,
+        wallet,
+        vault: wallet,
+        shareMint: wallet,
+        amountBaseUnits: 1_000_000n,
+        configurationHash: hash("a"),
+        idempotencyKey: randomBytes(32).toString("hex"),
+        expiresAt: new Date(Date.now() + 3_600_000),
+      });
+      assert.equal(first.state, "draft");
+      assert.equal((await pilot.readIntent(intentId))?.revision, 1n);
+      assert.equal((await pilot.listActivity(wallet)).length, 1);
+      const restarted = spawnSync(
+        process.execPath,
+        [
+          "--experimental-strip-types",
+          "tests/postgres-process-worker.mjs",
+          "pilot-read",
+          intentId,
+        ],
+        {
+          cwd: new URL("..", import.meta.url),
+          env: process.env,
+          encoding: "utf8",
+        },
+      );
+      assert.equal(
+        restarted.status,
+        0,
+        "Pilot state did not survive a separate process.",
+      );
+      assert.equal(JSON.parse(restarted.stdout).durable, true);
+      await assert.rejects(
+        pilot.markManualReview(intentId, 0n, "interrupted"),
+        /COMPARE_AND_SWAP_CONFLICT/,
+      );
+      await assert.rejects(
+        pilot.markManualReview(intentId, 1n, "interrupted"),
+        /INVALID_TRANSITION/,
+      );
+      const events = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_pilot_events WHERE intent_id=$1",
+        [intentId],
+      );
+      assert.equal(events.rows[0]?.count, "1");
+      const outbox = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_pilot_outbox WHERE intent_id=$1",
+        [intentId],
+      );
+      assert.equal(outbox.rows[0]?.count, "1");
+      await assert.rejects(
+        pool.query(
+          "UPDATE c3.c3_pilot_intents SET state='completed',revision=revision+1 WHERE intent_id=$1",
+          [intentId],
+        ),
+        /check constraint/,
+      );
+      await assert.rejects(
+        pool.query(
+          `INSERT INTO c3.c3_pilot_intents
+            (intent_id,kind,linked_deposit_id,wallet,vault,share_mint,amount_base_units,
+             configuration_hash,state,expires_at)
+           VALUES ($1,'redemption',$2,$3,$4,$5,1,$6,'redemption_draft',clock_timestamp()+interval '1 hour')`,
+          [
+            `c3p-${randomUUID().replaceAll("-", "")}`,
+            intentId,
+            wallet,
+            wallet,
+            wallet,
+            hash("a"),
+          ],
+        ),
+        /redemption source is not verified/,
+      );
+      await assert.rejects(
+        pilot.createDisabledDraft({
+          intentId: `c3p-${randomUUID().replaceAll("-", "")}`,
+          kind: "deposit",
+          linkedDepositId: null,
+          wallet,
+          vault: wallet,
+          shareMint: wallet,
+          amountBaseUnits: 1_000_000n,
+          configurationHash: hash("a"),
+          idempotencyKey: randomBytes(32).toString("hex"),
+          expiresAt: new Date(Date.now() + 3_600_000),
+        }),
+        /duplicate key/,
+      );
+    },
+  );
 
   await t.test(
     "actual writer-process exit and reader-process restart preserve authorization and signature",
