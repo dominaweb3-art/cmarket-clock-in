@@ -1,0 +1,16 @@
+{
+  "name": "@cmarket/c3-symmetry-owner-builder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "integrity:check": "node scripts/verify-integrity.mjs",
+    "readiness": "node --experimental-strip-types scripts/readiness.mjs"
+  },
+  "dependencies": {
+    "@solana/web3.js": "1.98.4",
+    "@symmetry-hq/sdk": "1.0.22",
+    "pg": "8.23.0"
+  }
+}

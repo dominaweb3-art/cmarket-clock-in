@@ -10,10 +10,13 @@ import {
   applyC3SchemaMigration,
   applyC3ManifestOrderingMigration,
   applyC3PilotMigration,
+  applyC3BuilderMigration,
   assertC3SchemaCurrent,
   assertC3PilotSchemaCurrent,
+  assertC3BuilderSchemaCurrent,
 } from "../src/migrations.ts";
 import { DisabledPilotRepository } from "../src/pilot-postgres.ts";
+import { requestIsolatedCandidate } from "../src/pilot-builder-boundary.ts";
 import { PostgresC3Repository } from "../src/postgres.ts";
 import { authorizationFixture, fixtureSignature, wallet } from "./fixtures.ts";
 import { seedSyntheticAuthorization } from "./support/seed-synthetic-authorization.ts";
@@ -208,6 +211,53 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
         }),
         /duplicate key/,
       );
+    },
+  );
+
+  await t.test(
+    "isolated builder migration is forward-only and seeds no authority",
+    async () => {
+      const client = await pool.connect();
+      try {
+        assert.equal(await applyC3BuilderMigration(client), "applied");
+        assert.equal(await applyC3BuilderMigration(client), "already_applied");
+        await assertC3BuilderSchemaCurrent(pool);
+      } finally {
+        client.release();
+      }
+      const configs = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_pilot_builder_configurations",
+      );
+      const manifests = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_pilot_authorization_manifests",
+      );
+      assert.equal(configs.rows[0]?.count, "0");
+      assert.equal(manifests.rows[0]?.count, "0");
+    },
+  );
+
+  await t.test(
+    "builder request reads PostgreSQL only and rejects absent approved configuration",
+    async () => {
+      const found = await pool.query<{ intent_id: string }>(
+        "SELECT intent_id FROM c3.c3_pilot_intents WHERE kind='deposit' LIMIT 1",
+      );
+      const intentId = found.rows[0]?.intent_id;
+      assert.ok(intentId);
+      await assert.rejects(
+        requestIsolatedCandidate({
+          intentId,
+          configurationVersion: "candidate/v1",
+          operation: "deposit",
+          expectedRevision: "1",
+        }),
+        /C3_BUILDER_FAILED_OR_TIMED_OUT/,
+      );
+      const state = await pool.query<{ state: string; revision: string }>(
+        "SELECT state,revision::text AS revision FROM c3.c3_pilot_intents WHERE intent_id=$1",
+        [intentId],
+      );
+      assert.deepEqual(state.rows[0], { state: "draft", revision: "1" });
     },
   );
 
