@@ -11,6 +11,19 @@ pub struct VaultEvent {
     pub slot: u64,
 }
 
+#[event]
+pub struct SettlementLegEvent {
+    pub version: u8,
+    pub vault: Pubkey,
+    pub intent: Pubkey,
+    pub direction: u8,
+    pub leg: u8,
+    pub input: u64,
+    pub output: u64,
+    pub executed_bitmap: u8,
+    pub slot: u64,
+}
+
 pub mod kind {
     pub const INITIALIZED: u8 = 1;
     pub const PAUSED: u8 = 2;
@@ -26,6 +39,7 @@ pub mod kind {
     pub const EXPIRED: u8 = 12;
     pub const CLOSED: u8 = 13;
     pub const KEEPER_CHANGED: u8 = 14;
+    pub const SHARES_LOCKED: u8 = 15;
 }
 
 pub fn emit_state(

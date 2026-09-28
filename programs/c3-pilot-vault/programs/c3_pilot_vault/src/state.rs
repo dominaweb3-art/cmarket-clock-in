@@ -87,6 +87,58 @@ pub struct RedemptionIntent {
     pub fingerprint: [u8; 32],
 }
 
+/// One immutable three-leg intent. Signatures and finality evidence live in the durable indexer,
+/// since a Solana program cannot know its enclosing transaction signature at execution time.
+#[account]
+#[derive(InitSpace)]
+pub struct SettlementPlan {
+    pub schema_version: u8,
+    pub config_version: u64,
+    pub vault: Pubkey,
+    pub intent: Pubkey,
+    pub wallet: Pubkey,
+    pub share_mint: Pubkey,
+    pub direction: u8,
+    pub amount: u64,
+    pub weights: [u16; 3],
+    pub input_mints: [Pubkey; 3],
+    pub output_mints: [Pubkey; 3],
+    pub source_accounts: [Pubkey; 3],
+    pub destination_accounts: [Pubkey; 3],
+    pub router_program: Pubkey,
+    pub route_hashes: [[u8; 32]; 3],
+    pub minimum_outputs: [u64; 3],
+    pub max_slippage_bps: u16,
+    pub quote_created_at: i64,
+    pub expires_at: i64,
+    pub executed_bitmap: u8,
+    pub lifecycle: u8,
+    pub revision: u64,
+    pub idempotency: [u8; 32],
+    pub actual_inputs: [u64; 3],
+    pub actual_outputs: [u64; 3],
+    pub failure_evidence: [u8; 32],
+    pub bump: u8,
+}
+
+pub mod plan_direction {
+    pub const DEPOSIT: u8 = 1;
+    pub const REDEMPTION: u8 = 2;
+}
+
+pub mod plan_lifecycle {
+    pub const FUNDED: u8 = 1;
+    pub const BUYING: u8 = 2;
+    pub const ACTIVE: u8 = 3;
+    pub const REDEMPTION_REQUESTED: u8 = 4;
+    pub const SELLING: u8 = 5;
+    pub const CLAIMABLE: u8 = 6;
+    pub const REDEEMED: u8 = 7;
+    pub const FAILED_RECOVERABLE: u8 = 8;
+    pub const PARTIALLY_COMPLETED: u8 = 9;
+    pub const MANUAL_REVIEW: u8 = 10;
+}
+
 pub mod deposit_status {
     pub const DRAFT: u8 = 0;
     pub const USDC_DEPOSITED: u8 = 1;
@@ -99,7 +151,7 @@ pub mod deposit_status {
 
 pub mod redemption_status {
     pub const REQUESTED: u8 = 0;
-    pub const SHARES_BURNED: u8 = 1;
+    pub const SHARES_LOCKED: u8 = 1;
     pub const LIQUIDATION_PENDING: u8 = 2;
     pub const LIQUIDATION_RECORDED: u8 = 3;
     pub const USDC_CLAIMABLE: u8 = 4;

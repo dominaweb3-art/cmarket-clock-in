@@ -10,3 +10,7 @@ pub const MAX_INTENT_SECONDS: i64 = 3_600;
 pub const VAULT_SEED: &[u8] = b"c3-vault-v1";
 pub const AUTHORITY_SEED: &[u8] = b"c3-authority-v1";
 pub const SHARE_SEED: &[u8] = b"c3-share-v1";
+pub const PLAN_SEED: &[u8] = b"c3-plan-v1";
+pub const MAX_QUOTE_AGE_SECONDS: i64 = 30;
+pub const MAX_PLAN_SECONDS: i64 = 120;
+pub const MAX_SLIPPAGE_BPS: u16 = 100;

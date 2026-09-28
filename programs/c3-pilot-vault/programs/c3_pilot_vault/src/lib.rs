@@ -12,6 +12,7 @@ pub mod events;
 pub mod instructions;
 #[cfg(feature = "local-mock")]
 pub mod mock_local_only;
+pub mod settlement_plan;
 pub mod state;
 pub mod token_validation;
 pub mod transitions;
@@ -177,6 +178,7 @@ pub mod c3_pilot_vault {
         )
     }
 
+    #[cfg(feature = "local-mock")]
     pub fn create_deposit_intent(
         ctx: Context<CreateDepositIntent>,
         nonce: u64,
@@ -277,6 +279,7 @@ pub mod c3_pilot_vault {
         emit_state(c.key(), d.key(), d.wallet, kind::USDC_DEPOSITED, ONE_USDC)
     }
 
+    #[cfg(feature = "local-mock")]
     pub fn record_deposit_settlement(
         ctx: Context<RecordDepositSettlement>,
         settlement_id: [u8; 32],
@@ -284,6 +287,7 @@ pub mod c3_pilot_vault {
         require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
         let c = &ctx.accounts.config;
         let d = &mut ctx.accounts.intent;
+        let p = &ctx.accounts.plan;
         require_keys_eq!(
             ctx.accounts.keeper.key(),
             c.keeper,
@@ -296,8 +300,32 @@ pub mod c3_pilot_vault {
         );
         at(d.status, deposit_status::SETTLEMENT_PENDING)?;
         live(d.expires_at)?;
+        require_keys_eq!(p.vault, c.key(), VaultError::InvalidPlan);
+        require_keys_eq!(p.wallet, d.wallet, VaultError::InvalidPlan);
+        require_eq!(
+            p.direction,
+            plan_direction::DEPOSIT,
+            VaultError::InvalidPlan
+        );
+        require_eq!(p.executed_bitmap, 0b111, VaultError::Settlement);
+        require_eq!(
+            p.lifecycle,
+            plan_lifecycle::ACTIVE,
+            VaultError::InvalidState
+        );
+        require_eq!(p.revision, 3, VaultError::InvalidState);
         require!(
-            settlement_id != [0; 32] && settlement_id == d.settlement_id,
+            p.actual_inputs == [400_000, 300_000, 300_000],
+            VaultError::Settlement
+        );
+        require!(
+            p.actual_outputs == [40_000, 30_000, 30_000],
+            VaultError::Settlement
+        );
+        require!(
+            settlement_id != [0; 32]
+                && settlement_id == d.settlement_id
+                && settlement_id == p.idempotency,
             VaultError::Settlement
         );
         require_eq!(
@@ -341,6 +369,99 @@ pub mod c3_pilot_vault {
         d.wsol_after = ctx.accounts.vault_wsol.amount;
         d.status = deposit_status::SETTLEMENT_RECORDED;
         emit_state(c.key(), d.key(), d.wallet, kind::DEPOSIT_SETTLED, ONE_USDC)
+    }
+
+    #[cfg(feature = "local-mock")]
+    pub fn create_deposit_settlement_plan(
+        ctx: Context<CreateDepositPlan>,
+        route_hashes: [[u8; 32]; 3],
+        minimum_outputs: [u64; 3],
+        quote_created_at: i64,
+        expires_at: i64,
+        max_slippage_bps: u16,
+        idempotency: [u8; 32],
+    ) -> Result<()> {
+        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        let c = &ctx.accounts.config;
+        let d = &ctx.accounts.intent;
+        require_keys_eq!(
+            ctx.accounts.keeper.key(),
+            c.keeper,
+            VaultError::Unauthorized
+        );
+        at(d.status, deposit_status::SETTLEMENT_PENDING)?;
+        live(d.expires_at)?;
+        require_eq!(d.deposited, ONE_USDC, VaultError::InvalidAmount);
+        require_eq!(
+            d.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        settlement_plan::initialize(
+            &mut ctx.accounts.plan,
+            c,
+            c.key(),
+            d.key(),
+            d.wallet,
+            plan_direction::DEPOSIT,
+            [c.usdc_mint; 3],
+            [c.btc_mint, c.eth_mint, c.wsol_mint],
+            [c.vault_usdc; 3],
+            [c.vault_btc, c.vault_eth, c.vault_wsol],
+            route_hashes,
+            minimum_outputs,
+            quote_created_at,
+            expires_at,
+            max_slippage_bps,
+            idempotency,
+            ctx.bumps.plan,
+        )
+    }
+
+    #[cfg(feature = "local-mock")]
+    pub fn create_redemption_settlement_plan(
+        ctx: Context<CreateRedemptionPlan>,
+        route_hashes: [[u8; 32]; 3],
+        minimum_outputs: [u64; 3],
+        quote_created_at: i64,
+        expires_at: i64,
+        max_slippage_bps: u16,
+        idempotency: [u8; 32],
+    ) -> Result<()> {
+        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        let c = &ctx.accounts.config;
+        let r = &ctx.accounts.intent;
+        require_keys_eq!(
+            ctx.accounts.keeper.key(),
+            c.keeper,
+            VaultError::Unauthorized
+        );
+        at(r.status, redemption_status::LIQUIDATION_PENDING)?;
+        require_eq!(r.share_amount, SHARE_UNITS, VaultError::InvalidAmount);
+        require_eq!(
+            r.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        settlement_plan::initialize(
+            &mut ctx.accounts.plan,
+            c,
+            c.key(),
+            r.key(),
+            r.wallet,
+            plan_direction::REDEMPTION,
+            [c.btc_mint, c.eth_mint, c.wsol_mint],
+            [c.usdc_mint; 3],
+            [c.vault_btc, c.vault_eth, c.vault_wsol],
+            [c.vault_usdc; 3],
+            route_hashes,
+            minimum_outputs,
+            quote_created_at,
+            expires_at,
+            max_slippage_bps,
+            idempotency,
+            ctx.bumps.plan,
+        )
     }
 
     pub fn issue_initial_shares(ctx: Context<IssueShares>) -> Result<()> {
@@ -470,7 +591,7 @@ pub mod c3_pilot_vault {
         emit_state(c.key(), r.key(), r.wallet, kind::REDEMPTION_CREATED, shares)
     }
 
-    pub fn lock_or_burn_shares(ctx: Context<BurnShares>) -> Result<()> {
+    pub fn lock_shares_for_redemption(ctx: Context<BurnShares>) -> Result<()> {
         let c = &ctx.accounts.config;
         let r = &mut ctx.accounts.intent;
         require_keys_eq!(r.wallet, ctx.accounts.owner.key(), VaultError::Unauthorized);
@@ -498,22 +619,13 @@ pub mod c3_pilot_vault {
             c.share_mint,
             anchor_spl::token_2022::ID,
         )?;
-        token_2022::burn(
-            CpiContext::new(
-                ctx.accounts.share_token_program.to_account_info(),
-                Burn2022 {
-                    mint: ctx.accounts.share_mint.to_account_info(),
-                    from: ctx.accounts.owner_shares.to_account_info(),
-                    authority: ctx.accounts.owner.to_account_info(),
-                },
-            ),
-            SHARE_UNITS,
-        )?;
-        r.status = redemption_status::SHARES_BURNED;
+        // Non-transferable shares remain with the owner until liquidation is proven.
+        // The single-position vault lifecycle and this intent prevent a second redemption.
         r.status = redemption_status::LIQUIDATION_PENDING;
-        emit_state(c.key(), r.key(), r.wallet, kind::SHARES_BURNED, SHARE_UNITS)
+        emit_state(c.key(), r.key(), r.wallet, kind::SHARES_LOCKED, SHARE_UNITS)
     }
 
+    #[cfg(feature = "local-mock")]
     pub fn record_redemption_settlement(
         ctx: Context<RecordRedemptionSettlement>,
         settlement_id: [u8; 32],
@@ -521,6 +633,7 @@ pub mod c3_pilot_vault {
         require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
         let c = &ctx.accounts.config;
         let r = &mut ctx.accounts.intent;
+        let p = &ctx.accounts.plan;
         require_keys_eq!(
             ctx.accounts.keeper.key(),
             c.keeper,
@@ -532,8 +645,32 @@ pub mod c3_pilot_vault {
             VaultError::InvalidConfig
         );
         at(r.status, redemption_status::LIQUIDATION_PENDING)?;
+        require_keys_eq!(p.vault, c.key(), VaultError::InvalidPlan);
+        require_keys_eq!(p.wallet, r.wallet, VaultError::InvalidPlan);
+        require_eq!(
+            p.direction,
+            plan_direction::REDEMPTION,
+            VaultError::InvalidPlan
+        );
+        require_eq!(p.executed_bitmap, 0b111, VaultError::Settlement);
+        require_eq!(
+            p.lifecycle,
+            plan_lifecycle::CLAIMABLE,
+            VaultError::InvalidState
+        );
+        require_eq!(p.revision, 3, VaultError::InvalidState);
         require!(
-            settlement_id != [0; 32] && settlement_id == r.settlement_id,
+            p.actual_inputs == [r.btc_before, r.eth_before, r.wsol_before],
+            VaultError::Settlement
+        );
+        require!(
+            p.actual_outputs == [396_000, 297_000, 297_000],
+            VaultError::Settlement
+        );
+        require!(
+            settlement_id != [0; 32]
+                && settlement_id == r.settlement_id
+                && settlement_id == p.idempotency,
             VaultError::Settlement
         );
         require_eq!(ctx.accounts.vault_btc.amount, 0, VaultError::Settlement);
@@ -576,6 +713,22 @@ pub mod c3_pilot_vault {
             r.usdc_claimable,
             VaultError::Settlement
         );
+        require_eq!(
+            ctx.accounts.owner_shares.amount,
+            SHARE_UNITS,
+            VaultError::InvalidAmount
+        );
+        require_eq!(
+            ctx.accounts.share_mint.supply,
+            SHARE_UNITS,
+            VaultError::InvalidAmount
+        );
+        ata(
+            ctx.accounts.owner_shares.key(),
+            r.wallet,
+            c.share_mint,
+            anchor_spl::token_2022::ID,
+        )?;
         ata(
             ctx.accounts.owner_usdc.key(),
             r.wallet,
@@ -584,6 +737,18 @@ pub mod c3_pilot_vault {
         )?;
         let bump = [c.authority_bump];
         let signer: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+        // Burn and USDC transfer are atomic: if either fails, neither effect survives.
+        token_2022::burn(
+            CpiContext::new(
+                ctx.accounts.share_token_program.to_account_info(),
+                Burn2022 {
+                    mint: ctx.accounts.share_mint.to_account_info(),
+                    from: ctx.accounts.owner_shares.to_account_info(),
+                    authority: ctx.accounts.owner.to_account_info(),
+                },
+            ),
+            SHARE_UNITS,
+        )?;
         token::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -602,6 +767,7 @@ pub mod c3_pilot_vault {
         r.status = redemption_status::USDC_RECEIVED;
         r.status = redemption_status::COMPLETED;
         c.lifecycle = 4;
+        emit_state(c.key(), r.key(), r.wallet, kind::SHARES_BURNED, SHARE_UNITS)?;
         emit_state(
             c.key(),
             r.key(),
@@ -642,6 +808,26 @@ pub mod c3_pilot_vault {
             kind::CLOSED,
             ctx.accounts.redemption.usdc_returned,
         )
+    }
+
+    #[cfg(feature = "local-mock")]
+    pub fn mock_execute_deposit_leg(
+        ctx: Context<MockDepositLeg>,
+        leg: u8,
+        expected_revision: u64,
+        route_hash: [u8; 32],
+    ) -> Result<()> {
+        mock_local_only::deposit_leg(ctx, leg, expected_revision, route_hash)
+    }
+
+    #[cfg(feature = "local-mock")]
+    pub fn mock_execute_redemption_leg(
+        ctx: Context<MockRedemptionLeg>,
+        leg: u8,
+        expected_revision: u64,
+        route_hash: [u8; 32],
+    ) -> Result<()> {
+        mock_local_only::redemption_leg(ctx, leg, expected_revision, route_hash)
     }
 
     #[cfg(feature = "local-mock")]

@@ -10,7 +10,7 @@ const root = resolve(here, "../..");
 const idlPath = resolve(here, "target/idl/c3_pilot_vault.json");
 const soPath = resolve(here, "target/deploy/c3_pilot_vault.so");
 
-test("production artifact excludes local mock entrypoints and no protected mobile/Symmetry file changed", () => {
+test("production artifact excludes local mock entrypoints and protects stable mobile/Symmetry", () => {
   assert.ok(
     existsSync(idlPath) && existsSync(soPath),
     "run a default-feature Anchor build first",
@@ -22,6 +22,19 @@ test("production artifact excludes local mock entrypoints and no protected mobil
     false,
     "mock instruction must be absent from production IDL",
   );
+  for (const localOnly of [
+    "createDepositIntent",
+    "recordDepositSettlement",
+    "createDepositSettlementPlan",
+    "createRedemptionSettlementPlan",
+    "recordRedemptionSettlement",
+  ]) {
+    assert.equal(
+      names.includes(localOnly),
+      false,
+      `${localOnly} must be absent from production IDL`,
+    );
+  }
   const so = readFileSync(soPath);
   for (const marker of [
     "MOCK_LOCAL_ONLY",
@@ -52,10 +65,11 @@ test("production artifact excludes local mock entrypoints and no protected mobil
       "preserved Symmetry builder changed",
     );
     assert.equal(
-      path.startsWith("services/c3-mainnet/"),
+      path === "services/c3-mainnet/src/symmetry.ts",
       false,
-      "production C3 service changed",
+      "frozen Symmetry provider changed",
     );
+    // C3V2 intentionally adds server-only Jupiter validation to c3-mainnet.
   }
   const source = readFileSync(
     resolve(here, "programs/c3_pilot_vault/src/lib.rs"),

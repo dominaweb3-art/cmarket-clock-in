@@ -10,6 +10,7 @@ import type { AccountMeta } from "@solana/web3.js";
 const U64_MAX = (1n << 64n) - 1n;
 const vaultSeed = Buffer.from("c3-vault-v1");
 const authoritySeed = Buffer.from("c3-authority-v1");
+const settlementPlanSeed = Buffer.from("c3-plan-v1");
 
 /** Monetary inputs are decimal strings, never JS numbers or exponent notation. */
 export function toBaseUnits(value: string, decimals = 6): bigint {
@@ -43,7 +44,7 @@ export type C3InstructionName =
   | "record_deposit_settlement"
   | "issue_initial_shares"
   | "create_redemption_intent"
-  | "lock_or_burn_shares"
+  | "lock_shares_for_redemption"
   | "record_redemption_settlement"
   | "claim_usdc"
   | "expire_intent"
@@ -73,6 +74,12 @@ export class C3PilotClient {
   }
   redemptionIntentPda(owner: PublicKey, nonce: bigint): PublicKey {
     return this.intentPda("redemption", owner, nonce);
+  }
+  settlementPlanPda(intent: PublicKey): PublicKey {
+    return PublicKey.findProgramAddressSync(
+      [settlementPlanSeed, intent.toBuffer()],
+      this.programId,
+    )[0];
   }
   private intentPda(
     prefix: string,
@@ -149,6 +156,9 @@ export class C3PilotClient {
   }
   decodeRedemption(data: Buffer): unknown {
     return this.coder.accounts.decode("RedemptionIntent", data);
+  }
+  decodeSettlementPlan(data: Buffer): unknown {
+    return this.coder.accounts.decode("SettlementPlan", data);
   }
   decodeEvents(logs: string[]): unknown[] {
     // EventParser is read-only; no wallet or RPC object is needed.

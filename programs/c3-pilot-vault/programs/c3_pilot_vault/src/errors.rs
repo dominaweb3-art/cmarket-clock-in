@@ -28,4 +28,10 @@ pub enum VaultError {
     Destination,
     #[msg("This instruction exists only in local mock builds")]
     MockOnly,
+    #[msg("Settlement plan is invalid or stale")]
+    InvalidPlan,
+    #[msg("Settlement leg is out of order or already executed")]
+    InvalidLeg,
+    #[msg("Settlement output is below the approved minimum")]
+    MinimumOutput,
 }

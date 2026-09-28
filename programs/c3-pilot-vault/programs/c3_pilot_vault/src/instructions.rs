@@ -84,6 +84,8 @@ pub struct RecordDepositSettlement<'info> {
     pub config: Account<'info, VaultConfig>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Account<'info, DepositIntent>,
+    #[account(seeds = [PLAN_SEED, intent.key().as_ref()], bump = plan.bump, constraint = plan.intent == intent.key())]
+    pub plan: Box<Account<'info, SettlementPlan>>,
     #[account(address = config.vault_usdc)]
     pub vault_usdc: Account<'info, TokenAccount>,
     #[account(address = config.vault_btc)]
@@ -92,6 +94,19 @@ pub struct RecordDepositSettlement<'info> {
     pub vault_eth: Account<'info, TokenAccount>,
     #[account(address = config.vault_wsol)]
     pub vault_wsol: Account<'info, TokenAccount>,
+}
+
+#[derive(Accounts)]
+pub struct CreateDepositPlan<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(mut, constraint = intent.vault == config.key())]
+    pub intent: Account<'info, DepositIntent>,
+    #[account(init, payer = keeper, seeds = [PLAN_SEED, intent.key().as_ref()], bump, space = 8 + SettlementPlan::INIT_SPACE)]
+    pub plan: Account<'info, SettlementPlan>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -164,6 +179,8 @@ pub struct RecordRedemptionSettlement<'info> {
     pub config: Account<'info, VaultConfig>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Account<'info, RedemptionIntent>,
+    #[account(seeds = [PLAN_SEED, intent.key().as_ref()], bump = plan.bump, constraint = plan.intent == intent.key())]
+    pub plan: Box<Account<'info, SettlementPlan>>,
     #[account(address = config.vault_usdc)]
     pub vault_usdc: Account<'info, TokenAccount>,
     #[account(address = config.vault_btc)]
@@ -172,6 +189,19 @@ pub struct RecordRedemptionSettlement<'info> {
     pub vault_eth: Account<'info, TokenAccount>,
     #[account(address = config.vault_wsol)]
     pub vault_wsol: Account<'info, TokenAccount>,
+}
+
+#[derive(Accounts)]
+pub struct CreateRedemptionPlan<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(mut, constraint = intent.vault == config.key())]
+    pub intent: Account<'info, RedemptionIntent>,
+    #[account(init, payer = keeper, seeds = [PLAN_SEED, intent.key().as_ref()], bump, space = 8 + SettlementPlan::INIT_SPACE)]
+    pub plan: Account<'info, SettlementPlan>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -191,7 +221,12 @@ pub struct ClaimUsdc<'info> {
     pub owner_usdc: Account<'info, TokenAccount>,
     #[account(address = config.usdc_mint)]
     pub usdc_mint: Account<'info, Mint>,
+    #[account(mut, address = config.share_mint)]
+    pub share_mint: InterfaceAccount<'info, ShareMint>,
+    #[account(mut, constraint = owner_shares.owner == owner.key(), constraint = owner_shares.mint == config.share_mint)]
+    pub owner_shares: InterfaceAccount<'info, ShareAccount>,
     pub token_program: Program<'info, Token>,
+    pub share_token_program: Program<'info, Token2022>,
 }
 
 #[derive(Accounts)]
@@ -255,4 +290,24 @@ pub struct MockRedemption<'info> {
     pub accounts: MockSettle<'info>,
     #[account(mut, constraint = intent.vault == accounts.config.key())]
     pub intent: Box<Account<'info, RedemptionIntent>>,
+}
+
+#[cfg(feature = "local-mock")]
+#[derive(Accounts)]
+pub struct MockDepositLeg<'info> {
+    pub accounts: MockSettle<'info>,
+    #[account(mut, constraint = intent.vault == accounts.config.key())]
+    pub intent: Box<Account<'info, DepositIntent>>,
+    #[account(mut, seeds = [PLAN_SEED, intent.key().as_ref()], bump = plan.bump)]
+    pub plan: Box<Account<'info, SettlementPlan>>,
+}
+
+#[cfg(feature = "local-mock")]
+#[derive(Accounts)]
+pub struct MockRedemptionLeg<'info> {
+    pub accounts: MockSettle<'info>,
+    #[account(mut, constraint = intent.vault == accounts.config.key())]
+    pub intent: Box<Account<'info, RedemptionIntent>>,
+    #[account(mut, seeds = [PLAN_SEED, intent.key().as_ref()], bump = plan.bump)]
+    pub plan: Box<Account<'info, SettlementPlan>>,
 }
