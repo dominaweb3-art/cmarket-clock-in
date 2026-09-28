@@ -26,3 +26,9 @@ credentials.json
 /apps/mobile/dist/generated-results/
 /artifacts/releases/*.apk
 /apps/identity/.vercel/
+/programs/c3-pilot-vault/target/
+/programs/c3-pilot-vault/.anchor/
+/programs/c3-pilot-vault/test-ledger/
+/programs/c3-pilot-vault/node_modules/
+/programs/c3-pilot-vault/.env*
+/programs/c3-pilot-vault/results/

@@ -1,0 +1,24 @@
+{
+  "name": "@cmarket/c3-pilot-vault-local",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test:local": "node --experimental-strip-types --test tests/e2e.test.ts",
+    "c3:vault:e2e:local": "node scripts/run-local.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint:check": "eslint tests scripts",
+    "format:check": "prettier --check tests scripts package.json eslint.config.mjs",
+    "test:boundary": "node --test tests/boundary.test.mjs"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.99.0",
+    "@types/node": "26.6.2",
+    "eslint": "9.39.5",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

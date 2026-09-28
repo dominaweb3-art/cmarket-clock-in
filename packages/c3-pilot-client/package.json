@@ -1,0 +1,28 @@
+{
+  "name": "@cmarket/c3-pilot-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "lint:check": "eslint src tests",
+    "format:check": "prettier --check src tests package.json eslint.config.mjs"
+  },
+  "peerDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/web3.js": "1.99.0"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/web3.js": "1.99.0",
+    "@types/node": "26.6.2",
+    "eslint": "9.39.5",
+    "prettier": "3.9.6",
+    "typescript-eslint": "8.70.0",
+    "typescript": "6.0.3"
+  }
+}

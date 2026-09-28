@@ -1,5 +1,17 @@
 # C Market workspace guidance
 
+## Active C3 open-vault pilot rule (2026-09-28; supersedes older Symmetry execution guidance below)
+
+The active controlled-pilot execution path is the source-reviewed C3 open vault in `programs/c3-pilot-vault/`. The older Symmetry V3 builder, evidence, PostgreSQL work, and documents remain preserved for provenance and a possible future adapter; Symmetry is frozen and non-executable for this pilot. The older sections below describe historical decisions and must not override this active rule.
+
+- C3 target is always BTC 4,000 bps, ETH 3,000 bps, SOL 3,000 bps. The owner-only first-deposit acceptance amount is exactly 1 USDC; later proportional deposits require a separate reviewed design.
+- The only user ownership representation is the actual on-chain C3 share-token balance. Do not substitute an internal database ledger for shares.
+- The open vault must hold the underlying assets in program-controlled accounts, with an explicit, reconciled deposit/settlement/share-issuance and full-redemption/USDC-claim lifecycle.
+- `MOCK_LOCAL_ONLY` settlement is a deterministic local-validator fixture, not Jupiter, not Mainnet, and not an economic C3 basket. It must remain absent from production artifacts and mobile packages.
+- Mainnet, production mints and authorities, fees, SKR rewards, public deposits, subsequent-deposit NAV math, and partial redemptions remain disabled until a supervised pilot, independent security review, and governance approval. C5, C10, Earn, and other products remain out of scope.
+- The next implementation step after C3V1 is Jupiter settlement plus backend/mobile integration. Do not activate the pilot or describe it as public production merely because local tests pass.
+- Every execution ends with the detailed Spanish project-manager report described below, including what was verified and what remains unverified. Never assume the project manager already knows the current state.
+
 ## Master product objective
 
 The delivery objective is one functional, secure, verifiable C3 dApp for Android/Seeker before the hackathon deadline. All economic C3 implementation and acceptance work targets a controlled Solana Mainnet pilot with real assets. Devnet is not valid evidence of economic C3 settlement and may be used only for non-economic mobile, MWA, lifecycle, recovery, and regression checks. Do not lose time building parallel products before the real C3 vertical slice works end to end.

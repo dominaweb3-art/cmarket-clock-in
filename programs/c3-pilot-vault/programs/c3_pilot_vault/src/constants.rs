@@ -1,0 +1,12 @@
+pub const SCHEMA_VERSION: u8 = 1;
+pub const CONFIG_VERSION: u64 = 1;
+pub const ONE_USDC: u64 = 1_000_000;
+pub const SHARE_UNITS: u64 = 1_000_000;
+pub const BTC_BPS: u16 = 4_000;
+pub const ETH_BPS: u16 = 3_000;
+pub const SOL_BPS: u16 = 3_000;
+pub const TOTAL_BPS: u16 = 10_000;
+pub const MAX_INTENT_SECONDS: i64 = 3_600;
+pub const VAULT_SEED: &[u8] = b"c3-vault-v1";
+pub const AUTHORITY_SEED: &[u8] = b"c3-authority-v1";
+pub const SHARE_SEED: &[u8] = b"c3-share-v1";
