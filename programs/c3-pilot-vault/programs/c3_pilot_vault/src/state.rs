@@ -118,6 +118,40 @@ pub struct SettlementPlan {
     pub actual_inputs: [u64; 3],
     pub actual_outputs: [u64; 3],
     pub failure_evidence: [u8; 32],
+    pub active_swap_authorization: [u8; 32],
+    pub active_swap_expires_at: i64,
+    pub bump: u8,
+}
+
+/// A governance-approved, single-use swap envelope for exactly one plan revision.
+/// The plan separately stores this account's commitment, preventing a self-hashed
+/// instruction from authorizing itself. It stores no private key or signature.
+#[account]
+#[derive(InitSpace)]
+pub struct SwapLegAuthorization {
+    pub schema_version: u8,
+    pub plan: Pubkey,
+    pub config_version: u64,
+    pub direction: u8,
+    pub leg: u8,
+    pub expected_revision: u64,
+    pub router_program: Pubkey,
+    pub route_registry_version: u64,
+    pub source: Pubkey,
+    pub destination: Pubkey,
+    pub input_mint: Pubkey,
+    pub output_mint: Pubkey,
+    pub input_amount: u64,
+    pub minimum_output: u64,
+    pub max_slippage_bps: u16,
+    pub quote_created_at: i64,
+    pub quote_fingerprint: [u8; 32],
+    pub route_fingerprint: [u8; 32],
+    pub instruction_hash: [u8; 32],
+    pub account_metas_hash: [u8; 32],
+    pub expires_at: i64,
+    pub idempotency: [u8; 32],
+    pub consumed: bool,
     pub bump: u8,
 }
 

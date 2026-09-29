@@ -8,7 +8,7 @@
     "c3:vault:e2e:local": "node scripts/run-local.mjs",
     "typecheck": "tsc --noEmit",
     "lint:check": "eslint tests scripts",
-    "format:check": "prettier --check tests scripts package.json eslint.config.mjs",
+    "format:check": "prettier --check tests/*.ts tests/*.mjs scripts package.json eslint.config.mjs",
     "test:boundary": "node --test tests/boundary.test.mjs"
   },
   "devDependencies": {

@@ -11,3 +11,7 @@ test = "npm run test:local"
 [features]
 resolution = true
 skip-lint = false
+
+[[test.genesis]]
+address = "7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ"
+program = "target/deploy/c3_local_router.so"

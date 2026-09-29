@@ -34,4 +34,12 @@ pub enum VaultError {
     InvalidLeg,
     #[msg("Settlement output is below the approved minimum")]
     MinimumOutput,
+    #[msg("Swap execution is disabled in this build")]
+    SwapDisabled,
+    #[msg("Swap authorization does not match the trusted plan")]
+    SwapAuthorization,
+    #[msg("Swap account or instruction is not allowed")]
+    SwapAccount,
+    #[msg("Swap token effects do not match the authorization")]
+    SwapEffects,
 }

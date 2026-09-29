@@ -21,6 +21,7 @@ let started = false;
 const testFile = process.argv.includes("--open-local")
   ? "pilot-open-local/orchestrator.integration.ts"
   : "tests/postgres-live.integration.ts";
+const withVault = process.argv.includes("--open-local-cpi");
 
 function run(binary, args, env = process.env) {
   const result = spawnSync(join(binaryDirectory, binary), args, {
@@ -83,9 +84,13 @@ try {
   url.password = password;
   const result = spawnSync(
     process.execPath,
-    ["--experimental-strip-types", "--test", testFile],
+    withVault
+      ? ["scripts/run-local.mjs"]
+      : ["--experimental-strip-types", "--test", testFile],
     {
-      cwd: new URL("..", import.meta.url),
+      cwd: withVault
+        ? new URL("../../../programs/c3-pilot-vault/", import.meta.url)
+        : new URL("..", import.meta.url),
       env: {
         ...process.env,
         DATABASE_URL: url.toString(),

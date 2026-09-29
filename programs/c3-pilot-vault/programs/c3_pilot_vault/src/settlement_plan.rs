@@ -42,8 +42,7 @@ pub fn initialize(
         .ok_or(VaultError::Expired)?;
     let remaining = expires_at.checked_sub(now).ok_or(VaultError::Expired)?;
     require!(
-        quote_age >= 0
-            && quote_age <= MAX_QUOTE_AGE_SECONDS
+        (0..=MAX_QUOTE_AGE_SECONDS).contains(&quote_age)
             && remaining > 0
             && remaining <= MAX_PLAN_SECONDS,
         VaultError::Expired
@@ -97,6 +96,8 @@ pub fn initialize(
     plan.actual_inputs = [0; 3];
     plan.actual_outputs = [0; 3];
     plan.failure_evidence = [0; 32];
+    plan.active_swap_authorization = [0; 32];
+    plan.active_swap_expires_at = 0;
     plan.bump = bump;
     Ok(())
 }

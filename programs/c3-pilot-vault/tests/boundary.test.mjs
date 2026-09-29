@@ -40,6 +40,7 @@ test("production artifact excludes local mock entrypoints and protects stable mo
     "MOCK_LOCAL_ONLY",
     "mock_settle_deposit",
     "mock_settle_redemption",
+    "7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ",
   ]) {
     assert.equal(
       so.includes(Buffer.from(marker)),

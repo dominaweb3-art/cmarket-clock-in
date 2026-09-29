@@ -30,6 +30,13 @@ if (
 ) {
   throw new Error("C3V1 local validator requires Anchor CLI 0.31.1");
 }
+const router = spawnSync(
+  "cargo",
+  ["build-sbf", "--manifest-path", "tests/mock-router/Cargo.toml"],
+  { cwd: workspace, stdio: "inherit" },
+);
+if (router.status !== 0)
+  throw new Error("Could not build isolated local-only router");
 const result = spawnSync(anchor, ["test", "--", "--features", "local-mock"], {
   cwd: workspace,
   stdio: "inherit",

@@ -14,3 +14,17 @@ pub const PLAN_SEED: &[u8] = b"c3-plan-v1";
 pub const MAX_QUOTE_AGE_SECONDS: i64 = 30;
 pub const MAX_PLAN_SECONDS: i64 = 120;
 pub const MAX_SLIPPAGE_BPS: u16 = 100;
+pub const SWAP_AUTH_SEED: &[u8] = b"c3-swap-auth-v1";
+pub const ROUTE_REGISTRY_VERSION: u64 = 1;
+
+// The production binary contains the boundary but cannot execute it before a
+// separately reviewed configuration/release. Environment variables cannot flip it.
+#[cfg(not(feature = "local-mock"))]
+pub const ROUTER_EXECUTION_ENABLED: bool = false;
+#[cfg(feature = "local-mock")]
+pub const ROUTER_EXECUTION_ENABLED: bool = true;
+
+#[cfg(not(feature = "local-mock"))]
+pub const REVIEWED_ROUTER_ID: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
+#[cfg(feature = "local-mock")]
+pub const REVIEWED_ROUTER_ID: &str = "7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ";

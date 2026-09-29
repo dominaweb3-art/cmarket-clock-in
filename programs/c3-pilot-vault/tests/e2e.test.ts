@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -35,6 +37,11 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { C3PilotClient } from "../../../packages/c3-pilot-client/src/index.ts";
+import { openValidatorJournal } from "../../../services/c3-mainnet/pilot-open-local/validator-bridge.ts";
+import type {
+  OpenSnapshot,
+  Scope,
+} from "../../../services/c3-mainnet/pilot-open-local/orchestrator.ts";
 
 const url = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
 if (url !== "http://127.0.0.1:8899")
@@ -63,6 +70,31 @@ const provider = new AnchorProvider(connection, new Wallet(payer), {
 });
 setProvider(provider);
 const program: AnyProgram = new Program(idl, provider);
+const routerId = new PublicKey("7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ");
+const [poolAuthority] = PublicKey.findProgramAddressSync(
+  [Buffer.from("liquidity")],
+  routerId,
+);
+const digest = (...parts: Uint8Array[]): number[] => [
+  ...createHash("sha256").update(Buffer.concat(parts)).digest(),
+];
+const bytes = (value: string): Uint8Array => Buffer.from(value);
+const hexDigest = (...parts: Uint8Array[]): string =>
+  Buffer.from(digest(...parts)).toString("hex");
+function base58(value: Uint8Array): string {
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let number = BigInt(`0x${Buffer.from(value).toString("hex")}`);
+  let encoded = "";
+  while (number > 0n) {
+    encoded = alphabet[Number(number % 58n)] + encoded;
+    number /= 58n;
+  }
+  for (const byte of value) {
+    if (byte !== 0) break;
+    encoded = `1${encoded}`;
+  }
+  return encoded;
+}
 const readOnlyClient = new C3PilotClient(idl, program.programId);
 const [config] = PublicKey.findProgramAddressSync(
   [Buffer.from("c3-vault-v1")],
@@ -131,7 +163,7 @@ async function expectFailure(
 test(
   "MOCK_LOCAL_ONLY: exact one-owner buy, hold, full redemption and USDC claim on isolated validator",
   { timeout: 240_000 },
-  async () => {
+  async (t) => {
     await airdrop(payer.publicKey, 20_000_000_000);
     const owner = Keypair.generate();
     const attacker = Keypair.generate();
@@ -151,21 +183,21 @@ test(
     const btcMint = await createMint(
       connection,
       payer,
-      vaultAuthority,
+      payer.publicKey,
       null,
       6,
     );
     const ethMint = await createMint(
       connection,
       payer,
-      vaultAuthority,
+      payer.publicKey,
       null,
       6,
     );
     const wsolMint = await createMint(
       connection,
       payer,
-      vaultAuthority,
+      payer.publicKey,
       null,
       6,
     );
@@ -273,6 +305,28 @@ test(
         true,
       )
     ).address;
+    const poolAccounts = new Map<string, PublicKey>();
+    for (const mint of [usdcMint, btcMint, ethMint, wsolMint]) {
+      const account = await getOrCreateAssociatedTokenAccount(
+        connection,
+        payer,
+        mint,
+        poolAuthority,
+        true,
+      );
+      poolAccounts.set(mint.toBase58(), account.address);
+      await mintTo(connection, payer, mint, account.address, payer, 2_000_000);
+    }
+    for (const mint of [btcMint, ethMint, wsolMint]) {
+      await setAuthority(
+        connection,
+        payer,
+        mint,
+        payer,
+        AuthorityType.MintTokens,
+        vaultAuthority,
+      );
+    }
     await mintTo(connection, payer, usdcMint, ownerUsdc, payer, 1_000_000);
     await setAuthority(
       connection,
@@ -302,6 +356,66 @@ test(
       tokenProgram: TOKEN_PROGRAM_ID,
       shareTokenProgram: TOKEN_2022_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
+    };
+    const durable = process.env.C3_DISPOSABLE_TEST_DATABASE
+      ? await openValidatorJournal()
+      : null;
+    if (durable) t.after(() => durable.close());
+    const journalId = randomUUID();
+    const depositPlanAddress = settlementPlan(
+      intent("deposit", owner.publicKey, 1),
+    );
+    let journalState: OpenSnapshot | null = durable
+      ? await durable.db.createDraft({
+          intentId: journalId,
+          wallet: owner.publicKey.toBase58(),
+          vault: config.toBase58(),
+          shareMint: shareMint.publicKey.toBase58(),
+          depositPlan: depositPlanAddress.toBase58(),
+          configurationHash: hexDigest(bytes("c3-local-cpi-v1")),
+          expiresAt: new Date(Date.now() + 3_600_000),
+          idempotencyHash: hexDigest(bytes(`create:${journalId}`)),
+        })
+      : null;
+    const journalScope = (): Scope => {
+      if (!journalState) throw new Error("C3_LOCAL_JOURNAL_NOT_ENABLED");
+      return {
+        intentId: journalId,
+        wallet: owner.publicKey.toBase58(),
+        vault: config.toBase58(),
+        expectedDbRevision: journalState.dbRevision,
+        expectedChainRevision: journalState.chainRevision,
+        idempotencyHash: hexDigest(
+          bytes(`${journalId}:${journalState.dbRevision}:${randomUUID()}`),
+        ),
+      };
+    };
+    const checkpoint = async (
+      from: "draft" | "buying" | "active" | "selling" | "claimable",
+      to:
+        "funded" | "active" | "redemption_requested" | "claimable" | "redeemed",
+      plan: PublicKey,
+      revision: bigint,
+      signature: string,
+    ): Promise<void> => {
+      if (!durable || !journalState) return;
+      journalState = await durable.db.recordLocalChainCheckpoint(
+        journalScope(),
+        from,
+        to,
+        {
+          source: "MOCK_LOCAL_ONLY",
+          plan: plan.toBase58(),
+          wallet: owner.publicKey.toBase58(),
+          vault: config.toBase58(),
+          amount: 1_000_000n,
+          chainRevision: revision,
+          evidenceHash: hexDigest(bytes(signature)),
+          ...(to === "redemption_requested"
+            ? { redemptionPlan: plan.toBase58() }
+            : {}),
+        },
+      );
     };
     const initialize = (
       accounts = initAccounts,
@@ -504,6 +618,7 @@ test(
       })
       .signers([owner])
       .rpc();
+    await checkpoint("draft", "funded", depositPlanAddress, 0n, depositSig);
     assert.equal(await balance(ownerUsdc), 0n);
     assert.equal(await balance(vaultUsdc), 1_000_000n);
     await expectFailure(
@@ -561,6 +676,499 @@ test(
       wsolMint,
       tokenProgram: TOKEN_PROGRAM_ID,
     };
+    const runCpiLeg = async (
+      plan: PublicKey,
+      leg: number,
+      revision: number,
+      direction: "buy" | "sell",
+    ): Promise<string> => {
+      const assets = [btcMint, ethMint, wsolMint];
+      const vaultAssets = [vaultBtc, vaultEth, vaultWsol];
+      const inputMint = direction === "buy" ? usdcMint : assets[leg];
+      const outputMint = direction === "buy" ? assets[leg] : usdcMint;
+      const source = direction === "buy" ? vaultUsdc : vaultAssets[leg];
+      const destination = direction === "buy" ? vaultAssets[leg] : vaultUsdc;
+      const input =
+        direction === "buy"
+          ? [400_000, 300_000, 300_000][leg]
+          : [40_000, 30_000, 30_000][leg];
+      const output =
+        direction === "buy"
+          ? [40_000, 30_000, 30_000][leg]
+          : [396_000, 297_000, 297_000][leg];
+      const routerData = Buffer.alloc(25);
+      Buffer.from(digest(bytes("global:swap"))).copy(routerData, 0, 0, 8);
+      routerData.writeBigUInt64LE(BigInt(input), 8);
+      routerData.writeBigUInt64LE(BigInt(output), 16);
+      const routerKeys = [
+        [vaultAuthority, false],
+        [source, true],
+        [destination, true],
+        [poolAccounts.get(inputMint.toBase58())!, true],
+        [poolAccounts.get(outputMint.toBase58())!, true],
+        [poolAuthority, false],
+        [inputMint, false],
+        [outputMint, false],
+        [TOKEN_PROGRAM_ID, false],
+      ] as const;
+      const routerInstruction = {
+        data: routerData,
+        keys: routerKeys.map(([pubkey, isWritable]) => ({
+          pubkey,
+          isWritable,
+        })),
+      };
+      const ordered = Buffer.alloc(2);
+      ordered.writeUInt16LE(routerInstruction.keys.length);
+      const metaBytes = Buffer.concat([
+        ordered,
+        ...routerInstruction.keys.map((key) =>
+          Buffer.concat([
+            key.pubkey.toBuffer(),
+            Buffer.from([
+              Number(key.pubkey.equals(vaultAuthority)),
+              Number(key.isWritable),
+            ]),
+          ]),
+        ),
+      ]);
+      const fingerprint = digest(
+        bytes("c3-local-route-v1"),
+        routerInstruction.data,
+      );
+      const idempotency = digest(
+        bytes("c3-local-leg-v1"),
+        plan.toBuffer(),
+        Buffer.from([leg]),
+      );
+      const [authorization] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("c3-swap-auth-v1"),
+          plan.toBuffer(),
+          Buffer.from(idempotency),
+        ],
+        program.programId,
+      );
+      const [quoteTime, planExpiry] = await settlementTimes();
+      const args = {
+        leg,
+        expectedRevision: new BN(revision),
+        inputAmount: new BN(input),
+        minimumOutput: new BN(output),
+        maxSlippageBps: 100,
+        quoteCreatedAt: quoteTime,
+        expiresAt: new BN(
+          Math.min(planExpiry.toNumber(), quoteTime.toNumber() + 30),
+        ),
+        quoteFingerprint: fingerprint,
+        routeFingerprint: fingerprint,
+        instructionHash: digest(
+          bytes("c3-router-data-v1"),
+          routerInstruction.data,
+        ),
+        accountMetasHash: digest(bytes("c3-ordered-metas-v1"), metaBytes),
+        idempotency,
+      };
+      const authorizationAccounts = {
+        governance: payer.publicKey,
+        config,
+        plan,
+        vaultAuthority,
+        source,
+        destination,
+        routerProgram: routerId,
+        authorization,
+        systemProgram: SystemProgram.programId,
+      };
+      const executionAccounts = {
+        keeper: keeper.publicKey,
+        config,
+        plan,
+        authorization,
+        vaultAuthority,
+        source,
+        destination,
+        routerProgram: routerId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      };
+      const remaining = routerInstruction.keys.map((key) => ({
+        pubkey: key.pubkey,
+        isSigner: false,
+        isWritable: key.isWritable,
+      }));
+      if (direction === "buy" && leg === 0 && revision === 0) {
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg(args)
+              .accountsStrict({
+                ...authorizationAccounts,
+                governance: attacker.publicKey,
+              })
+              .signers([attacker])
+              .rpc(),
+          "attacker cannot authorize CPI",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg({ ...args, inputAmount: new BN(input + 1) })
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "excess input cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg({ ...args, minimumOutput: new BN(output - 1) })
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "reduced minimum cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg({
+                ...args,
+                quoteCreatedAt: new BN(quoteTime.toNumber() - 100),
+              })
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "expired quote cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg(args)
+              .accountsStrict({
+                ...authorizationAccounts,
+                routerProgram: SystemProgram.programId,
+              })
+              .rpc(),
+          "substituted router cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg(args)
+              .accountsStrict({
+                ...authorizationAccounts,
+                destination: attackerUsdc,
+              })
+              .rpc(),
+          "attacker destination cannot be authorized",
+        );
+      }
+      const ordinal = direction === "buy" ? leg : leg + 3;
+      const workerA = hexDigest(bytes(`worker-a:${journalId}`)).slice(0, 32);
+      const workerB = hexDigest(bytes(`worker-b:${journalId}`)).slice(0, 32);
+      const workerUuid = (hex: string) =>
+        `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+      let worker = workerUuid(workerA);
+      const authorizationHash = hexDigest(
+        bytes("c3-auth-v1"),
+        Buffer.from(idempotency),
+      );
+      const expectedEffects = {
+        source: source.toBase58(),
+        destination: destination.toBase58(),
+        inputMint: inputMint.toBase58(),
+        outputMint: outputMint.toBase58(),
+        debit: String(input),
+        credit: String(output),
+        router: routerId.toBase58(),
+      };
+      if (durable && journalState) {
+        if (ordinal === 4) {
+          const race = await Promise.allSettled([
+            durable.db.lease(journalScope(), ordinal, workerUuid(workerA)),
+            durable.db.lease(journalScope(), ordinal, workerUuid(workerB)),
+          ]);
+          assert.equal(
+            race.filter((result) => result.status === "fulfilled").length,
+            1,
+          );
+          const winner = race.findIndex(
+            (result) => result.status === "fulfilled",
+          );
+          worker = workerUuid(winner === 0 ? workerA : workerB);
+          journalState = (race[winner] as PromiseFulfilledResult<OpenSnapshot>)
+            .value;
+        } else {
+          journalState = await durable.db.lease(
+            journalScope(),
+            ordinal,
+            worker,
+          );
+        }
+        journalState = await durable.db.prepare(
+          journalScope(),
+          ordinal,
+          worker,
+          {
+            routeHash: Buffer.from(fingerprint).toString("hex"),
+            instructionHash: Buffer.from(args.instructionHash).toString("hex"),
+            authorizationHash,
+            inputMint: inputMint.toBase58(),
+            outputMint: outputMint.toBase58(),
+            source: source.toBase58(),
+            destination: destination.toBase58(),
+            inputAmount: BigInt(input),
+            minimumOutput: BigInt(output),
+            quoteExpiresAt: new Date(args.expiresAt.toNumber() * 1000),
+            expectedEffects,
+          },
+        );
+      }
+      await program.methods
+        .authorizeSwapLeg(args)
+        .accountsStrict(authorizationAccounts)
+        .rpc();
+      const execute = (
+        data: Buffer,
+        accounts = executionAccounts,
+        metas = remaining,
+      ) =>
+        program.methods
+          .executeSwapLeg(data)
+          .accountsStrict(accounts)
+          .remainingAccounts(metas)
+          .signers([keeper])
+          .rpc();
+      if (direction === "buy" && leg === 0 && revision === 0) {
+        const altered = Buffer.from(routerInstruction.data);
+        altered[24] = 1;
+        await expectFailure(() => execute(altered), "CPI data mutation");
+        await expectFailure(
+          () =>
+            execute(
+              routerInstruction.data,
+              executionAccounts,
+              [...remaining].reverse(),
+            ),
+          "CPI account reorder",
+        );
+        await expectFailure(
+          () =>
+            execute(routerInstruction.data, executionAccounts, [
+              ...remaining,
+              { pubkey: attackerUsdc, isSigner: false, isWritable: true },
+            ]),
+          "unexpected writable token account",
+        );
+        await expectFailure(
+          () =>
+            execute(routerInstruction.data, executionAccounts, [
+              ...remaining,
+              {
+                pubkey: SystemProgram.programId,
+                isSigner: false,
+                isWritable: false,
+              },
+            ]),
+          "unknown executable route program",
+        );
+        await expectFailure(
+          () =>
+            execute(routerInstruction.data, {
+              ...executionAccounts,
+              destination: attackerUsdc,
+            }),
+          "keeper-controlled destination",
+        );
+      }
+      if (!durable || !journalState) return execute(routerInstruction.data);
+      const ix = await program.methods
+        .executeSwapLeg(routerInstruction.data)
+        .accountsStrict(executionAccounts)
+        .remainingAccounts(remaining)
+        .instruction();
+      const latest = await connection.getLatestBlockhash("confirmed");
+      const transaction = new Transaction({
+        feePayer: keeper.publicKey,
+        recentBlockhash: latest.blockhash,
+      }).add(ix);
+      transaction.sign(keeper);
+      assert.ok(transaction.signature, "local keeper signature is required");
+      const signature = base58(transaction.signature);
+      journalState = await durable.db.recordSignature(
+        journalScope(),
+        ordinal,
+        worker,
+        signature,
+        authorizationHash,
+      );
+      if (ordinal === 1) {
+        const restart = spawnSync(
+          process.execPath,
+          [
+            "--experimental-strip-types",
+            "tests/restart-reader.ts",
+            journalId,
+            String(ordinal),
+          ],
+          {
+            cwd: new URL("..", import.meta.url),
+            env: process.env,
+            encoding: "utf8",
+            timeout: 10_000,
+          },
+        );
+        assert.equal(
+          restart.status,
+          0,
+          "signature did not survive process restart",
+        );
+        assert.equal(JSON.parse(restart.stdout).signature, signature);
+      }
+      journalState = await durable.db.markSubmitted(
+        journalScope(),
+        ordinal,
+        worker,
+        signature,
+      );
+      try {
+        const returned = await connection.sendRawTransaction(
+          transaction.serialize(),
+          {
+            maxRetries: 0,
+          },
+        );
+        if (ordinal !== 1) assert.equal(returned, signature);
+        // Leg 1 deliberately discards the RPC return value and reconciles the
+        // pre-persisted signature instead of rebuilding or submitting again.
+      } catch (error) {
+        journalState = await durable.db.uncertain(
+          journalScope(),
+          ordinal,
+          "RPC_SUBMISSION_UNCERTAIN",
+        );
+        throw error;
+      }
+      const finalized = await connection.confirmTransaction(
+        { signature, ...latest },
+        "finalized",
+      );
+      assert.equal(finalized.value.err, null);
+      const result = await connection.getTransaction(signature, {
+        commitment: "finalized",
+        maxSupportedTransactionVersion: 0,
+      });
+      assert.ok(
+        result?.meta && result.meta.err === null,
+        "raw finalized transaction evidence is required",
+      );
+      assert.equal(
+        result.transaction.signatures[0],
+        signature,
+        "persisted signature differs from finalized transaction",
+      );
+      const message = result.transaction.message;
+      assert.ok(
+        "accountKeys" in message && "instructions" in message,
+        "local settlement requires a legacy message with raw instructions",
+      );
+      const accountKeys = message.accountKeys;
+      assert.deepEqual(
+        Buffer.from(message.serialize()),
+        Buffer.from(transaction.serializeMessage()),
+        "finalized outer message changed after authorization",
+      );
+      assert.ok(accountKeys[0]?.equals(keeper.publicKey), "fee payer mismatch");
+      assert.equal(
+        message.instructions.length,
+        1,
+        "unexpected outer instruction",
+      );
+      assert.ok(
+        accountKeys[message.instructions[0]!.programIdIndex]?.equals(
+          program.programId,
+        ),
+        "outer vault instruction missing",
+      );
+      assert.ok(
+        result.meta.innerInstructions?.some((group) =>
+          group.instructions.some((instruction) =>
+            accountKeys[instruction.programIdIndex]?.equals(routerId),
+          ),
+        ),
+        "inner router CPI missing",
+      );
+      assert.ok(
+        result.meta.innerInstructions?.every((group) =>
+          group.instructions.every((instruction) => {
+            const programKey = accountKeys[instruction.programIdIndex];
+            return (
+              programKey?.equals(routerId) ||
+              programKey?.equals(TOKEN_PROGRAM_ID)
+            );
+          }),
+        ),
+        "unreviewed inner program",
+      );
+      const tokenAmount = (
+        list: typeof result.meta.preTokenBalances,
+        account: PublicKey,
+        mint: PublicKey,
+      ) => {
+        const index = accountKeys.findIndex((key) => key.equals(account));
+        const entry = list?.find((value) => value.accountIndex === index);
+        assert.ok(
+          entry &&
+            entry.owner === vaultAuthority.toBase58() &&
+            entry.mint === mint.toBase58(),
+          "vault token owner/mint evidence missing",
+        );
+        return BigInt(entry.uiTokenAmount.amount);
+      };
+      assert.equal(
+        tokenAmount(result.meta.preTokenBalances, source, inputMint) -
+          tokenAmount(result.meta.postTokenBalances, source, inputMint),
+        BigInt(input),
+      );
+      assert.equal(
+        tokenAmount(result.meta.postTokenBalances, destination, outputMint) -
+          tokenAmount(result.meta.preTokenBalances, destination, outputMint),
+        BigInt(output),
+      );
+      for (const entry of result.meta.preTokenBalances ?? []) {
+        if (entry.owner !== vaultAuthority.toBase58()) continue;
+        const key = accountKeys[entry.accountIndex];
+        if (key?.equals(source) || key?.equals(destination)) continue;
+        const after:
+          | { owner?: string; mint: string; uiTokenAmount: { amount: string } }
+          | undefined = result.meta.postTokenBalances?.find(
+          (value) => value.accountIndex === entry.accountIndex,
+        );
+        assert.ok(
+          after &&
+            after.owner === entry.owner &&
+            after.mint === entry.mint &&
+            after.uiTokenAmount.amount === entry.uiTokenAmount.amount,
+          "unrelated vault asset changed",
+        );
+      }
+      assert.equal(
+        ((await fetchState("settlementPlan", plan)).revision as BN).toString(),
+        String(revision + 1),
+      );
+      journalState = await durable.db.recordLocalConfirmedLeg(
+        journalScope(),
+        ordinal,
+        {
+          source: "MOCK_LOCAL_ONLY",
+          plan: plan.toBase58(),
+          signature,
+          evidenceHash: hexDigest(
+            bytes(signature),
+            bytes(JSON.stringify(expectedEffects)),
+          ),
+          chainRevision: BigInt(revision + 1),
+          observedEffects: expectedEffects,
+        },
+      );
+      return signature;
+    };
     const depositSettlementId = Array.from({ length: 32 }, () => 1);
     const depositPlan = settlementPlan(depositIntent);
     const depositHashes = [1, 2, 3].map((value) =>
@@ -610,20 +1218,24 @@ test(
       () => createDepositPlan(),
       "duplicate deposit settlement plan",
     );
-    const runDepositLeg = (
+    const runDepositLeg = async (
       leg: number,
       revision: number,
       routeHash = depositHashes[leg],
     ) =>
-      program.methods
-        .mockExecuteDepositLeg(leg, new BN(revision), routeHash)
-        .accountsStrict({
-          accounts: commonMock,
-          intent: depositIntent,
-          plan: depositPlan,
-        })
-        .signers([keeper])
-        .rpc();
+      leg === revision &&
+      (!journalState || journalState.chainRevision === BigInt(revision)) &&
+      Buffer.from(routeHash).equals(Buffer.from(depositHashes[leg]))
+        ? runCpiLeg(depositPlan, leg, revision, "buy")
+        : program.methods
+            .mockExecuteDepositLeg(leg, new BN(revision), routeHash)
+            .accountsStrict({
+              accounts: commonMock,
+              intent: depositIntent,
+              plan: depositPlan,
+            })
+            .signers([keeper])
+            .rpc();
     await expectFailure(() => runDepositLeg(1, 0), "skipped first buy leg");
     await expectFailure(
       () => runDepositLeg(0, 0, depositHashes[1]),
@@ -786,6 +1398,7 @@ test(
       })
       .signers([owner])
       .rpc();
+    await checkpoint("buying", "active", depositPlan, 3n, shareSig);
     assert.equal(await balance(ownerShares, TOKEN_2022_PROGRAM_ID), 1_000_000n);
     await expectFailure(
       () =>
@@ -970,6 +1583,13 @@ test(
       })
       .signers([keeper])
       .rpc();
+    await checkpoint(
+      "active",
+      "redemption_requested",
+      redemptionPlan,
+      0n,
+      redemptionPlanSig,
+    );
     await expectFailure(
       () =>
         program.methods
@@ -988,20 +1608,24 @@ test(
           .rpc(),
       "redemption settlement before all three sell legs",
     );
-    const runRedemptionLeg = (
+    const runRedemptionLeg = async (
       leg: number,
       revision: number,
       routeHash = redemptionHashes[leg],
     ) =>
-      program.methods
-        .mockExecuteRedemptionLeg(leg, new BN(revision), routeHash)
-        .accountsStrict({
-          accounts: commonMock,
-          intent: redemptionIntent,
-          plan: redemptionPlan,
-        })
-        .signers([keeper])
-        .rpc();
+      leg === revision &&
+      (!journalState || journalState.chainRevision === BigInt(revision)) &&
+      Buffer.from(routeHash).equals(Buffer.from(redemptionHashes[leg]))
+        ? runCpiLeg(redemptionPlan, leg, revision, "sell")
+        : program.methods
+            .mockExecuteRedemptionLeg(leg, new BN(revision), routeHash)
+            .accountsStrict({
+              accounts: commonMock,
+              intent: redemptionIntent,
+              plan: redemptionPlan,
+            })
+            .signers([keeper])
+            .rpc();
     await expectFailure(() => runRedemptionLeg(2, 0), "skipped sell leg");
     const redemptionLegSigs: string[] = [];
     redemptionLegSigs.push(await runRedemptionLeg(0, 0));
@@ -1039,6 +1663,13 @@ test(
       })
       .signers([keeper])
       .rpc();
+    await checkpoint(
+      "selling",
+      "claimable",
+      redemptionPlan,
+      3n,
+      recordRedemptionSig,
+    );
     await expectFailure(
       () =>
         program.methods
@@ -1104,6 +1735,19 @@ test(
       })
       .signers([owner])
       .rpc();
+    await checkpoint("claimable", "redeemed", redemptionPlan, 3n, claimSig);
+    if (durable) {
+      assert.equal((await durable.db.read(journalId))?.state, "redeemed");
+      for (let ordinal = 0; ordinal < 6; ordinal++) {
+        const leg: { state: string; signature: string | null } =
+          await durable.db.readLeg(journalId, ordinal);
+        assert.equal(leg.state, "confirmed");
+        assert.ok(
+          leg.signature,
+          "confirmed leg signature must survive restart",
+        );
+      }
+    }
     assert.equal(await balance(ownerUsdc), 990_000n);
     assert.equal(await balance(ownerShares, TOKEN_2022_PROGRAM_ID), 0n);
     assert.equal(await balance(vaultUsdc), 0n);

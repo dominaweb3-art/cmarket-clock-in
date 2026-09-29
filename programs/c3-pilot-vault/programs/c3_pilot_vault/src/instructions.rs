@@ -205,6 +205,55 @@ pub struct CreateRedemptionPlan<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(args: crate::swap_leg::AuthorizeSwapArgs)]
+pub struct AuthorizeSwapLeg<'info> {
+    #[account(mut, address = config.governance)]
+    pub governance: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Box<Account<'info, VaultConfig>>,
+    #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
+        constraint = plan.vault == config.key())]
+    pub plan: Box<Account<'info, SettlementPlan>>,
+    /// CHECK: Only the seed-derived PDA can sign an inner token operation.
+    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    pub source: Box<Account<'info, TokenAccount>>,
+    pub destination: Box<Account<'info, TokenAccount>>,
+    /// CHECK: Executable address is compared to the source-reviewed router ID.
+    #[account(executable)]
+    pub router_program: UncheckedAccount<'info>,
+    #[account(init, payer = governance,
+        seeds = [SWAP_AUTH_SEED, plan.key().as_ref(), args.idempotency.as_ref()], bump,
+        space = 8 + SwapLegAuthorization::INIT_SPACE)]
+    pub authorization: Box<Account<'info, SwapLegAuthorization>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteSwapLeg<'info> {
+    pub keeper: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Box<Account<'info, VaultConfig>>,
+    #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
+        constraint = plan.vault == config.key())]
+    pub plan: Box<Account<'info, SettlementPlan>>,
+    #[account(mut, seeds = [SWAP_AUTH_SEED, plan.key().as_ref(), authorization.idempotency.as_ref()],
+        bump = authorization.bump, constraint = authorization.plan == plan.key())]
+    pub authorization: Box<Account<'info, SwapLegAuthorization>>,
+    /// CHECK: Only the seed-derived PDA can sign an inner token operation.
+    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, address = authorization.source)]
+    pub source: Box<Account<'info, TokenAccount>>,
+    #[account(mut, address = authorization.destination)]
+    pub destination: Box<Account<'info, TokenAccount>>,
+    /// CHECK: Executable address is compared to the source-reviewed router ID.
+    #[account(executable, address = authorization.router_program)]
+    pub router_program: UncheckedAccount<'info>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct ClaimUsdc<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,

@@ -14,6 +14,7 @@ pub mod instructions;
 pub mod mock_local_only;
 pub mod settlement_plan;
 pub mod state;
+pub mod swap_leg;
 pub mod token_validation;
 pub mod transitions;
 
@@ -324,10 +325,14 @@ pub mod c3_pilot_vault {
         );
         require!(
             settlement_id != [0; 32]
-                && settlement_id == d.settlement_id
-                && settlement_id == p.idempotency,
+                && settlement_id == p.idempotency
+                && (d.settlement_id == [0; 32] || d.settlement_id == settlement_id),
             VaultError::Settlement
         );
+        d.settlement_id = settlement_id;
+        if [d.btc_input_usdc, d.eth_input_usdc, d.wsol_input_usdc] == [0; 3] {
+            [d.btc_input_usdc, d.eth_input_usdc, d.wsol_input_usdc] = p.actual_inputs;
+        }
         require_eq!(
             d.btc_input_usdc,
             portion(ONE_USDC, BTC_BPS)?,
@@ -462,6 +467,23 @@ pub mod c3_pilot_vault {
             idempotency,
             ctx.bumps.plan,
         )
+    }
+
+    /// A governance-signed, single-use authorization bound to a plan revision.
+    /// The default build deliberately rejects it until a reviewed release exists.
+    pub fn authorize_swap_leg(
+        ctx: Context<AuthorizeSwapLeg>,
+        args: swap_leg::AuthorizeSwapArgs,
+    ) -> Result<()> {
+        swap_leg::authorize(ctx, args)
+    }
+
+    /// The keeper can only pay fees and execute the exact approved CPI envelope.
+    pub fn execute_swap_leg<'info>(
+        ctx: Context<'_, '_, '_, 'info, ExecuteSwapLeg<'info>>,
+        instruction_data: Vec<u8>,
+    ) -> Result<()> {
+        swap_leg::execute(ctx, instruction_data)
     }
 
     pub fn issue_initial_shares(ctx: Context<IssueShares>) -> Result<()> {
@@ -669,10 +691,11 @@ pub mod c3_pilot_vault {
         );
         require!(
             settlement_id != [0; 32]
-                && settlement_id == r.settlement_id
-                && settlement_id == p.idempotency,
+                && settlement_id == p.idempotency
+                && (r.settlement_id == [0; 32] || r.settlement_id == settlement_id),
             VaultError::Settlement
         );
+        r.settlement_id = settlement_id;
         require_eq!(ctx.accounts.vault_btc.amount, 0, VaultError::Settlement);
         require_eq!(ctx.accounts.vault_eth.amount, 0, VaultError::Settlement);
         require_eq!(ctx.accounts.vault_wsol.amount, 0, VaultError::Settlement);
