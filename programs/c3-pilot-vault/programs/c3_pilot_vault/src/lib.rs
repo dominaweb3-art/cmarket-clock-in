@@ -21,7 +21,7 @@ pub mod transitions;
 use arithmetic::*;
 use constants::*;
 use errors::VaultError;
-use events::{emit_state, kind};
+use events::{emit_state, kind, RouteRegistryEvent};
 use instructions::*;
 use state::*;
 use token_validation::*;
@@ -124,6 +124,125 @@ pub mod c3_pilot_vault {
             kind::INITIALIZED,
             0,
         )
+    }
+
+    pub fn initialize_route_registry(ctx: Context<InitializeRouteRegistry>) -> Result<()> {
+        let r = &mut ctx.accounts.registry;
+        r.schema_version = 1;
+        r.vault = ctx.accounts.config.key();
+        r.governance = ctx.accounts.config.governance;
+        r.config_version = ctx.accounts.config.config_version;
+        r.revision = 0;
+        r.config_hash = [0; 32];
+        r.enabled = false;
+        r.activation_slot = 0;
+        r.expiry_slot = 0;
+        r.program_count = 0;
+        r.programs = [Pubkey::default(); MAX_ROUTE_PROGRAMS];
+        r.bump = ctx.bumps.registry;
+        emit!(RouteRegistryEvent {
+            vault: r.vault,
+            revision: r.revision,
+            config_hash: r.config_hash,
+            action: 1,
+            slot: Clock::get()?.slot,
+        });
+        Ok(())
+    }
+
+    pub fn replace_route_registry(
+        ctx: Context<GovernRouteRegistry>,
+        programs: Vec<Pubkey>,
+        activation_slot: u64,
+        expiry_slot: u64,
+        config_hash: [u8; 32],
+    ) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
+        let r = &mut ctx.accounts.registry;
+        let slot = Clock::get()?.slot;
+        require!(
+            r.schema_version == 1 && r.config_version == ctx.accounts.config.config_version,
+            VaultError::RouteRegistry
+        );
+        require!(
+            !programs.is_empty() && programs.len() <= MAX_ROUTE_PROGRAMS,
+            VaultError::RouteRegistry
+        );
+        require!(
+            config_hash != [0; 32] && expiry_slot > slot && expiry_slot > activation_slot,
+            VaultError::RouteRegistry
+        );
+        let mut unique = std::collections::BTreeSet::new();
+        for id in &programs {
+            require!(
+                *id != Pubkey::default() && unique.insert(*id),
+                VaultError::RouteRegistry
+            );
+        }
+        require!(
+            unique.contains(&swap_leg::reviewed_router()?),
+            VaultError::RouteRegistry
+        );
+        require_eq!(
+            ctx.remaining_accounts.len(),
+            programs.len(),
+            VaultError::RouteRegistry
+        );
+        for (id, account) in programs.iter().zip(ctx.remaining_accounts.iter()) {
+            require_keys_eq!(*id, account.key(), VaultError::RouteRegistry);
+            require!(
+                account.executable && !account.is_writable && !account.is_signer,
+                VaultError::RouteRegistry
+            );
+        }
+        let program_bytes: Vec<u8> = programs.iter().flat_map(|id| id.to_bytes()).collect();
+        let expected_hash = hashv(&[
+            b"c3-route-registry-v1",
+            r.vault.as_ref(),
+            &r.config_version.to_le_bytes(),
+            &activation_slot.to_le_bytes(),
+            &expiry_slot.to_le_bytes(),
+            &[programs.len() as u8],
+            &program_bytes,
+        ])
+        .to_bytes();
+        require!(config_hash == expected_hash, VaultError::RouteRegistry);
+        r.revision = r.revision.checked_add(1).ok_or(VaultError::Math)?;
+        r.programs = [Pubkey::default(); MAX_ROUTE_PROGRAMS];
+        for (index, id) in programs.iter().enumerate() {
+            r.programs[index] = *id;
+        }
+        r.program_count = programs.len() as u8;
+        r.config_hash = config_hash;
+        r.activation_slot = activation_slot;
+        r.expiry_slot = expiry_slot;
+        r.enabled = true;
+        emit!(RouteRegistryEvent {
+            vault: r.vault,
+            revision: r.revision,
+            config_hash: r.config_hash,
+            action: 2,
+            slot,
+        });
+        Ok(())
+    }
+
+    pub fn disable_route_registry(ctx: Context<GovernRouteRegistry>) -> Result<()> {
+        let r = &mut ctx.accounts.registry;
+        require!(
+            r.schema_version == 1 && r.enabled,
+            VaultError::RouteRegistry
+        );
+        r.revision = r.revision.checked_add(1).ok_or(VaultError::Math)?;
+        r.enabled = false;
+        emit!(RouteRegistryEvent {
+            vault: r.vault,
+            revision: r.revision,
+            config_hash: r.config_hash,
+            action: 3,
+            slot: Clock::get()?.slot,
+        });
+        Ok(())
     }
 
     pub fn set_keeper(ctx: Context<Govern>, next: Pubkey) -> Result<()> {

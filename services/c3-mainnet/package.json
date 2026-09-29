@@ -39,7 +39,8 @@
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",
     "c3:mainnet:deployment-readiness": "node --experimental-strip-types scripts/readiness.ts deployment",
-    "c3:jupiter:pilot-preflight": "node --experimental-strip-types scripts/jupiter-pilot-preflight.ts"
+    "c3:jupiter:pilot-preflight": "node --experimental-strip-types scripts/jupiter-pilot-preflight.ts",
+    "c3:jupiter:v0-six-route-probe": "node --experimental-strip-types scripts/jupiter-v0-six-route-probe.ts"
   },
   "devDependencies": {
     "@solana/web3.js": "1.99.0",

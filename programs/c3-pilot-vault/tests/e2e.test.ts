@@ -104,6 +104,10 @@ const [vaultAuthority] = PublicKey.findProgramAddressSync(
   [Buffer.from("c3-authority-v1")],
   program.programId,
 );
+const [routeRegistry] = PublicKey.findProgramAddressSync(
+  [Buffer.from("c3-route-reg-v1"), config.toBuffer()],
+  program.programId,
+);
 const fetchState = (
   name: string,
   address: PublicKey,
@@ -458,6 +462,152 @@ test(
 
     const initSig = await initialize();
     assert.equal((await fetchState("vaultConfig", config)).paused, true);
+    await program.methods
+      .initializeRouteRegistry()
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        registry: routeRegistry,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    assert.equal(
+      (await fetchState("routeProgramRegistry", routeRegistry)).enabled,
+      false,
+    );
+    const registrySlot = await connection.getSlot("confirmed");
+    const slot64 = (value: number): Buffer => {
+      const result = Buffer.alloc(8);
+      result.writeBigUInt64LE(BigInt(value));
+      return result;
+    };
+    const reviewedHash = digest(
+      bytes("c3-route-registry-v1"),
+      config.toBuffer(),
+      slot64(1),
+      slot64(registrySlot),
+      slot64(registrySlot + 10_000),
+      Buffer.from([2]),
+      routerId.toBuffer(),
+      TOKEN_PROGRAM_ID.toBuffer(),
+    );
+    const registryMetas = [routerId, TOKEN_PROGRAM_ID].map((pubkey) => ({
+      pubkey,
+      isSigner: false,
+      isWritable: false,
+    }));
+    await expectFailure(
+      () =>
+        program.methods
+          .replaceRouteRegistry(
+            [routerId, TOKEN_PROGRAM_ID],
+            new BN(registrySlot),
+            new BN(registrySlot + 10_000),
+            reviewedHash,
+          )
+          .accountsStrict({
+            governance: attacker.publicKey,
+            config,
+            registry: routeRegistry,
+          })
+          .remainingAccounts(registryMetas)
+          .signers([attacker])
+          .rpc(),
+      "attacker cannot govern route registry",
+    );
+    await expectFailure(
+      () =>
+        program.methods
+          .replaceRouteRegistry(
+            [routerId, TOKEN_PROGRAM_ID],
+            new BN(registrySlot),
+            new BN(registrySlot + 10_000),
+            digest(bytes("unreviewed")),
+          )
+          .accountsStrict({
+            governance: payer.publicKey,
+            config,
+            registry: routeRegistry,
+          })
+          .remainingAccounts(registryMetas)
+          .rpc(),
+      "unreviewed registry hash",
+    );
+    await expectFailure(
+      () =>
+        program.methods
+          .replaceRouteRegistry(
+            [routerId, attacker.publicKey],
+            new BN(registrySlot),
+            new BN(registrySlot + 10_000),
+            digest(
+              bytes("c3-route-registry-v1"),
+              config.toBuffer(),
+              slot64(1),
+              slot64(registrySlot),
+              slot64(registrySlot + 10_000),
+              Buffer.from([2]),
+              routerId.toBuffer(),
+              attacker.publicKey.toBuffer(),
+            ),
+          )
+          .accountsStrict({
+            governance: payer.publicKey,
+            config,
+            registry: routeRegistry,
+          })
+          .remainingAccounts([
+            registryMetas[0]!,
+            { pubkey: attacker.publicKey, isSigner: false, isWritable: false },
+          ])
+          .rpc(),
+      "non-executable route program cannot enter registry",
+    );
+    await program.methods
+      .replaceRouteRegistry(
+        [routerId, TOKEN_PROGRAM_ID],
+        new BN(registrySlot),
+        new BN(registrySlot + 10_000),
+        reviewedHash,
+      )
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        registry: routeRegistry,
+      })
+      .remainingAccounts(registryMetas)
+      .rpc();
+    await program.methods
+      .disableRouteRegistry()
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        registry: routeRegistry,
+      })
+      .rpc();
+    assert.equal(
+      (await fetchState("routeProgramRegistry", routeRegistry)).enabled,
+      false,
+    );
+    await program.methods
+      .replaceRouteRegistry(
+        [routerId, TOKEN_PROGRAM_ID],
+        new BN(registrySlot),
+        new BN(registrySlot + 10_000),
+        reviewedHash,
+      )
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        registry: routeRegistry,
+      })
+      .remainingAccounts(registryMetas)
+      .rpc();
+    const reviewedRegistry = await fetchState(
+      "routeProgramRegistry",
+      routeRegistry,
+    );
+    assert.equal(reviewedRegistry.enabled, true);
 
     const depositNonce = 1;
     const depositIntent = intent("deposit", owner.publicKey, depositNonce);
@@ -710,6 +860,9 @@ test(
         [inputMint, false],
         [outputMint, false],
         [TOKEN_PROGRAM_ID, false],
+        // Jupiter may legitimately repeat an account meta; the local router
+        // ignores this trailing duplicate while the vault hashes its position.
+        [TOKEN_PROGRAM_ID, false],
       ] as const;
       const routerInstruction = {
         data: routerData,
@@ -722,16 +875,22 @@ test(
       ordered.writeUInt16LE(routerInstruction.keys.length);
       const metaBytes = Buffer.concat([
         ordered,
-        ...routerInstruction.keys.map((key) =>
+        ...routerInstruction.keys.map((key, index) =>
           Buffer.concat([
+            Buffer.from([index, 0]),
             key.pubkey.toBuffer(),
             Buffer.from([
               Number(key.pubkey.equals(vaultAuthority)),
               Number(key.isWritable),
+              Number(key.pubkey.equals(TOKEN_PROGRAM_ID)),
             ]),
           ]),
         ),
       ]);
+      const registryVersion = Buffer.alloc(8);
+      registryVersion.writeBigUInt64LE(
+        BigInt((reviewedRegistry.revision as BN).toString()),
+      );
       const fingerprint = digest(
         bytes("c3-local-route-v1"),
         routerInstruction.data,
@@ -754,6 +913,7 @@ test(
         leg,
         expectedRevision: new BN(revision),
         inputAmount: new BN(input),
+        quotedOutput: new BN(Math.ceil((output * 10_000) / 9_900)),
         minimumOutput: new BN(output),
         maxSlippageBps: 100,
         quoteCreatedAt: quoteTime,
@@ -766,12 +926,18 @@ test(
           bytes("c3-router-data-v1"),
           routerInstruction.data,
         ),
-        accountMetasHash: digest(bytes("c3-ordered-metas-v1"), metaBytes),
+        accountMetasHash: digest(
+          bytes("c3-ordered-metas-v2"),
+          registryVersion,
+          Buffer.from(reviewedRegistry.configHash as number[]),
+          metaBytes,
+        ),
         idempotency,
       };
       const authorizationAccounts = {
         governance: payer.publicKey,
         config,
+        registry: routeRegistry,
         plan,
         vaultAuthority,
         source,
@@ -783,6 +949,7 @@ test(
       const executionAccounts = {
         keeper: keeper.publicKey,
         config,
+        registry: routeRegistry,
         plan,
         authorization,
         vaultAuthority,
@@ -824,6 +991,22 @@ test(
               .accountsStrict(authorizationAccounts)
               .rpc(),
           "reduced minimum cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg({ ...args, minimumOutput: new BN(1) })
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "arbitrary minimum of one cannot be authorized",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg({ ...args, quotedOutput: new BN(output + 1) })
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "quoted-output mutation cannot be authorized",
         );
         await expectFailure(
           () =>

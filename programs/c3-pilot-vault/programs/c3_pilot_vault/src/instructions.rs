@@ -43,6 +43,29 @@ pub struct Govern<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeRouteRegistry<'info> {
+    #[account(mut, address = config.governance)]
+    pub governance: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(init, payer = governance, seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump,
+        space = 8 + RouteProgramRegistry::INIT_SPACE)]
+    pub registry: Account<'info, RouteProgramRegistry>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GovernRouteRegistry<'info> {
+    #[account(address = config.governance)]
+    pub governance: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(mut, seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
+        constraint = registry.vault == config.key(), constraint = registry.governance == config.governance)]
+    pub registry: Account<'info, RouteProgramRegistry>,
+}
+
+#[derive(Accounts)]
 #[instruction(nonce: u64)]
 pub struct CreateDepositIntent<'info> {
     #[account(mut)]
@@ -211,6 +234,9 @@ pub struct AuthorizeSwapLeg<'info> {
     pub governance: Signer<'info>,
     #[account(seeds = [VAULT_SEED], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
+    #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
+        constraint = registry.vault == config.key())]
+    pub registry: Box<Account<'info, RouteProgramRegistry>>,
     #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
         constraint = plan.vault == config.key())]
     pub plan: Box<Account<'info, SettlementPlan>>,
@@ -234,6 +260,9 @@ pub struct ExecuteSwapLeg<'info> {
     pub keeper: Signer<'info>,
     #[account(seeds = [VAULT_SEED], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
+    #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
+        constraint = registry.vault == config.key())]
+    pub registry: Box<Account<'info, RouteProgramRegistry>>,
     #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
         constraint = plan.vault == config.key())]
     pub plan: Box<Account<'info, SettlementPlan>>,

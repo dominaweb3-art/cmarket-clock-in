@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Keypair } from "@solana/web3.js";
+import {
+  AddressLookupTableAccount,
+  AddressLookupTableProgram,
+  Keypair,
+} from "@solana/web3.js";
 import { C3_MAINNET } from "../src/constants.ts";
 import type { RouterBuild, RouterRequest } from "../src/jupiter-v2.ts";
 import {
@@ -164,4 +168,138 @@ test("fresh-route fallback is bounded to 64, 48, 32 before any signature", async
   });
   assert.deepEqual(attempts, [64, 48, 32]);
   assert.equal(result.executable, false);
+});
+test("duplicate metas retain their ordered occurrence and flag semantics", () => {
+  const original = build(0);
+  const repeated = {
+    ...original,
+    swapInstruction: {
+      ...original.swapInstruction,
+      accounts: [
+        ...original.swapInstruction.accounts,
+        { ...original.swapInstruction.accounts[1]! },
+      ],
+    },
+  };
+  assert.notEqual(measure(repeated).messageHash, measure(original).messageHash);
+  const reordered = {
+    ...repeated,
+    swapInstruction: {
+      ...repeated.swapInstruction,
+      accounts: [
+        repeated.swapInstruction.accounts[0]!,
+        repeated.swapInstruction.accounts[2]!,
+        repeated.swapInstruction.accounts[1]!,
+        repeated.swapInstruction.accounts[3]!,
+      ],
+    },
+  };
+  assert.notEqual(
+    measure(repeated).messageHash,
+    measure(reordered).messageHash,
+  );
+  const escalated = {
+    ...repeated,
+    swapInstruction: {
+      ...repeated.swapInstruction,
+      accounts: repeated.swapInstruction.accounts.map((item, index) =>
+        index === 3 ? { ...item, isSigner: true } : item,
+      ),
+    },
+  };
+  assert.throws(() => measure(escalated), /UNEXPECTED_REQUIRED_SIGNER/);
+});
+test("lookup table identity, owner, addresses and activation fail closed", () => {
+  const tableKey = Keypair.generate().publicKey;
+  const lookedUp = Keypair.generate().publicKey;
+  const table = new AddressLookupTableAccount({
+    key: tableKey,
+    state: {
+      deactivationSlot: 18446744073709551615n,
+      lastExtendedSlot: 50,
+      lastExtendedSlotStartIndex: 0,
+      authority: Keypair.generate().publicKey,
+      addresses: [lookedUp],
+    },
+  });
+  const candidate = {
+    ...build(0),
+    addressesByLookupTableAddress: {
+      [tableKey.toBase58()]: [lookedUp.toBase58()],
+    },
+  };
+  const base = {
+    build: candidate,
+    request,
+    feePayer: payer,
+    currentSlot: 100,
+    currentBlockHeight: 100,
+    expectedSource: source,
+    expectedDestination: destination,
+    allowedWritableAccounts: [source, destination],
+  };
+  assert.throws(
+    () => measureUnsignedV0Candidate({ ...base, lookupEvidence: [] }),
+    /LOOKUP_EVIDENCE_MISSING/,
+  );
+  const evidence = [
+    {
+      table,
+      owner: AddressLookupTableProgram.programId.toBase58(),
+      observedSlot: 100,
+    },
+  ];
+  assert.doesNotThrow(() =>
+    measureUnsignedV0Candidate({ ...base, lookupEvidence: evidence }),
+  );
+  assert.throws(
+    () =>
+      measureUnsignedV0Candidate({
+        ...base,
+        lookupEvidence: [{ ...evidence[0]!, owner: C3_MAINNET.tokenProgram }],
+      }),
+    /UNVERIFIED_LOOKUP_TABLE/,
+  );
+  assert.throws(
+    () =>
+      measureUnsignedV0Candidate({
+        ...base,
+        lookupEvidence: [{ ...evidence[0]!, observedSlot: 50 }],
+      }),
+    /UNVERIFIED_LOOKUP_TABLE/,
+  );
+  assert.throws(
+    () =>
+      measureUnsignedV0Candidate({
+        ...base,
+        build: {
+          ...candidate,
+          addressesByLookupTableAddress: { [tableKey.toBase58()]: [source] },
+        },
+        lookupEvidence: evidence,
+      }),
+    /UNVERIFIED_LOOKUP_TABLE/,
+  );
+});
+test("complete unsigned v0 packet boundary is measured, not inferred from maxAccounts", () => {
+  let lastAccepted = 0;
+  let rejected = false;
+  for (let length = 700; length < 1_100; length += 1) {
+    const candidate = build(0);
+    const data = Buffer.alloc(length).toString("base64");
+    (candidate.swapInstruction as { data: string }).data = data;
+    try {
+      const result = measure(candidate);
+      lastAccepted = result.bytes;
+    } catch (error) {
+      assert.match(
+        String(error),
+        /C3_V0_(SERIALIZATION_OVERFLOW|TRANSACTION_TOO_LARGE)/,
+      );
+      rejected = true;
+      break;
+    }
+  }
+  assert.ok(rejected);
+  assert.equal(lastAccepted, 1_232);
 });

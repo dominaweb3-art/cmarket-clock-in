@@ -137,11 +137,13 @@ pub struct SwapLegAuthorization {
     pub expected_revision: u64,
     pub router_program: Pubkey,
     pub route_registry_version: u64,
+    pub route_registry_hash: [u8; 32],
     pub source: Pubkey,
     pub destination: Pubkey,
     pub input_mint: Pubkey,
     pub output_mint: Pubkey,
     pub input_amount: u64,
+    pub quoted_output: u64,
     pub minimum_output: u64,
     pub max_slippage_bps: u16,
     pub quote_created_at: i64,
@@ -152,6 +154,25 @@ pub struct SwapLegAuthorization {
     pub expires_at: i64,
     pub idempotency: [u8; 32],
     pub consumed: bool,
+    pub bump: u8,
+}
+
+/// Governance-owned route policy. An uninitialized registry cannot authorize a swap.
+/// Production execution remains separately disabled by an immutable build constant.
+#[account]
+#[derive(InitSpace)]
+pub struct RouteProgramRegistry {
+    pub schema_version: u8,
+    pub vault: Pubkey,
+    pub governance: Pubkey,
+    pub config_version: u64,
+    pub revision: u64,
+    pub config_hash: [u8; 32],
+    pub enabled: bool,
+    pub activation_slot: u64,
+    pub expiry_slot: u64,
+    pub program_count: u8,
+    pub programs: [Pubkey; 16],
     pub bump: u8,
 }
 

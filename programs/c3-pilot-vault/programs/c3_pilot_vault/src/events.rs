@@ -24,6 +24,15 @@ pub struct SettlementLegEvent {
     pub slot: u64,
 }
 
+#[event]
+pub struct RouteRegistryEvent {
+    pub vault: Pubkey,
+    pub revision: u64,
+    pub config_hash: [u8; 32],
+    pub action: u8, // 1=created disabled, 2=replaced, 3=disabled, 4=used
+    pub slot: u64,
+}
+
 pub mod kind {
     pub const INITIALIZED: u8 = 1;
     pub const PAUSED: u8 = 2;

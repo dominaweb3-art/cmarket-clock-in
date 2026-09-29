@@ -42,4 +42,6 @@ pub enum VaultError {
     SwapAccount,
     #[msg("Swap token effects do not match the authorization")]
     SwapEffects,
+    #[msg("Route program registry is disabled, stale, or invalid")]
+    RouteRegistry,
 }

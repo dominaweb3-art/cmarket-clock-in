@@ -1,6 +1,11 @@
 //! Fail-closed vault-authorized CPI boundary. Production capability is an
 //! immutable false constant; only a separately compiled local mock can run it.
-use crate::{constants::*, errors::VaultError, events::SettlementLegEvent, state::*};
+use crate::{
+    constants::*,
+    errors::VaultError,
+    events::{RouteRegistryEvent, SettlementLegEvent},
+    state::*,
+};
 use anchor_lang::{
     prelude::*,
     solana_program::{
@@ -11,13 +16,14 @@ use anchor_lang::{
     },
 };
 use anchor_spl::token::spl_token;
-use std::{collections::BTreeSet, str::FromStr};
+use std::{collections::BTreeMap, str::FromStr};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct AuthorizeSwapArgs {
     pub leg: u8,
     pub expected_revision: u64,
     pub input_amount: u64,
+    pub quoted_output: u64,
     pub minimum_output: u64,
     pub max_slippage_bps: u16,
     pub quote_created_at: i64,
@@ -29,7 +35,7 @@ pub struct AuthorizeSwapArgs {
     pub idempotency: [u8; 32],
 }
 
-fn reviewed_router() -> Result<Pubkey> {
+pub(crate) fn reviewed_router() -> Result<Pubkey> {
     Pubkey::from_str(REVIEWED_ROUTER_ID).map_err(|_| VaultError::InvalidConfig.into())
 }
 
@@ -39,8 +45,11 @@ fn commitment(auth_key: Pubkey, a: &SwapLegAuthorization) -> [u8; 32] {
         auth_key.as_ref(),
         a.plan.as_ref(),
         a.router_program.as_ref(),
+        &a.route_registry_version.to_le_bytes(),
+        &a.route_registry_hash,
         &a.expected_revision.to_le_bytes(),
         &a.input_amount.to_le_bytes(),
+        &a.quoted_output.to_le_bytes(),
         &a.minimum_output.to_le_bytes(),
         &a.max_slippage_bps.to_le_bytes(),
         &a.expires_at.to_le_bytes(),
@@ -50,6 +59,31 @@ fn commitment(auth_key: Pubkey, a: &SwapLegAuthorization) -> [u8; 32] {
         &a.idempotency,
     ])
     .to_bytes()
+}
+
+fn active_registry(
+    r: &RouteProgramRegistry,
+    c: &VaultConfig,
+    vault: Pubkey,
+    slot: u64,
+    router: Pubkey,
+) -> Result<()> {
+    require!(
+        r.schema_version == 1
+            && r.vault == vault
+            && r.governance == c.governance
+            && r.config_version == c.config_version
+            && r.enabled
+            && r.revision > 0
+            && r.config_hash != [0; 32]
+            && r.activation_slot <= slot
+            && slot < r.expiry_slot
+            && usize::from(r.program_count) <= MAX_ROUTE_PROGRAMS
+            && r.program_count > 0
+            && r.programs[..usize::from(r.program_count)].contains(&router),
+        VaultError::RouteRegistry
+    );
+    Ok(())
 }
 
 fn assert_vault_token(
@@ -115,10 +149,25 @@ pub fn authorize(
         VaultError::InvalidPlan
     );
     require!(
-        args.input_amount > 0
-            && args.minimum_output >= p.minimum_outputs[leg]
-            && args.minimum_output > 0,
+        args.input_amount > 0 && args.quoted_output > 0,
         VaultError::InvalidAmount
+    );
+    let derived_minimum = u128::from(args.quoted_output)
+        .checked_mul(u128::from(TOTAL_BPS - args.max_slippage_bps))
+        .ok_or(VaultError::Math)?
+        / u128::from(TOTAL_BPS);
+    require!(
+        derived_minimum > 0 && derived_minimum <= u128::from(u64::MAX),
+        VaultError::MinimumOutput
+    );
+    require_eq!(
+        args.minimum_output,
+        derived_minimum as u64,
+        VaultError::MinimumOutput
+    );
+    require!(
+        args.minimum_output >= p.minimum_outputs[leg],
+        VaultError::MinimumOutput
     );
     require!(
         args.idempotency != [0; 32]
@@ -129,6 +178,13 @@ pub fn authorize(
         VaultError::SwapAuthorization
     );
     let router = reviewed_router()?;
+    active_registry(
+        &ctx.accounts.registry,
+        c,
+        c.key(),
+        Clock::get()?.slot,
+        router,
+    )?;
     require_keys_eq!(
         ctx.accounts.router_program.key(),
         router,
@@ -190,12 +246,14 @@ pub fn authorize(
     auth.leg = args.leg;
     auth.expected_revision = args.expected_revision;
     auth.router_program = router;
-    auth.route_registry_version = ROUTE_REGISTRY_VERSION;
+    auth.route_registry_version = ctx.accounts.registry.revision;
+    auth.route_registry_hash = ctx.accounts.registry.config_hash;
     auth.source = ctx.accounts.source.key();
     auth.destination = ctx.accounts.destination.key();
     auth.input_mint = p.input_mints[leg];
     auth.output_mint = p.output_mints[leg];
     auth.input_amount = args.input_amount;
+    auth.quoted_output = args.quoted_output;
     auth.minimum_output = args.minimum_output;
     auth.max_slippage_bps = args.max_slippage_bps;
     auth.quote_created_at = args.quote_created_at;
@@ -213,34 +271,54 @@ pub fn authorize(
     p.minimum_outputs[leg] = args.minimum_output;
     p.active_swap_authorization = commitment(auth.key(), auth);
     p.active_swap_expires_at = args.expires_at;
+    emit!(RouteRegistryEvent {
+        vault: c.key(),
+        revision: ctx.accounts.registry.revision,
+        config_hash: ctx.accounts.registry.config_hash,
+        action: 4,
+        slot: Clock::get()?.slot,
+    });
     Ok(())
 }
 
 fn account_metas_hash<'info>(
     accounts: &[AccountInfo<'info>],
+    registry: &RouteProgramRegistry,
     authority: Pubkey,
     source: Pubkey,
     destination: Pubkey,
     router: Pubkey,
 ) -> Result<([u8; 32], Vec<AccountMeta>)> {
     require!(
-        accounts.len() >= 3 && accounts.len() <= 64,
+        accounts.len() >= 3 && accounts.len() <= 128,
         VaultError::SwapAccount
     );
-    let mut bytes = Vec::with_capacity(2 + accounts.len() * 34);
+    let mut bytes = Vec::with_capacity(2 + accounts.len() * 39);
     bytes.extend_from_slice(&(accounts.len() as u16).to_le_bytes());
     let mut metas = Vec::with_capacity(accounts.len());
-    let mut seen = BTreeSet::new();
+    let mut seen = BTreeMap::new();
     let (mut found_authority, mut found_source, mut found_destination) = (false, false, false);
-    for account in accounts {
+    require!(
+        authority != source && authority != destination && source != destination,
+        VaultError::SwapAccount
+    );
+    for (index, account) in accounts.iter().enumerate() {
         let key = account.key();
-        require!(seen.insert(key) && key != router, VaultError::SwapAccount);
+        require!(key != router, VaultError::SwapAccount);
         let signer = key == authority;
         require!(!account.is_signer || signer, VaultError::SwapAccount);
+        if let Some(previous) = seen.insert(key, (signer, account.is_writable, account.executable))
+        {
+            require!(
+                previous == (signer, account.is_writable, account.executable),
+                VaultError::SwapAccount
+            );
+        }
         if account.executable {
-            // The isolated router invokes only the SPL Token program. A
-            // production DEX registry is still required before enabling JUP6.
-            require_keys_eq!(key, spl_token::ID, VaultError::SwapAccount);
+            require!(
+                registry.programs[..usize::from(registry.program_count)].contains(&key),
+                VaultError::RouteRegistry
+            );
             require!(!account.is_writable && !signer, VaultError::SwapAccount);
         }
         if signer {
@@ -267,19 +345,33 @@ fn account_metas_hash<'info>(
                 require_keys_eq!(parsed.owner, pool_authority, VaultError::SwapAccount);
             }
         }
-        // Production remains closed. The local router may change only SPL pool
-        // accounts; no caller-supplied executable, System or vault state account.
+        // The governed route registry bounds writable DEX accounts as well as
+        // executable programs. This is NOT a substitute for signed quote or
+        // post-CPI effect validation; production stays immutable-disabled.
         if account.is_writable && key != source && key != destination {
-            require_keys_eq!(*account.owner, spl_token::ID, VaultError::SwapAccount);
-            require_eq!(
-                account.data_len(),
-                spl_token::state::Account::LEN,
+            require!(
+                *account.owner == spl_token::ID
+                    || registry.programs[..usize::from(registry.program_count)]
+                        .contains(account.owner),
+                VaultError::SwapAccount
+            );
+            if *account.owner == spl_token::ID {
+                require_eq!(
+                    account.data_len(),
+                    spl_token::state::Account::LEN,
+                    VaultError::SwapAccount
+                );
+            }
+            require!(
+                key != authority && key != registry.governance && key != registry.vault,
                 VaultError::SwapAccount
             );
         }
+        bytes.extend_from_slice(&(index as u16).to_le_bytes());
         bytes.extend_from_slice(key.as_ref());
         bytes.push(u8::from(signer));
         bytes.push(u8::from(account.is_writable));
+        bytes.push(u8::from(account.executable));
         metas.push(if account.is_writable {
             AccountMeta::new(key, signer)
         } else {
@@ -290,7 +382,16 @@ fn account_metas_hash<'info>(
         found_authority && found_source && found_destination,
         VaultError::SwapAccount
     );
-    Ok((hashv(&[b"c3-ordered-metas-v1", &bytes]).to_bytes(), metas))
+    Ok((
+        hashv(&[
+            b"c3-ordered-metas-v2",
+            &registry.revision.to_le_bytes(),
+            &registry.config_hash,
+            &bytes,
+        ])
+        .to_bytes(),
+        metas,
+    ))
 }
 
 pub fn execute<'info>(
@@ -321,9 +422,18 @@ pub fn execute<'info>(
             && p.active_swap_expires_at == a.expires_at,
         VaultError::Expired
     );
+    require!(a.schema_version == 1, VaultError::InvalidConfig);
+    active_registry(
+        &ctx.accounts.registry,
+        &ctx.accounts.config,
+        ctx.accounts.config.key(),
+        Clock::get()?.slot,
+        a.router_program,
+    )?;
     require!(
-        a.schema_version == 1 && a.route_registry_version == ROUTE_REGISTRY_VERSION,
-        VaultError::InvalidConfig
+        a.route_registry_version == ctx.accounts.registry.revision
+            && a.route_registry_hash == ctx.accounts.registry.config_hash,
+        VaultError::RouteRegistry
     );
     require_eq!(
         a.config_version,
@@ -386,6 +496,7 @@ pub fn execute<'info>(
     );
     let (meta_hash, metas) = account_metas_hash(
         ctx.remaining_accounts,
+        &ctx.accounts.registry,
         ctx.accounts.vault_authority.key(),
         a.source,
         a.destination,

@@ -15,7 +15,8 @@ pub const MAX_QUOTE_AGE_SECONDS: i64 = 30;
 pub const MAX_PLAN_SECONDS: i64 = 120;
 pub const MAX_SLIPPAGE_BPS: u16 = 100;
 pub const SWAP_AUTH_SEED: &[u8] = b"c3-swap-auth-v1";
-pub const ROUTE_REGISTRY_VERSION: u64 = 1;
+pub const ROUTE_REGISTRY_SEED: &[u8] = b"c3-route-reg-v1";
+pub const MAX_ROUTE_PROGRAMS: usize = 16;
 
 // The production binary contains the boundary but cannot execute it before a
 // separately reviewed configuration/release. Environment variables cannot flip it.

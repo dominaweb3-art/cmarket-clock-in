@@ -109,7 +109,8 @@ export function measureUnsignedV0Candidate(
       seen.has(key) ||
       evidence.owner !== AddressLookupTableProgram.programId.toBase58() ||
       !evidence.table.isActive() ||
-      evidence.observedSlot < evidence.table.state.lastExtendedSlot ||
+      evidence.observedSlot <= evidence.table.state.lastExtendedSlot ||
+      input.currentSlot <= evidence.table.state.lastExtendedSlot ||
       evidence.observedSlot > input.currentSlot ||
       expected.length !== evidence.table.state.addresses.length ||
       expected.some(
