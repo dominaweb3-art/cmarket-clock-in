@@ -11,6 +11,7 @@ export default tseslint.config(
       "scripts/**/*.ts",
       "tests/**/*.ts",
       "research/**/*.ts",
+      "pilot-open-local/**/*.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "error",

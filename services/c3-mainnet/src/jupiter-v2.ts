@@ -306,7 +306,7 @@ function validateRequest(request: RouterRequest): void {
   if (
     !Number.isSafeInteger(request.maxAccounts) ||
     request.maxAccounts < 16 ||
-    request.maxAccounts > 32
+    request.maxAccounts > 64
   )
     throw new Error("C3_JUPITER_INVALID_REQUEST");
 }

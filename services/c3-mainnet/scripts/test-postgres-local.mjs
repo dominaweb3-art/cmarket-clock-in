@@ -18,6 +18,9 @@ const role = `c3_test_${suffix}`;
 const database = `c3_test_${suffix}`;
 const password = randomBytes(32).toString("hex");
 let started = false;
+const testFile = process.argv.includes("--open-local")
+  ? "pilot-open-local/orchestrator.integration.ts"
+  : "tests/postgres-live.integration.ts";
 
 function run(binary, args, env = process.env) {
   const result = spawnSync(join(binaryDirectory, binary), args, {
@@ -80,11 +83,7 @@ try {
   url.password = password;
   const result = spawnSync(
     process.execPath,
-    [
-      "--experimental-strip-types",
-      "--test",
-      "tests/postgres-live.integration.ts",
-    ],
+    ["--experimental-strip-types", "--test", testFile],
     {
       cwd: new URL("..", import.meta.url),
       env: {

@@ -16,11 +16,13 @@
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "lint:check": "eslint src scripts tests research",
+    "lint:check": "eslint src scripts tests research pilot-open-local",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:postgres": "node scripts/test-postgres-local.mjs",
+    "test:open-local-postgres": "node scripts/test-postgres-local.mjs --open-local",
+    "test:open-v0-measure": "node --experimental-strip-types --test pilot-open-local/jupiter-v0-measure.test.ts",
     "test:accounting": "node --experimental-strip-types --test tests/accounting.test.ts",
     "test:security": "node --experimental-strip-types --test tests/security.test.ts",
     "test:keeper": "node --experimental-strip-types --test tests/keeper.test.ts",
@@ -39,6 +41,7 @@
     "c3:jupiter:pilot-preflight": "node --experimental-strip-types scripts/jupiter-pilot-preflight.ts"
   },
   "devDependencies": {
+    "@solana/web3.js": "1.99.0",
     "@types/node": "26.6.2",
     "@types/pg": "8.23.1",
     "eslint": "9.39.5",
