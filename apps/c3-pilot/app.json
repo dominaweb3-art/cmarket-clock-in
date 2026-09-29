@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "C Market C3 Pilot",
+    "slug": "c-market-c3-pilot",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "cmarketc3pilot",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.dominaweb3.cmarket.c3pilot",
+      "versionCode": 1,
+      "permissions": ["android.permission.INTERNET"],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "extra": {
+      "pilotExecutionEnabled": false,
+      "mainnetExecutionEnabled": false
+    }
+  }
+}
