@@ -13,6 +13,11 @@ const MIGRATION_URL = new URL(
   "./migrations/0001_open_settlement.sql",
   import.meta.url,
 );
+const RECOVERY_MIGRATION = "0002_open_recovery";
+const RECOVERY_MIGRATION_URL = new URL(
+  "./migrations/0002_open_recovery.sql",
+  import.meta.url,
+);
 const fail = (code: string): never => {
   throw new Error(`C3_OPEN_${code}`);
 };
@@ -33,6 +38,7 @@ export type OpenState =
   | "cancelled"
   | "failed_recoverable"
   | "partially_completed"
+  | "reconciliation_required"
   | "manual_review"
   | "paused";
 export type LocalIntent = Readonly<{
@@ -86,6 +92,8 @@ type LegRow = {
   authorization_hash: string | null;
   minimum_output: string | null;
   quote_expires_at: Date | null;
+  submitted_at: Date | null;
+  recovery_attempts: number;
 };
 const snapshot = (row: IntentRow): OpenSnapshot =>
   Object.freeze({
@@ -106,32 +114,54 @@ export async function applyOpenLocalMigration(
 ): Promise<"applied" | "already_applied"> {
   const sql = await readFile(MIGRATION_URL, "utf8");
   const checksum = createHash("sha256").update(sql).digest("hex");
+  const recoverySql = await readFile(RECOVERY_MIGRATION_URL, "utf8");
+  const recoveryChecksum = createHash("sha256")
+    .update(recoverySql)
+    .digest("hex");
   await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
   try {
     await client.query("SELECT pg_advisory_xact_lock(304137, 5)");
     const namespace = await client.query<{ schema: string | null }>(
       "SELECT to_regnamespace('c3_open')::text AS schema",
     );
+    let changed = false;
     if (!namespace.rows[0]?.schema) {
       await client.query(sql);
       await client.query(
         "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
         [MIGRATION, checksum],
       );
-      await client.query("COMMIT");
-      return "applied";
+      changed = true;
+    } else {
+      const existing = await client.query<{ checksum_sha256: string }>(
+        "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+        [MIGRATION],
+      );
+      assert(
+        existing.rows.length === 1 &&
+          existing.rows[0]?.checksum_sha256 === checksum,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     }
-    const existing = await client.query<{ checksum_sha256: string }>(
+    const recovery = await client.query<{ checksum_sha256: string }>(
       "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
-      [MIGRATION],
+      [RECOVERY_MIGRATION],
     );
-    assert(
-      existing.rows.length === 1 &&
-        existing.rows[0]?.checksum_sha256 === checksum,
-      "MIGRATION_CHECKSUM_MISMATCH",
-    );
+    if (recovery.rows.length === 0) {
+      await client.query(recoverySql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [RECOVERY_MIGRATION, recoveryChecksum],
+      );
+      changed = true;
+    } else {
+      assert(
+        recovery.rows[0]?.checksum_sha256 === recoveryChecksum,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
+    }
     await client.query("COMMIT");
-    return "already_applied";
+    return changed ? "applied" : "already_applied";
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -139,14 +169,19 @@ export async function applyOpenLocalMigration(
 }
 
 export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
-  const checksum = createHash("sha256")
-    .update(await readFile(MIGRATION_URL))
-    .digest("hex");
-  const found = await pool.query<{ checksum_sha256: string }>(
-    "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
-    [MIGRATION],
-  );
-  assert(found.rows[0]?.checksum_sha256 === checksum, "SCHEMA_MISMATCH");
+  for (const [id, url] of [
+    [MIGRATION, MIGRATION_URL],
+    [RECOVERY_MIGRATION, RECOVERY_MIGRATION_URL],
+  ] as const) {
+    const checksum = createHash("sha256")
+      .update(await readFile(url))
+      .digest("hex");
+    const found = await pool.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [id],
+    );
+    assert(found.rows[0]?.checksum_sha256 === checksum, "SCHEMA_MISMATCH");
+  }
 }
 
 async function atomic<T>(
@@ -256,7 +291,8 @@ async function legForUpdate(
   );
   const result = await client.query<LegRow>(
     `SELECT state,chain_revision,lease_owner,lease_expires_at,submitted_signature,
-      route_hash,instruction_hash,authorization_hash,minimum_output,quote_expires_at
+      route_hash,instruction_hash,authorization_hash,minimum_output,quote_expires_at,
+      submitted_at,recovery_attempts
      FROM c3_open.legs WHERE intent_id=$1 AND ordinal=$2 FOR UPDATE`,
     [intentId, ordinal],
   );
@@ -352,6 +388,7 @@ export class OpenLocalSettlementRepository {
       claimable: ["redeemed", "manual_review"],
       partially_completed: ["buying", "selling", "manual_review", "paused"],
       failed_recoverable: ["manual_review"],
+      reconciliation_required: ["manual_review"],
       paused: ["manual_review"],
       manual_review: [],
     };
@@ -667,19 +704,75 @@ export class OpenLocalSettlementRepository {
       );
       await client.query(
         `UPDATE c3_open.legs SET state='uncertain',reason_code=$3,
+          submitted_at=COALESCE(submitted_at,clock_timestamp()),
           lease_owner=NULL,lease_expires_at=NULL,updated_at=clock_timestamp()
          WHERE intent_id=$1 AND ordinal=$2`,
         [scope.intentId, ordinal, reason],
       );
-      const next = await bump(client, scope, "manual_review");
+      const next = await bump(client, scope, "reconciliation_required");
       await event(
         client,
         scope,
         next.dbRevision,
-        "manual_review",
+        "reconciliation_required",
         ordinal,
         null,
         reason,
+      );
+      return next;
+    });
+  }
+  /** A bounded, operator-triggered read attempt; it never rebuilds or resends a transaction. */
+  async beginReconciliation(
+    scope: Scope,
+    ordinal: number,
+  ): Promise<OpenSnapshot> {
+    return atomic(this.pool, async (client) => {
+      const row = await locked(client, scope, true);
+      const leg = await legForUpdate(client, scope.intentId, ordinal);
+      assert(
+        row.state === "reconciliation_required" &&
+          ["uncertain", "reconciliation_required"].includes(leg.state) &&
+          leg.submitted_signature !== null,
+        "RECONCILIATION_NOT_REQUIRED",
+      );
+      const clock = await client.query<{ now: Date }>(
+        "SELECT clock_timestamp() AS now",
+      );
+      const now = clock.rows[0]!.now.getTime();
+      const expired =
+        leg.submitted_at === null ||
+        now >= leg.submitted_at.getTime() + 24 * 60 * 60 * 1_000;
+      if (expired || leg.recovery_attempts >= 3) {
+        await client.query(
+          "UPDATE c3_open.legs SET state='manual_review',updated_at=clock_timestamp() WHERE intent_id=$1 AND ordinal=$2",
+          [scope.intentId, ordinal],
+        );
+        const next = await bump(client, scope, "manual_review");
+        await event(
+          client,
+          scope,
+          next.dbRevision,
+          "manual_review",
+          ordinal,
+          null,
+          expired ? "RECOVERY_EXPIRED" : "RECOVERY_EXHAUSTED",
+        );
+        return next;
+      }
+      await client.query(
+        `UPDATE c3_open.legs SET state='reconciliation_required',
+          recovery_attempts=recovery_attempts+1,updated_at=clock_timestamp()
+         WHERE intent_id=$1 AND ordinal=$2`,
+        [scope.intentId, ordinal],
+      );
+      const next = await bump(client, scope, "reconciliation_required");
+      await event(
+        client,
+        scope,
+        next.dbRevision,
+        "reconciliation_attempt",
+        ordinal,
       );
       return next;
     });
@@ -710,9 +803,16 @@ export class OpenLocalSettlementRepository {
       const expectedPlan = ordinal < 3 ? row.deposit_plan : row.redemption_plan;
       assert(attestation.plan === expectedPlan, "PLAN_MISMATCH");
       assert(
-        (ordinal < 3 && ["funded", "buying"].includes(row.state)) ||
+        (ordinal < 3 &&
+          ["funded", "buying", "reconciliation_required"].includes(
+            row.state,
+          )) ||
           (ordinal >= 3 &&
-            ["redemption_requested", "selling"].includes(row.state)),
+            [
+              "redemption_requested",
+              "selling",
+              "reconciliation_required",
+            ].includes(row.state)),
         "INVALID_STATE",
       );
       if (ordinal > 0) {
@@ -725,10 +825,23 @@ export class OpenLocalSettlementRepository {
       }
       const leg = await legForUpdate(client, scope.intentId, ordinal);
       assert(
-        leg.state === "submitted" &&
+        ["submitted", "reconciliation_required"].includes(leg.state) &&
           leg.submitted_signature === attestation.signature,
         "SUBMISSION_OR_SIGNATURE_MISMATCH",
       );
+      if (leg.state === "reconciliation_required") {
+        const clock = await client.query<{ now: Date }>(
+          "SELECT clock_timestamp() AS now",
+        );
+        assert(
+          leg.recovery_attempts >= 1 &&
+            leg.recovery_attempts <= 3 &&
+            leg.submitted_at !== null &&
+            clock.rows[0]!.now.getTime() <
+              leg.submitted_at.getTime() + 24 * 60 * 60 * 1_000,
+          "RECOVERY_WINDOW_CLOSED",
+        );
+      }
       const expectations = await client.query<{ expected_effects: unknown }>(
         "SELECT expected_effects FROM c3_open.legs WHERE intent_id=$1 AND ordinal=$2",
         [scope.intentId, ordinal],
@@ -774,11 +887,13 @@ export class OpenLocalSettlementRepository {
       state: string;
       signature: string | null;
       authorizationHash: string | null;
+      recoveryAttempts: number;
+      submittedAt: Date | null;
     }>
   > {
     assert(ID.test(intentId), "INVALID_ID");
     const leg = await this.pool.query<LegRow>(
-      `SELECT state,submitted_signature,authorization_hash FROM c3_open.legs
+      `SELECT state,submitted_signature,authorization_hash,recovery_attempts,submitted_at FROM c3_open.legs
        WHERE intent_id=$1 AND ordinal=$2`,
       [intentId, ordinal],
     );
@@ -787,6 +902,8 @@ export class OpenLocalSettlementRepository {
       state: leg.rows[0]!.state,
       signature: leg.rows[0]!.submitted_signature,
       authorizationHash: leg.rows[0]!.authorization_hash,
+      recoveryAttempts: leg.rows[0]!.recovery_attempts,
+      submittedAt: leg.rows[0]!.submitted_at,
     });
   }
 }

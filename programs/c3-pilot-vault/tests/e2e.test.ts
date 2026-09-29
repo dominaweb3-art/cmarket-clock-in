@@ -1106,6 +1106,22 @@ test(
         ),
         "unreviewed inner program",
       );
+      if (ordinal === 1) {
+        journalState = await durable.db.uncertain(
+          journalScope(),
+          ordinal,
+          "RPC_RESPONSE_LOST_AFTER_FINALITY",
+        );
+        assert.equal(journalState.state, "reconciliation_required");
+        journalState = await durable.db.beginReconciliation(
+          journalScope(),
+          ordinal,
+        );
+        assert.equal(
+          (await durable.db.readLeg(journalId, ordinal)).signature,
+          signature,
+        );
+      }
       const tokenAmount = (
         list: typeof result.meta.preTokenBalances,
         account: PublicKey,

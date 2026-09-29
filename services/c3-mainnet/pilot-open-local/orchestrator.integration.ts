@@ -350,15 +350,47 @@ test(
       0,
       "NO_RPC_RESPONSE",
     );
-    assert.equal(interrupted.state, "manual_review");
+    assert.equal(interrupted.state, "reconciliation_required");
     assert.equal(
       (await db.readLeg(interruptedId, 0)).signature,
       interruptedSignature,
     );
     await assert.rejects(
+      pool.query(
+        "UPDATE c3_open.legs SET submitted_signature=$3 WHERE intent_id=$1 AND ordinal=$2",
+        [interruptedId, 0, "9".repeat(88)],
+      ),
+      /C3_OPEN_IMMUTABLE_LEG/,
+    );
+    await assert.rejects(
+      pool.query(
+        "UPDATE c3_open.legs SET minimum_output=1+minimum_output WHERE intent_id=$1 AND ordinal=$2",
+        [interruptedId, 0],
+      ),
+      /C3_OPEN_IMMUTABLE_LEG/,
+    );
+    await assert.rejects(
       db.uncertain(scope(interrupted, interruptedId), 0, "NO_RPC_RESPONSE"),
       /NO_SIGNATURE_TO_RECONCILE/,
     );
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      interrupted = await db.beginReconciliation(
+        scope(interrupted, interruptedId),
+        0,
+      );
+      assert.equal(interrupted.state, "reconciliation_required");
+      assert.equal(
+        (await db.readLeg(interruptedId, 0)).recoveryAttempts,
+        attempt,
+      );
+      assert.equal(restartRead(interruptedId).signature, interruptedSignature);
+    }
+    interrupted = await db.beginReconciliation(
+      scope(interrupted, interruptedId),
+      0,
+    );
+    assert.equal(interrupted.state, "manual_review");
+    assert.equal((await db.readLeg(interruptedId, 0)).recoveryAttempts, 3);
     await assert.rejects(
       db.lease(scope(interrupted, interruptedId), 0, workerB),
       /INVALID_STATE/,
