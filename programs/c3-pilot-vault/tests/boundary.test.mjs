@@ -22,17 +22,23 @@ test("production artifact excludes local mock entrypoints and protects stable mo
     false,
     "mock instruction must be absent from production IDL",
   );
-  for (const localOnly of [
-    "createDepositIntent",
-    "recordDepositSettlement",
-    "createDepositSettlementPlan",
-    "createRedemptionSettlementPlan",
-    "recordRedemptionSettlement",
+  for (const lifecycle of [
+    "create_deposit_intent",
+    "deposit_usdc",
+    "create_deposit_settlement_plan",
+    "authorize_swap_leg",
+    "execute_swap_leg",
+    "record_deposit_settlement",
+    "issue_initial_shares",
+    "create_redemption_intent",
+    "create_redemption_settlement_plan",
+    "record_redemption_settlement",
+    "claim_usdc",
   ]) {
     assert.equal(
-      names.includes(localOnly),
-      false,
-      `${localOnly} must be absent from production IDL`,
+      names.includes(lifecycle),
+      true,
+      `${lifecycle} must be present but disabled in the production IDL`,
     );
   }
   const so = readFileSync(soPath);
@@ -72,14 +78,22 @@ test("production artifact excludes local mock entrypoints and protects stable mo
     );
     // C3V2 intentionally adds server-only Jupiter validation to c3-mainnet.
   }
+  const constants = readFileSync(
+    resolve(here, "programs/c3_pilot_vault/src/constants.rs"),
+    "utf8",
+  );
+  assert.match(
+    constants,
+    /#\[cfg\(not\(feature = "local-mock"\)\)\][\s\S]*?ROUTER_EXECUTION_ENABLED: bool = false/,
+    "default build must disable all economic execution",
+  );
   const source = readFileSync(
     resolve(here, "programs/c3_pilot_vault/src/lib.rs"),
     "utf8",
   );
   assert.match(
     source,
-    /cfg!\(feature = "local-mock"\)/,
-    "default build must gate deposits",
+    /require!\(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled\)/,
   );
   assert.match(
     source,

@@ -179,7 +179,6 @@ pub mod c3_pilot_vault {
         )
     }
 
-    #[cfg(feature = "local-mock")]
     pub fn create_deposit_intent(
         ctx: Context<CreateDepositIntent>,
         nonce: u64,
@@ -187,7 +186,7 @@ pub mod c3_pilot_vault {
         config_version: u64,
         expires_at: i64,
     ) -> Result<()> {
-        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &mut ctx.accounts.config;
         require!(!c.paused, VaultError::Paused);
         require_keys_eq!(
@@ -231,6 +230,7 @@ pub mod c3_pilot_vault {
     }
 
     pub fn deposit_usdc(ctx: Context<DepositUsdc>) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let d = &mut ctx.accounts.intent;
         require!(!c.paused, VaultError::Paused);
@@ -280,12 +280,11 @@ pub mod c3_pilot_vault {
         emit_state(c.key(), d.key(), d.wallet, kind::USDC_DEPOSITED, ONE_USDC)
     }
 
-    #[cfg(feature = "local-mock")]
     pub fn record_deposit_settlement(
         ctx: Context<RecordDepositSettlement>,
         settlement_id: [u8; 32],
     ) -> Result<()> {
-        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let d = &mut ctx.accounts.intent;
         let p = &ctx.accounts.plan;
@@ -320,7 +319,7 @@ pub mod c3_pilot_vault {
             VaultError::Settlement
         );
         require!(
-            p.actual_outputs == [40_000, 30_000, 30_000],
+            p.actual_outputs.iter().all(|amount| *amount > 0),
             VaultError::Settlement
         );
         require!(
@@ -356,17 +355,17 @@ pub mod c3_pilot_vault {
         require_eq!(ctx.accounts.vault_usdc.amount, 0, VaultError::Settlement);
         require_eq!(
             ctx.accounts.vault_btc.amount,
-            40_000,
+            p.actual_outputs[0],
             VaultError::Settlement
         );
         require_eq!(
             ctx.accounts.vault_eth.amount,
-            30_000,
+            p.actual_outputs[1],
             VaultError::Settlement
         );
         require_eq!(
             ctx.accounts.vault_wsol.amount,
-            30_000,
+            p.actual_outputs[2],
             VaultError::Settlement
         );
         d.btc_after = ctx.accounts.vault_btc.amount;
@@ -376,7 +375,6 @@ pub mod c3_pilot_vault {
         emit_state(c.key(), d.key(), d.wallet, kind::DEPOSIT_SETTLED, ONE_USDC)
     }
 
-    #[cfg(feature = "local-mock")]
     pub fn create_deposit_settlement_plan(
         ctx: Context<CreateDepositPlan>,
         route_hashes: [[u8; 32]; 3],
@@ -386,7 +384,7 @@ pub mod c3_pilot_vault {
         max_slippage_bps: u16,
         idempotency: [u8; 32],
     ) -> Result<()> {
-        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let d = &ctx.accounts.intent;
         require_keys_eq!(
@@ -423,7 +421,6 @@ pub mod c3_pilot_vault {
         )
     }
 
-    #[cfg(feature = "local-mock")]
     pub fn create_redemption_settlement_plan(
         ctx: Context<CreateRedemptionPlan>,
         route_hashes: [[u8; 32]; 3],
@@ -433,7 +430,7 @@ pub mod c3_pilot_vault {
         max_slippage_bps: u16,
         idempotency: [u8; 32],
     ) -> Result<()> {
-        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let r = &ctx.accounts.intent;
         require_keys_eq!(
@@ -487,6 +484,7 @@ pub mod c3_pilot_vault {
     }
 
     pub fn issue_initial_shares(ctx: Context<IssueShares>) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &mut ctx.accounts.config;
         let d = &mut ctx.accounts.intent;
         require_keys_eq!(d.wallet, ctx.accounts.owner.key(), VaultError::Unauthorized);
@@ -555,6 +553,7 @@ pub mod c3_pilot_vault {
         config_version: u64,
         expires_at: i64,
     ) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &mut ctx.accounts.config;
         require!(!c.paused, VaultError::Paused);
         require_keys_eq!(
@@ -614,6 +613,7 @@ pub mod c3_pilot_vault {
     }
 
     pub fn lock_shares_for_redemption(ctx: Context<BurnShares>) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let r = &mut ctx.accounts.intent;
         require_keys_eq!(r.wallet, ctx.accounts.owner.key(), VaultError::Unauthorized);
@@ -647,12 +647,11 @@ pub mod c3_pilot_vault {
         emit_state(c.key(), r.key(), r.wallet, kind::SHARES_LOCKED, SHARE_UNITS)
     }
 
-    #[cfg(feature = "local-mock")]
     pub fn record_redemption_settlement(
         ctx: Context<RecordRedemptionSettlement>,
         settlement_id: [u8; 32],
     ) -> Result<()> {
-        require!(cfg!(feature = "local-mock"), VaultError::MockOnly);
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let r = &mut ctx.accounts.intent;
         let p = &ctx.accounts.plan;
@@ -686,7 +685,7 @@ pub mod c3_pilot_vault {
             VaultError::Settlement
         );
         require!(
-            p.actual_outputs == [396_000, 297_000, 297_000],
+            p.actual_outputs.iter().all(|amount| *amount > 0),
             VaultError::Settlement
         );
         require!(
@@ -699,12 +698,16 @@ pub mod c3_pilot_vault {
         require_eq!(ctx.accounts.vault_btc.amount, 0, VaultError::Settlement);
         require_eq!(ctx.accounts.vault_eth.amount, 0, VaultError::Settlement);
         require_eq!(ctx.accounts.vault_wsol.amount, 0, VaultError::Settlement);
+        let realized_usdc = p
+            .actual_outputs
+            .iter()
+            .try_fold(0u64, |sum, amount| add(sum, *amount))?;
         require_eq!(
             ctx.accounts.vault_usdc.amount,
-            990_000,
+            realized_usdc,
             VaultError::Settlement
         );
-        r.usdc_claimable = ctx.accounts.vault_usdc.amount;
+        r.usdc_claimable = realized_usdc;
         r.status = redemption_status::LIQUIDATION_RECORDED;
         r.status = redemption_status::USDC_CLAIMABLE;
         emit_state(
@@ -727,10 +730,7 @@ pub mod c3_pilot_vault {
         );
         at(r.status, redemption_status::USDC_CLAIMABLE)?;
         require_eq!(r.usdc_returned, 0, VaultError::InvalidState);
-        require!(
-            r.usdc_claimable > 0 && r.usdc_claimable <= ONE_USDC,
-            VaultError::Settlement
-        );
+        require!(r.usdc_claimable > 0, VaultError::Settlement);
         require_eq!(
             ctx.accounts.vault_usdc.amount,
             r.usdc_claimable,
