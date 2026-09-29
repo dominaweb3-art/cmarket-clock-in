@@ -4,6 +4,10 @@ import { C3_MAINNET } from "./constants.ts";
 
 const ORIGIN = "https://api.jup.ag";
 const MAX_RESPONSE_BYTES = 256_000;
+// Conservative application bound for an unsigned v0 candidate. The final
+// authority decision still requires resolved ALTs and <= 1,232 serialized bytes.
+// `maxAccounts` is a routing hint, not a bound on returned instruction metas.
+const MAX_INSTRUCTION_META_OCCURRENCES = 256;
 const TIMEOUT_MS = 12_000;
 const U64_MAX = (1n << 64n) - 1n;
 const ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -95,7 +99,10 @@ function amount(value: unknown, allowZero = false): bigint {
 function instruction(value: unknown): RouterInstruction {
   const raw = record(value);
   const programId = address(raw.programId);
-  if (!Array.isArray(raw.accounts) || raw.accounts.length > 64)
+  if (
+    !Array.isArray(raw.accounts) ||
+    raw.accounts.length > MAX_INSTRUCTION_META_OCCURRENCES
+  )
     throw new Error("C3_JUPITER_INVALID_ACCOUNTS");
   const accounts = raw.accounts.map((item: unknown) => {
     const meta = record(item);

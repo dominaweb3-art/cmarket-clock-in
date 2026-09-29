@@ -70,6 +70,39 @@ test("valid V2-shaped response parses without treating labels as authority", () 
   assert.match(quoteFingerprint(build), /^[a-f0-9]{64}$/);
 });
 
+test("raw build parses 83 ordered meta occurrences but rejects an unbounded response", () => {
+  const raw = fixture();
+  const accounts = (
+    raw.swapInstruction as {
+      accounts: Array<{
+        pubkey: string;
+        isSigner: boolean;
+        isWritable: boolean;
+      }>;
+    }
+  ).accounts;
+  for (let index = 1; index < 83; index += 1) {
+    accounts.push({
+      pubkey: index % 2 === 0 ? request.inputMint : request.outputMint,
+      isSigner: false,
+      isWritable: true,
+    });
+  }
+  const parsed = parseRouterBuild(raw, request);
+  assert.equal(parsed.swapInstruction.accounts.length, 83);
+  assert.equal(parsed.swapInstruction.accounts[1]?.pubkey, request.outputMint);
+  assert.equal(parsed.swapInstruction.accounts[2]?.pubkey, request.inputMint);
+  assert.equal(parsed.swapInstruction.accounts[82]?.pubkey, request.inputMint);
+  for (let index = 83; index < 257; index += 1) {
+    accounts.push({
+      pubkey: request.inputMint,
+      isSigner: false,
+      isWritable: false,
+    });
+  }
+  assert.throws(() => parseRouterBuild(raw, request), /INVALID_ACCOUNTS/);
+});
+
 test("multi-hop route accounting is per mint, not sum of all hop bps", () => {
   const raw = fixture();
   raw.routePlan = [
