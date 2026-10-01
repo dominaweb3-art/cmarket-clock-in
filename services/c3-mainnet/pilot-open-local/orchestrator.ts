@@ -1,8 +1,10 @@
 /** MOCK_LOCAL_ONLY durable journal. Deliberately excluded from the production service build. */
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createPublicKey, randomUUID, verify } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import type { Pool, PoolClient } from "pg";
+import { quoteContextHash } from "../src/quote-seal.ts";
+import { openQuoteContext, type StoredQuoteContext } from "./open-quote.ts";
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -16,6 +18,11 @@ const MIGRATION_URL = new URL(
 const RECOVERY_MIGRATION = "0002_open_recovery";
 const RECOVERY_MIGRATION_URL = new URL(
   "./migrations/0002_open_recovery.sql",
+  import.meta.url,
+);
+const QUOTE_MIGRATION = "0003_open_quote_authority";
+const QUOTE_MIGRATION_URL = new URL(
+  "./migrations/0003_open_quote_authority.sql",
   import.meta.url,
 );
 const fail = (code: string): never => {
@@ -108,6 +115,63 @@ const snapshot = (row: IntentRow): OpenSnapshot =>
     expiresAt: row.expires_at,
   });
 
+/** Once enrolled, an intent/leg cannot downgrade to the historical unsealed
+ * mock-fixture preparation. No signing operation occurs under this PG lock. */
+async function signedOpenSeal(
+  client: PoolClient,
+  intentId: string,
+  ordinal: number,
+  authorizationHash: string,
+) {
+  const enrolled = await client.query(
+    "SELECT 1 FROM c3_open.quote_contexts WHERE intent_id=$1 AND ordinal=$2 LIMIT 1",
+    [intentId, ordinal],
+  );
+  if (!enrolled.rowCount) return null; // historical mock-only regression fixtures
+  const q = (
+    await client.query(
+      `SELECT q.*,ctx.context,ctx.context_hash FROM c3_open.quote_authorizations q
+    JOIN c3_open.quote_contexts ctx USING(intent_id,ordinal,intent_revision)
+    WHERE q.intent_id=$1 AND q.ordinal=$2 AND q.state='signed' AND encode(q.payload_hash,'hex')=$3 FOR SHARE OF q`,
+      [intentId, ordinal, authorizationHash],
+    )
+  ).rows[0];
+  assert(
+    q &&
+      q.signature &&
+      q.canonical_payload.length === 300 &&
+      q.signature.length === 64,
+    "SIGNED_OPEN_SEAL_REQUIRED",
+  );
+  const payload = q.canonical_payload as Buffer;
+  assert(
+    createHash("sha256").update(payload).digest().equals(q.payload_hash) &&
+      payload.subarray(17, 49).equals(q.context_hash) &&
+      quoteContextHash(openQuoteContext(q.context)).equals(q.context_hash) &&
+      Buffer.from(q.context.authority, "hex").equals(q.authority) &&
+      verify(
+        null,
+        payload,
+        createPublicKey({
+          key: Buffer.concat([
+            Buffer.from("302a300506032b6570032100", "hex"),
+            q.authority,
+          ]),
+          format: "der",
+          type: "spki",
+        }),
+        q.signature,
+      ),
+    "OPEN_SEAL_CORRUPTED",
+  );
+  return q as {
+    quote_id: Buffer;
+    canonical_payload: Buffer;
+    intent_revision: string;
+    context: StoredQuoteContext;
+  };
+}
+
 /** Explicit migration; production bootstrap never calls this. */
 export async function applyOpenLocalMigration(
   client: PoolClient,
@@ -160,6 +224,24 @@ export async function applyOpenLocalMigration(
         "MIGRATION_CHECKSUM_MISMATCH",
       );
     }
+    const quoteSql = await readFile(QUOTE_MIGRATION_URL, "utf8");
+    const quoteChecksum = createHash("sha256").update(quoteSql).digest("hex");
+    const quoteExisting = await client.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [QUOTE_MIGRATION],
+    );
+    if (!quoteExisting.rows.length) {
+      await client.query(quoteSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [QUOTE_MIGRATION, quoteChecksum],
+      );
+      changed = true;
+    } else
+      assert(
+        quoteExisting.rows[0]?.checksum_sha256 === quoteChecksum,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     await client.query("COMMIT");
     return changed ? "applied" : "already_applied";
   } catch (error) {
@@ -172,6 +254,7 @@ export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
   for (const [id, url] of [
     [MIGRATION, MIGRATION_URL],
     [RECOVERY_MIGRATION, RECOVERY_MIGRATION_URL],
+    [QUOTE_MIGRATION, QUOTE_MIGRATION_URL],
   ] as const) {
     const checksum = createHash("sha256")
       .update(await readFile(url))
@@ -599,6 +682,31 @@ export class OpenLocalSettlementRepository {
           leg.lease_expires_at.getTime() > Date.now(),
         "LEASE_REQUIRED",
       );
+      const seal = await signedOpenSeal(
+        client,
+        scope.intentId,
+        ordinal,
+        details.authorizationHash,
+      );
+      if (seal)
+        assert(
+          seal.intent_revision === scope.expectedDbRevision.toString() &&
+            seal.canonical_payload.readBigUInt64LE(113) ===
+              details.inputAmount &&
+            seal.canonical_payload.readBigUInt64LE(131) ===
+              details.minimumOutput &&
+            seal.canonical_payload.subarray(139, 171).toString("hex") ===
+              details.routeHash &&
+            seal.canonical_payload.subarray(171, 203).toString("hex") ===
+              details.instructionHash &&
+            Number(seal.canonical_payload.readBigInt64LE(284)) * 1000 ===
+              details.quoteExpiresAt.getTime() &&
+            seal.context.inputMint === details.inputMint &&
+            seal.context.outputMint === details.outputMint &&
+            seal.context.source === details.source &&
+            seal.context.destination === details.destination,
+          "OPEN_SEAL_PREPARATION_MISMATCH",
+        );
       await client.query(
         `UPDATE c3_open.legs SET state='prepared',route_hash=$3,instruction_hash=$4,
           authorization_hash=$5,input_mint=$6,output_mint=$7,source_account=$8,
@@ -651,6 +759,7 @@ export class OpenLocalSettlementRepository {
           leg.submitted_signature === null,
         "PREPARED_AUTHORIZATION_REQUIRED",
       );
+      await signedOpenSeal(client, scope.intentId, ordinal, authorizationHash);
       await client.query(
         "UPDATE c3_open.legs SET state='signed',submitted_signature=$3,updated_at=clock_timestamp() WHERE intent_id=$1 AND ordinal=$2",
         [scope.intentId, ordinal, signature],
@@ -851,6 +960,12 @@ export class OpenLocalSettlementRepository {
         expected && isDeepStrictEqual(expected, attestation.observedEffects),
         "LOCAL_EFFECT_MISMATCH",
       );
+      const seal = await signedOpenSeal(
+        client,
+        scope.intentId,
+        ordinal,
+        leg.authorization_hash!,
+      );
       await client.query(
         `UPDATE c3_open.legs SET state='confirmed',chain_revision=$3,evidence_hash=$4,
           observed_effects=$5,updated_at=clock_timestamp() WHERE intent_id=$1 AND ordinal=$2`,
@@ -862,6 +977,11 @@ export class OpenLocalSettlementRepository {
           JSON.stringify(attestation.observedEffects),
         ],
       );
+      if (seal)
+        await client.query(
+          "UPDATE c3_open.quote_authorizations SET state='consumed',revision=revision+1 WHERE quote_id=$1 AND state='signed'",
+          [seal.quote_id],
+        );
       const next = await bump(
         client,
         scope,

@@ -43,10 +43,15 @@
     "c3:jupiter:v0-six-route-probe": "node --experimental-strip-types scripts/jupiter-v0-six-route-probe.ts",
     "c3:jupiter:vault-cpi-preflight": "node --experimental-strip-types scripts/jupiter-vault-cpi-preflight.ts",
     "test:open-cpi-inspection": "node --experimental-strip-types --test pilot-open-local/jupiter-vault-cpi-inspection.test.ts",
-    "test:jupiter-fork-probe": "node --experimental-strip-types pilot-open-local/jupiter-fork-probe.ts"
+    "test:jupiter-fork-probe": "node --experimental-strip-types pilot-open-local/jupiter-fork-probe.ts",
+    "test:jupiter-six-clone": "node --experimental-strip-types pilot-open-local/jupiter-six-clone.ts",
+    "test:open-quote-postgres": "node scripts/test-postgres-local.mjs --open-quote",
+    "c3:open:read-server": "node --experimental-strip-types pilot-open-local/read-server-cli.ts"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
     "@solana/web3.js": "1.99.0",
+    "@types/bn.js": "5.2.0",
     "@types/node": "26.6.2",
     "@types/pg": "8.23.1",
     "eslint": "9.39.5",

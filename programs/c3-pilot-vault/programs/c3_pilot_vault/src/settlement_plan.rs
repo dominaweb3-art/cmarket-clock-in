@@ -78,8 +78,9 @@ pub fn initialize(
     plan.output_mints = outputs;
     plan.source_accounts = sources;
     plan.destination_accounts = destinations;
-    // MOCK_LOCAL_ONLY is the only router allowed while no production route policy exists.
-    plan.router_program = crate::ID;
+    // Bind the real plan before its first server-side quote is enrolled. The
+    // historical mock shortcut keeps its own program ID; it is not Jupiter.
+    plan.router_program = initial_router_program()?;
     plan.route_hashes = route_hashes;
     plan.minimum_outputs = minimum_outputs;
     plan.max_slippage_bps = max_slippage_bps;
@@ -100,6 +101,36 @@ pub fn initialize(
     plan.active_swap_expires_at = 0;
     plan.bump = bump;
     Ok(())
+}
+
+fn initial_router_program() -> Result<Pubkey> {
+    #[cfg(feature = "local-mock")]
+    {
+        Ok(crate::ID)
+    }
+    #[cfg(not(feature = "local-mock"))]
+    {
+        crate::swap_leg::reviewed_router()
+    }
+}
+
+#[cfg(test)]
+mod router_binding_tests {
+    use super::*;
+    #[test]
+    fn first_quote_context_has_the_reviewed_router_without_enabling_execution() {
+        #[cfg(not(feature = "local-mock"))]
+        {
+            assert_eq!(
+                initial_router_program().unwrap(),
+                crate::swap_leg::reviewed_router().unwrap()
+            );
+            assert_ne!(initial_router_program().unwrap(), crate::ID);
+            assert!(!ROUTER_EXECUTION_ENABLED);
+        }
+        #[cfg(feature = "local-mock")]
+        assert_eq!(initial_router_program().unwrap(), crate::ID);
+    }
 }
 
 pub fn check_next_leg(

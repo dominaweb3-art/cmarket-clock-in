@@ -41,6 +41,12 @@ import {
 } from "@solana/web3.js";
 import { C3PilotClient } from "../../../packages/c3-pilot-client/src/index.ts";
 import { openValidatorJournal } from "../../../services/c3-mainnet/pilot-open-local/validator-bridge.ts";
+import { IsolatedOpenTestSigner } from "../../../services/c3-mainnet/pilot-open-local/isolated-test-signer.ts";
+import {
+  OpenQuoteAuthority,
+  openQuoteContext,
+  type StoredQuoteContext,
+} from "../../../services/c3-mainnet/pilot-open-local/open-quote.ts";
 import type {
   OpenSnapshot,
   Scope,
@@ -419,6 +425,8 @@ test(
       ? await openValidatorJournal()
       : null;
     if (durable) t.after(() => durable.close());
+    let isolatedSigner: IsolatedOpenTestSigner | null = null;
+    t.after(() => isolatedSigner?.close());
     const journalId = randomUUID();
     const depositPlanAddress = settlementPlan(
       intent("deposit", owner.publicKey, 1),
@@ -1023,6 +1031,9 @@ test(
         seal: {} as Seal,
       };
       const planState = await fetchState("settlementPlan", plan);
+      let policyRevision = Number(
+        (await fetchState("quoteAuthorityPolicy", quotePolicy)).revision,
+      );
       const currentSlot = await connection.getSlot("confirmed");
       const [quoteReceipt] = PublicKey.findProgramAddressSync(
         [Buffer.from("c3-quote-receipt-v1"), Buffer.from(quoteId)],
@@ -1047,7 +1058,7 @@ test(
         source.toBuffer(),
         destination.toBuffer(),
         routerId.toBuffer(),
-        u64le(1),
+        u64le(policyRevision),
       );
       assert.deepEqual(
         [
@@ -1073,7 +1084,7 @@ test(
             source: source.toBase58(),
             destination: destination.toBase58(),
             routerProgram: routerId.toBase58(),
-            policyRevision: 1n,
+            policyRevision: BigInt(policyRevision),
           }),
         ],
         contextHash,
@@ -1112,7 +1123,7 @@ test(
         altCount: 0,
         altAddresses: Array(4).fill(PublicKey.default),
         altContentsHash: Array(32).fill(0),
-        policyRevision: new BN(1),
+        policyRevision: new BN(policyRevision),
         builderTimestamp: args.quoteCreatedAt,
         builderSlot: new BN(currentSlot),
         expiresAt: args.expiresAt,
@@ -1139,7 +1150,7 @@ test(
         }),
         encodeSeal(args.seal),
       );
-      const ed25519 = Ed25519Program.createInstructionWithPrivateKey({
+      let ed25519 = Ed25519Program.createInstructionWithPrivateKey({
         privateKey: quoteSigner.secretKey,
         message: encodeSeal(args.seal),
       });
@@ -1349,7 +1360,7 @@ test(
       const workerUuid = (hex: string) =>
         `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
       let worker = workerUuid(workerA);
-      const authorizationHash = hexDigest(
+      let authorizationHash = hexDigest(
         bytes("c3-auth-v1"),
         Buffer.from(idempotency),
       );
@@ -1385,6 +1396,138 @@ test(
             worker,
           );
         }
+        // This fixture is explicitly MOCK_LOCAL_ONLY. The same durable signer
+        // path loads its context from the original open-vault intent, not the
+        // frozen Symmetry schema. No production key or wallet callback exists.
+        // Preserve the original signed hostile-case tests above. Only AFTER
+        // those checks rotate the local policy to a child-generated key whose
+        // private half never leaves the isolated PostgreSQL-reading signer.
+        if (!isolatedSigner) {
+          isolatedSigner = await IsolatedOpenTestSigner.start();
+          await program.methods
+            .configureQuotePolicy(
+              new PublicKey(isolatedSigner.publicKey),
+              genesisHash,
+              new BN(30),
+              100,
+            )
+            .accountsStrict({
+              governance: payer.publicKey,
+              config,
+              policy: quotePolicy,
+            })
+            .rpc();
+          policyRevision = Number(
+            (await fetchState("quoteAuthorityPolicy", quotePolicy)).revision,
+          );
+        }
+        const trusted: StoredQuoteContext = {
+          keeper: keeper.publicKey.toBase58(),
+          governance: payer.publicKey.toBase58(),
+          policy: quotePolicy.toBase58(),
+          reviewedPrograms: [routerId.toBase58(), TOKEN_PROGRAM_ID.toBase58()],
+          genesisHash: Buffer.from(genesisHash).toString("hex"),
+          vault: config.toBase58(),
+          configVersion: "1",
+          registry: routeRegistry.toBase58(),
+          registryRevision: String(reviewedRegistry.revision),
+          registryHash: Buffer.from(
+            reviewedRegistry.configHash as number[],
+          ).toString("hex"),
+          plan: plan.toBase58(),
+          planRevision: String(revision),
+          intent: (planState.intent as PublicKey).toBase58(),
+          wallet: owner.publicKey.toBase58(),
+          leg,
+          direction: direction === "buy" ? 1 : 2,
+          inputMint: inputMint.toBase58(),
+          outputMint: outputMint.toBase58(),
+          source: source.toBase58(),
+          destination: destination.toBase58(),
+          routerProgram: routerId.toBase58(),
+          policyRevision: String(policyRevision),
+          inputAmount: String(input),
+          authority: Buffer.from(isolatedSigner.publicKey).toString("hex"),
+          maxSlippageBps: 100,
+          maxQuoteAgeSeconds: 30,
+          planExpiresAt: String(planExpiry),
+          configurationHash: hexDigest(bytes("c3-local-cpi-v1")),
+        };
+        contextHash.splice(
+          0,
+          contextHash.length,
+          ...quoteContextHash(openQuoteContext(trusted)),
+        );
+        args.seal.policyRevision = new BN(policyRevision);
+        await durable.pool.query(
+          `INSERT INTO c3_open.quote_contexts(intent_id,ordinal,intent_revision,context,context_hash,scope)
+          VALUES($1,$2,$3,$4,$5,'LOCAL_MOCK')`,
+          [
+            journalId,
+            ordinal,
+            journalState.dbRevision.toString(),
+            {
+              ...trusted,
+              slot: currentSlot,
+              program: program.programId.toBase58(),
+              snapshotHash: createHash("sha256")
+                .update(encodeSeal(args.seal))
+                .digest("hex"),
+            },
+            Buffer.from(contextHash),
+          ],
+        );
+        const serverAuthority = new OpenQuoteAuthority(durable.pool, {
+          // Only the deterministic local mock uses this fixture material. The
+          // real cloned route adapter validates RPC/ALTs/v0 independently.
+          validateAndBuild: async () => ({
+            authorizationNonce: Uint8Array.from(nonce),
+            quotedOutput: BigInt(args.quotedOutput.toString()),
+            jupiterThreshold: BigInt(output),
+            slippageBps: 100,
+            routeHash: Uint8Array.from(fingerprint),
+            instructionHash: Uint8Array.from(args.instructionHash),
+            accountMetasHash: Uint8Array.from(args.accountMetasHash),
+            altCount: 0,
+            altContentsHash: Buffer.alloc(32),
+            builderTimestamp: BigInt(quoteTime.toString()),
+            builderSlot: BigInt(currentSlot),
+            expiresAt: BigInt(args.expiresAt.toString()),
+            expiresSlot: BigInt(currentSlot + 200),
+            unsignedPacketBytes: 1232,
+          }),
+        });
+        const recordId = await serverAuthority.prepare(
+          journalId,
+          ordinal,
+          journalState.dbRevision,
+        );
+        const sealed = await serverAuthority.signPersisted(
+          recordId,
+          isolatedSigner,
+        );
+        assert.deepEqual(
+          sealed.payload,
+          encodeSeal(args.seal),
+          "PostgreSQL bytes must exactly match on-chain verifier bytes",
+        );
+        assert.equal(
+          (
+            await durable.pool.query(
+              "SELECT state,signature FROM c3_open.quote_authorizations WHERE quote_id=$1",
+              [Buffer.from(quoteId)],
+            )
+          ).rows[0].state,
+          "signed",
+        );
+        authorizationHash = createHash("sha256")
+          .update(sealed.payload)
+          .digest("hex");
+        ed25519 = Ed25519Program.createInstructionWithPublicKey({
+          publicKey: isolatedSigner.publicKey,
+          message: sealed.payload,
+          signature: sealed.signature,
+        });
         journalState = await durable.db.prepare(
           journalScope(),
           ordinal,
@@ -2288,9 +2431,23 @@ test(
       .rpc();
     assert.equal(await connection.getAccountInfo(redemptionIntent), null);
     assert.equal((await fetchState("vaultConfig", config)).lifecycle, 4);
+    if (durable) {
+      const seals = await durable.pool.query(
+        "SELECT state,count(*)::int AS count FROM c3_open.quote_authorizations WHERE intent_id=$1 GROUP BY state",
+        [journalId],
+      );
+      assert.deepEqual(
+        seals.rows,
+        [{ state: "consumed", count: 6 }],
+        "all six PG seals must be consumed exactly once by the mock local lifecycle",
+      );
+    }
     console.log(
       JSON.stringify({
         network: "local-validator-only",
+        quoteAuthorization: durable
+          ? "SIX_POSTGRES_SEALS_ED25519_ONCHAIN_MOCK_ONLY"
+          : "EPHEMERAL_ONLY",
         programId: program.programId.toBase58(),
         amounts: {
           depositedUSDC: "1000000",

@@ -32,6 +32,9 @@ import {
 } from "@solana/web3.js";
 import { C3_MAINNET } from "../src/constants.ts";
 import { JupiterV2ReadOnlyClient } from "../src/jupiter-v2.ts";
+import { validateDirectWhirlpoolRoute } from "./jupiter-route-v2.ts";
+import { JupiterOpenBuilder } from "./jupiter-open-builder.ts";
+import type { StoredQuoteContext } from "./open-quote.ts";
 import {
   deriveQuoteMinimum,
   encodeQuoteSealV1,
@@ -79,6 +82,7 @@ const observedAbsentOracles = new Set<string>();
 let cloneSlot = 0;
 let stage = "read-only-clone";
 let validator: ReturnType<typeof spawn> | undefined;
+let canonicalMeasurement: Record<string, unknown> | null = null;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function dump(
   address: string,
@@ -144,10 +148,10 @@ function tokenFixture(address: string, mint: string, amount: bigint): void {
     true,
   );
 }
-async function clone(addresses: string[]): Promise<void> {
+async function clone(addresses: string[], refresh = false): Promise<void> {
   const unique = [...new Set(addresses)].filter(
     (address) =>
-      !copied.has(address) &&
+      (refresh || !copied.has(address)) &&
       !fixtureAccounts.has(address) &&
       !address.startsWith("Sysvar") &&
       !new Set<string>([
@@ -245,14 +249,28 @@ async function main(): Promise<void> {
   const asset = assetArgument < 0 ? "btc" : process.argv[assetArgument + 1];
   if (asset !== "btc" && asset !== "eth" && asset !== "sol")
     throw new Error("C3_FORK_ASSET_INVALID");
-  const outputMint = {
+  const assetMint = {
     btc: C3_MAINNET.cbBtcMint,
     eth: C3_MAINNET.portalEthMint,
     sol: C3_MAINNET.wrappedSolMint,
   }[asset];
+  const selling = process.argv.includes("--sell");
   const amountBps = asset === "btc" ? 4_000n : 3_000n;
-  const legInput = (1_000_000n * amountBps) / 10_000n;
-  const source = vaultAta(C3_MAINNET.usdcMint),
+  const amountArgument = process.argv.indexOf("--amount");
+  const specifiedAmount =
+    amountArgument < 0 ? undefined : process.argv[amountArgument + 1];
+  if (
+    selling &&
+    (!specifiedAmount || !/^[1-9][0-9]{0,19}$/.test(specifiedAmount))
+  )
+    throw new Error("C3_FORK_SELL_INPUT_EVIDENCE_REQUIRED");
+  const legInput = selling
+    ? BigInt(specifiedAmount!)
+    : (1_000_000n * amountBps) / 10_000n;
+  if (legInput > (1n << 64n) - 1n) throw new Error("C3_FORK_AMOUNT_OVERFLOW");
+  const inputMint = selling ? assetMint : C3_MAINNET.usdcMint;
+  const outputMint = selling ? C3_MAINNET.usdcMint : assetMint;
+  const source = vaultAta(inputMint),
     destination = vaultAta(outputMint);
   for (const address of [
     payer.toBase58(),
@@ -269,16 +287,16 @@ async function main(): Promise<void> {
       },
       true,
     );
-  tokenFixture(source, C3_MAINNET.usdcMint, 1_000_000n);
+  tokenFixture(source, inputMint, selling ? legInput : 1_000_000n);
   tokenFixture(destination, outputMint, 0n);
   const request = {
-    inputMint: C3_MAINNET.usdcMint,
+    inputMint,
     outputMint,
     amount: legInput,
     taker: VAULT_AUTHORITY.toBase58(),
     destinationTokenAccount: destination,
     slippageBps: 100,
-    maxAccounts: 32,
+    maxAccounts: process.argv.includes("--compact") ? 16 : 32,
   };
   const dexArgument = process.argv.indexOf("--dexes");
   const diagnosticDexes =
@@ -357,6 +375,61 @@ async function main(): Promise<void> {
       "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
   )
     throw new Error("C3_FORK_WHIRLPOOL_OWNER_MISMATCH");
+  // Warmed public program binaries are reused, but execution never reuses the
+  // warm-up quote. Clone the FINAL quote's exact route immediately before
+  // starting the isolated validator. In particular readonly Jupiter accounts
+  // may rotate between builds; their existence is not permission to omit them.
+  stage = "fresh-quote-exact-snapshot";
+  const build = await client.getExactInQuote(request);
+  if (diagnosticDexes === "Whirlpool")
+    validateDirectWhirlpoolRoute(build, {
+      authority: VAULT_AUTHORITY.toBase58(),
+      source,
+      destination,
+      inputMint: request.inputMint,
+      outputMint: request.outputMint,
+      inputAmount: request.amount,
+      maxSlippageBps: 100,
+    });
+  if (diagnosticDexes === "Whirlpool" && build.routePlan.length === 1) {
+    const oracle = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("oracle"),
+        key(build.routePlan[0]!.swapInfo.ammKey).toBuffer(),
+      ],
+      key("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"),
+    )[0].toBase58();
+    if (
+      build.swapInstruction.accounts.some(
+        (meta) => meta.pubkey === oracle && !meta.isWritable && !meta.isSigner,
+      )
+    )
+      permittedAbsentOracles.add(oracle);
+  }
+  await clone(
+    [
+      ...build.swapInstruction.accounts.map((meta) => meta.pubkey),
+      ...Object.keys(build.addressesByLookupTableAddress),
+    ],
+    true,
+  );
+  const newCode: string[] = [];
+  for (const meta of build.swapInstruction.accounts) {
+    const account = copied.get(meta.pubkey);
+    if (!account?.executable) continue;
+    if (
+      account.owner.toBase58() ===
+        "BPFLoaderUpgradeab1e11111111111111111111111" &&
+      account.data.length === 36 &&
+      account.data.readUInt32LE() === 2
+    )
+      newCode.push(new PublicKey(account.data.subarray(4, 36)).toBase58());
+    else if (
+      account.owner.toBase58() !== "BPFLoader2111111111111111111111111111111111"
+    )
+      throw new Error("C3_FORK_UNSUPPORTED_PUBLIC_LOADER");
+  }
+  await clone(newCode);
   stage = "start-isolated-validator";
   const rpcPort = await port();
   const faucetPort = await port();
@@ -425,7 +498,10 @@ async function main(): Promise<void> {
   if ((await local.getGenesisHash()) === C3_MAINNET.genesisHash)
     throw new Error("C3_FORK_LOCAL_RPC_REQUIRED");
   stage = "fresh-route-against-cloned-accounts";
-  const build = await client.getExactInQuote(request);
+  const quoteExpiresAtMs =
+    build.blockhashWithMetadata.fetchedAtEpochMs + 30_000;
+  if (Date.now() >= quoteExpiresAtMs)
+    throw new Error("C3_FORK_QUOTE_EXPIRED_REBUILD_REQUIRED");
   for (const meta of build.swapInstruction.accounts)
     if (
       !copied.has(meta.pubkey) &&
@@ -457,6 +533,85 @@ async function main(): Promise<void> {
   if (!clock) throw new Error("C3_FORK_CLOCK_MISSING");
   const now = clock.data.readBigInt64LE(32);
   const slot = clock.data.readBigUInt64LE(0);
+  if (process.argv.includes("--canonical-measure")) {
+    // Measurement uses the exact already-cloned fresh route. It is NOT a
+    // reconciler-enrolled context or a proof of durable on-chain authorization.
+    const config = PublicKey.findProgramAddressSync(
+      [Buffer.from("c3-vault-v1")],
+      VAULT_PROGRAM,
+    )[0];
+    const context: StoredQuoteContext = {
+      keeper: payer.toBase58(),
+      governance: payer.toBase58(),
+      policy: PublicKey.findProgramAddressSync(
+        [Buffer.from("c3-quote-policy-v1"), config.toBuffer()],
+        VAULT_PROGRAM,
+      )[0].toBase58(),
+      reviewedPrograms: [
+        C3_MAINNET.jupiterProgram,
+        "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+        C3_MAINNET.tokenProgram,
+        "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+      ],
+      genesisHash: key(await local.getGenesisHash())
+        .toBuffer()
+        .toString("hex"),
+      vault: config.toBase58(),
+      configVersion: "1",
+      registry: PublicKey.findProgramAddressSync(
+        [Buffer.from("c3-route-reg-v1"), config.toBuffer()],
+        VAULT_PROGRAM,
+      )[0].toBase58(),
+      registryRevision: "1",
+      registryHash: digest(Buffer.from("measurement-only-registry")).toString(
+        "hex",
+      ),
+      plan: new PublicKey(Buffer.alloc(32, 8)).toBase58(),
+      planRevision: "0",
+      intent: new PublicKey(Buffer.alloc(32, 9)).toBase58(),
+      wallet: payer.toBase58(),
+      leg: asset === "btc" ? 0 : asset === "eth" ? 1 : 2,
+      direction: selling ? 2 : 1,
+      inputMint: request.inputMint,
+      outputMint: request.outputMint,
+      source,
+      destination,
+      routerProgram: C3_MAINNET.jupiterProgram,
+      policyRevision: "1",
+      inputAmount: request.amount.toString(),
+      authority: authorityBytes.toString("hex"),
+      maxSlippageBps: 100,
+      maxQuoteAgeSeconds: 30,
+      planExpiresAt: (now + 120n).toString(),
+      configurationHash: digest(
+        Buffer.from("measurement-only-config"),
+      ).toString("hex"),
+    };
+    class FrozenFreshRoute extends JupiterV2ReadOnlyClient {
+      override async getExactInQuote() {
+        return build;
+      }
+    }
+    try {
+      const material = await new JupiterOpenBuilder(
+        local,
+        new FrozenFreshRoute(),
+      ).validateAndBuild(context);
+      canonicalMeasurement = {
+        status: "PACKET_FITS",
+        maximumPacketBytes: material.unsignedPacketBytes,
+        trustedContextEnrolled: false,
+        onchainAuthorizationVerified: false,
+      };
+    } catch (error) {
+      canonicalMeasurement = {
+        status: "BLOCKED",
+        error: error instanceof Error ? error.message : "MEASUREMENT_FAILED",
+        trustedContextEnrolled: false,
+        onchainAuthorizationVerified: false,
+      };
+    }
+  }
   const altHash = quoteAltContentsHash(altRaw, slot);
   const raw = Buffer.from(build.swapInstruction.data, "base64");
   const flags = Buffer.from(
@@ -580,7 +735,7 @@ async function main(): Promise<void> {
     altContentsHash: altHash,
     builderTimestamp: now,
     builderSlot: slot,
-    expiresAt: now + 30n,
+    expiresAt: BigInt(Math.floor(quoteExpiresAtMs / 1000)),
     expiresSlot: slot + 100n,
   });
   const signature = sign(null, payload, quoteKey.privateKey);
@@ -588,11 +743,14 @@ async function main(): Promise<void> {
   const size = inspectUnsignedEnvelope(message);
   if (!size.fits)
     throw new Error("C3_FORK_COMPLETE_TRANSACTION_SIZE:" + size.bytes);
+  if (Date.now() >= quoteExpiresAtMs)
+    throw new Error("C3_FORK_QUOTE_EXPIRED_REBUILD_REQUIRED");
   stage = "local-real-jupiter-cpi-simulation";
   const simulation = await local.simulateTransaction(
     new VersionedTransaction(message),
     {
       sigVerify: false,
+      innerInstructions: true,
       accounts: { encoding: "base64", addresses: [source, destination] },
     },
   );
@@ -717,6 +875,7 @@ async function main(): Promise<void> {
     mockRouterUsed: false,
     canonicalMetaAndWhirlpoolRoleValidatorUsed: true,
     canonicalDurableIntentAuthorizationUsed: false,
+    canonicalMeasurement,
     adversarial,
     fixtureAccounts: [...fixtureAccounts],
     absentOnMainnetReadonlyWhirlpoolOracles: [...observedAbsentOracles],
@@ -735,10 +894,18 @@ async function main(): Promise<void> {
       sha256: digest(account.data).toString("hex"),
     })),
     asset,
+    direction: selling ? "sell" : "buy",
     allocationBps: amountBps.toString(),
     input: request.amount.toString(),
     quotedOutput: build.outAmount,
     minimum: build.otherAmountThreshold,
+    authorizedMinimum: payload.readBigUInt64LE(131).toString(),
+    slippageBps: build.slippageBps,
+    quoteFetchedAtMs: build.blockhashWithMetadata.fetchedAtEpochMs,
+    quoteExpiresAtMs,
+    quoteFingerprint: digest(Buffer.from(JSON.stringify(build))).toString(
+      "hex",
+    ),
     apiSetupInstructionsNotExecuted: build.setupInstructions.length,
     apiCleanupInstructionNotExecuted: build.cleanupInstruction !== null,
     serializedBytes: size.bytes,
@@ -746,6 +913,7 @@ async function main(): Promise<void> {
     error: simulation.value.err,
     unitsConsumed: simulation.value.unitsConsumed,
     logs: simulation.value.logs,
+    simulationInnerInstructions: simulation.value.innerInstructions ?? null,
     sourceAfter: amount(sourceOut),
     destinationAfter: amount(output),
   };
