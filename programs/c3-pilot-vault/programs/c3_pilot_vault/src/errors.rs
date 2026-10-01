@@ -44,4 +44,10 @@ pub enum VaultError {
     SwapEffects,
     #[msg("Route program registry is disabled, stale, or invalid")]
     RouteRegistry,
+    #[msg("Quote signing policy is disabled, stale or invalid")]
+    QuotePolicy,
+    #[msg("Quote signature or canonical message does not match")]
+    QuoteSignature,
+    #[msg("Quote identity has already been used")]
+    QuoteReplay,
 }

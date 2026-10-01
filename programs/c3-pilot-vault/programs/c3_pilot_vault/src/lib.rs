@@ -10,19 +10,25 @@ pub mod constants;
 pub mod errors;
 pub mod events;
 pub mod instructions;
+#[cfg(feature = "local-jupiter-probe")]
+pub mod local_jupiter_probe;
 #[cfg(feature = "local-mock")]
 pub mod mock_local_only;
+pub mod quote_alt;
 pub mod settlement_plan;
 pub mod state;
 pub mod swap_leg;
 pub mod token_validation;
 pub mod transitions;
+pub mod whirlpool_roles;
 
 use arithmetic::*;
 use constants::*;
 use errors::VaultError;
-use events::{emit_state, kind, RouteRegistryEvent};
+use events::{emit_state, kind, QuotePolicyEvent, RouteRegistryEvent};
 use instructions::*;
+#[cfg(feature = "local-jupiter-probe")]
+use local_jupiter_probe::*;
 use state::*;
 use token_validation::*;
 use transitions::*;
@@ -32,6 +38,17 @@ declare_id!("AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb");
 #[program]
 pub mod c3_pilot_vault {
     use super::*;
+
+    /// Isolated cloned-state CPI experiment only. No production entrypoint,
+    /// settlement-plan state, share issuance or Mainnet execution is enabled.
+    #[cfg(feature = "local-jupiter-probe")]
+    pub fn local_jupiter_probe<'info>(
+        ctx: Context<'_, '_, '_, 'info, Probe<'info>>,
+        instruction_data: Vec<u8>,
+        flags: Vec<u8>,
+    ) -> Result<()> {
+        local_jupiter_probe::run(ctx, instruction_data, flags)
+    }
 
     pub fn initialize_vault(
         ctx: Context<InitializeVault>,
@@ -145,6 +162,90 @@ pub mod c3_pilot_vault {
             revision: r.revision,
             config_hash: r.config_hash,
             action: 1,
+            slot: Clock::get()?.slot,
+        });
+        Ok(())
+    }
+
+    pub fn initialize_quote_policy(ctx: Context<InitializeQuotePolicy>) -> Result<()> {
+        let policy = &mut ctx.accounts.policy;
+        policy.schema_version = 1;
+        policy.vault = ctx.accounts.config.key();
+        policy.governance = ctx.accounts.config.governance;
+        policy.config_version = ctx.accounts.config.config_version;
+        policy.revision = 0;
+        policy.authority = Pubkey::default();
+        policy.enabled = false;
+        policy.max_age_seconds = 0;
+        policy.max_slippage_bps = 0;
+        policy.genesis_hash = [0; 32];
+        policy.domain = QUOTE_DOMAIN;
+        policy.bump = ctx.bumps.policy;
+        emit!(QuotePolicyEvent {
+            vault: policy.vault,
+            revision: 0,
+            authority: policy.authority,
+            enabled: false,
+            action: 1,
+            slot: Clock::get()?.slot,
+        });
+        Ok(())
+    }
+
+    pub fn configure_quote_policy(
+        ctx: Context<GovernQuotePolicy>,
+        authority: Pubkey,
+        genesis_hash: [u8; 32],
+        max_age_seconds: i64,
+        max_slippage_bps: u16,
+    ) -> Result<()> {
+        require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
+        require!(
+            authority != Pubkey::default() && genesis_hash != [0; 32],
+            VaultError::QuotePolicy
+        );
+        require!(
+            max_age_seconds > 0 && max_age_seconds <= MAX_QUOTE_AGE_SECONDS,
+            VaultError::QuotePolicy
+        );
+        require!(
+            max_slippage_bps > 0 && max_slippage_bps <= MAX_SLIPPAGE_BPS,
+            VaultError::QuotePolicy
+        );
+        let policy = &mut ctx.accounts.policy;
+        require!(
+            policy.schema_version == 1
+                && policy.config_version == ctx.accounts.config.config_version,
+            VaultError::QuotePolicy
+        );
+        policy.revision = policy.revision.checked_add(1).ok_or(VaultError::Math)?;
+        policy.authority = authority;
+        policy.genesis_hash = genesis_hash;
+        policy.max_age_seconds = max_age_seconds;
+        policy.max_slippage_bps = max_slippage_bps;
+        policy.enabled = true;
+        emit!(QuotePolicyEvent {
+            vault: policy.vault,
+            revision: policy.revision,
+            authority,
+            enabled: true,
+            action: 2,
+            slot: Clock::get()?.slot,
+        });
+        Ok(())
+    }
+
+    pub fn disable_quote_policy(ctx: Context<GovernQuotePolicy>) -> Result<()> {
+        let policy = &mut ctx.accounts.policy;
+        require!(policy.schema_version == 1, VaultError::QuotePolicy);
+        policy.revision = policy.revision.checked_add(1).ok_or(VaultError::Math)?;
+        policy.enabled = false;
+        emit!(QuotePolicyEvent {
+            vault: policy.vault,
+            revision: policy.revision,
+            authority: policy.authority,
+            enabled: false,
+            action: 3,
             slot: Clock::get()?.slot,
         });
         Ok(())
@@ -598,8 +699,9 @@ pub mod c3_pilot_vault {
     pub fn execute_swap_leg<'info>(
         ctx: Context<'_, '_, '_, 'info, ExecuteSwapLeg<'info>>,
         instruction_data: Vec<u8>,
+        flags: Vec<u8>,
     ) -> Result<()> {
-        swap_leg::execute(ctx, instruction_data)
+        swap_leg::execute(ctx, instruction_data, flags)
     }
 
     pub fn issue_initial_shares(ctx: Context<IssueShares>) -> Result<()> {

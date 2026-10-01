@@ -30,10 +30,13 @@ import {
 } from "@solana/spl-token";
 import {
   Connection,
+  Ed25519Program,
   Keypair,
   PublicKey,
+  SYSVAR_INSTRUCTIONS_PUBKEY,
   SystemProgram,
   Transaction,
+  TransactionInstruction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { C3PilotClient } from "../../../packages/c3-pilot-client/src/index.ts";
@@ -42,6 +45,11 @@ import type {
   OpenSnapshot,
   Scope,
 } from "../../../services/c3-mainnet/pilot-open-local/orchestrator.ts";
+import {
+  encodeQuoteSealV1,
+  quoteContextHash,
+  quoteIdForNonce,
+} from "../../../services/c3-mainnet/src/quote-seal.ts";
 
 const url = process.env.ANCHOR_PROVIDER_URL ?? "http://127.0.0.1:8899";
 if (url !== "http://127.0.0.1:8899")
@@ -108,6 +116,52 @@ const [routeRegistry] = PublicKey.findProgramAddressSync(
   [Buffer.from("c3-route-reg-v1"), config.toBuffer()],
   program.programId,
 );
+const [quotePolicy] = PublicKey.findProgramAddressSync(
+  [Buffer.from("c3-quote-policy-v1"), config.toBuffer()],
+  program.programId,
+);
+const quoteSigner = Keypair.generate(); // Ephemeral and never written to disk.
+const u64le = (value: number | BN): Buffer => {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(BigInt(value.toString()));
+  return b;
+};
+const i64le = (value: BN): Buffer => {
+  const b = Buffer.alloc(8);
+  b.writeBigInt64LE(BigInt(value.toString()));
+  return b;
+};
+const u16le = (value: number): Buffer => {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(value);
+  return b;
+};
+type Seal = Record<string, unknown>;
+function encodeSeal(s: Seal): Buffer {
+  const hash = (name: string) => Buffer.from(s[name] as number[]);
+  const number = (name: string) => s[name] as number;
+  const bn = (name: string) => s[name] as BN;
+  return Buffer.concat([
+    hash("domain"),
+    Buffer.from([number("schemaVersion")]),
+    hash("contextHash"),
+    hash("quoteId"),
+    hash("nonce"),
+    u64le(bn("inputAmount")),
+    u64le(bn("quotedOutput")),
+    u16le(number("slippageBps")),
+    u64le(bn("minimumOutput")),
+    hash("routeHash"),
+    hash("instructionHash"),
+    hash("accountMetasHash"),
+    Buffer.from([number("altCount")]),
+    hash("altContentsHash"),
+    i64le(bn("builderTimestamp")),
+    u64le(bn("builderSlot")),
+    i64le(bn("expiresAt")),
+    u64le(bn("expiresSlot")),
+  ]);
+}
 const fetchState = (
   name: string,
   address: PublicKey,
@@ -469,6 +523,30 @@ test(
         config,
         registry: routeRegistry,
         systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    await program.methods
+      .initializeQuotePolicy()
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        policy: quotePolicy,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    assert.equal(
+      (await fetchState("quoteAuthorityPolicy", quotePolicy)).enabled,
+      false,
+    );
+    const genesisHash = [
+      ...new PublicKey(await connection.getGenesisHash()).toBytes(),
+    ];
+    await program.methods
+      .configureQuotePolicy(quoteSigner.publicKey, genesisHash, new BN(30), 100)
+      .accountsStrict({
+        governance: payer.publicKey,
+        config,
+        policy: quotePolicy,
       })
       .rpc();
     assert.equal(
@@ -863,6 +941,8 @@ test(
         // Jupiter may legitimately repeat an account meta; the local router
         // ignores this trailing duplicate while the vault hashes its position.
         [TOKEN_PROGRAM_ID, false],
+        // Same PDA, different inner signer role: preserve each occurrence.
+        [vaultAuthority, false],
       ] as const;
       const routerInstruction = {
         data: routerData,
@@ -880,7 +960,7 @@ test(
             Buffer.from([index, 0]),
             key.pubkey.toBuffer(),
             Buffer.from([
-              Number(key.pubkey.equals(vaultAuthority)),
+              Number(index === 0) | (Number(key.isWritable) << 1),
               Number(key.isWritable),
               Number(key.pubkey.equals(TOKEN_PROGRAM_ID)),
             ]),
@@ -909,7 +989,14 @@ test(
         program.programId,
       );
       const [quoteTime, planExpiry] = await settlementTimes();
+      const nonce = digest(
+        bytes("c3-local-quote-nonce-v1"),
+        plan.toBuffer(),
+        Buffer.from([leg]),
+      );
+      const quoteId = digest(bytes("c3-quote-id-v1"), Buffer.from(nonce));
       const args = {
+        quoteId,
         leg,
         expectedRevision: new BN(revision),
         inputAmount: new BN(input),
@@ -927,31 +1014,158 @@ test(
           routerInstruction.data,
         ),
         accountMetasHash: digest(
-          bytes("c3-ordered-metas-v2"),
+          bytes("c3-ordered-metas-v3"),
           registryVersion,
           Buffer.from(reviewedRegistry.configHash as number[]),
           metaBytes,
         ),
         idempotency,
+        seal: {} as Seal,
       };
+      const planState = await fetchState("settlementPlan", plan);
+      const currentSlot = await connection.getSlot("confirmed");
+      const [quoteReceipt] = PublicKey.findProgramAddressSync(
+        [Buffer.from("c3-quote-receipt-v1"), Buffer.from(quoteId)],
+        program.programId,
+      );
+      const contextHash = digest(
+        bytes("c3-quote-context-v1"),
+        bytes("C3QUOTESEAL-V1!!"),
+        Buffer.from(genesisHash),
+        config.toBuffer(),
+        u64le(1),
+        routeRegistry.toBuffer(),
+        u64le(reviewedRegistry.revision as BN),
+        Buffer.from(reviewedRegistry.configHash as number[]),
+        plan.toBuffer(),
+        u64le(revision),
+        (planState.intent as PublicKey).toBuffer(),
+        owner.publicKey.toBuffer(),
+        Buffer.from([leg, direction === "buy" ? 1 : 2]),
+        inputMint.toBuffer(),
+        outputMint.toBuffer(),
+        source.toBuffer(),
+        destination.toBuffer(),
+        routerId.toBuffer(),
+        u64le(1),
+      );
+      assert.deepEqual(
+        [
+          ...quoteContextHash({
+            genesisHash: Uint8Array.from(genesisHash),
+            vault: config.toBase58(),
+            configVersion: 1n,
+            registry: routeRegistry.toBase58(),
+            registryRevision: BigInt(
+              (reviewedRegistry.revision as BN).toString(),
+            ),
+            registryHash: Uint8Array.from(
+              reviewedRegistry.configHash as number[],
+            ),
+            plan: plan.toBase58(),
+            planRevision: BigInt(revision),
+            intent: (planState.intent as PublicKey).toBase58(),
+            wallet: owner.publicKey.toBase58(),
+            leg,
+            direction: direction === "buy" ? 1 : 2,
+            inputMint: inputMint.toBase58(),
+            outputMint: outputMint.toBase58(),
+            source: source.toBase58(),
+            destination: destination.toBase58(),
+            routerProgram: routerId.toBase58(),
+            policyRevision: 1n,
+          }),
+        ],
+        contextHash,
+      );
+      assert.deepEqual([...quoteIdForNonce(Uint8Array.from(nonce))], quoteId);
+      args.seal = {
+        domain: [...bytes("C3QUOTESEAL-V1!!")],
+        schemaVersion: 1,
+        genesisHash,
+        contextHash,
+        vault: config,
+        configVersion: new BN(1),
+        registry: routeRegistry,
+        registryRevision: reviewedRegistry.revision,
+        registryHash: reviewedRegistry.configHash,
+        plan,
+        planRevision: new BN(revision),
+        intent: planState.intent,
+        quoteId,
+        nonce,
+        wallet: owner.publicKey,
+        leg,
+        direction: direction === "buy" ? 1 : 2,
+        inputMint,
+        outputMint,
+        source,
+        destination,
+        inputAmount: args.inputAmount,
+        quotedOutput: args.quotedOutput,
+        slippageBps: args.maxSlippageBps,
+        minimumOutput: args.minimumOutput,
+        routeHash: args.routeFingerprint,
+        routerProgram: routerId,
+        instructionHash: args.instructionHash,
+        accountMetasHash: args.accountMetasHash,
+        altCount: 0,
+        altAddresses: Array(4).fill(PublicKey.default),
+        altContentsHash: Array(32).fill(0),
+        policyRevision: new BN(1),
+        builderTimestamp: args.quoteCreatedAt,
+        builderSlot: new BN(currentSlot),
+        expiresAt: args.expiresAt,
+        expiresSlot: new BN(currentSlot + 200),
+      };
+      assert.deepEqual(
+        encodeQuoteSealV1({
+          contextHash: Uint8Array.from(contextHash),
+          quoteId: Uint8Array.from(quoteId),
+          nonce: Uint8Array.from(nonce),
+          inputAmount: BigInt(input),
+          quotedOutput: BigInt(args.quotedOutput.toString()),
+          slippageBps: 100,
+          minimumOutput: BigInt(output),
+          routeHash: Uint8Array.from(fingerprint),
+          instructionHash: Uint8Array.from(args.instructionHash),
+          accountMetasHash: Uint8Array.from(args.accountMetasHash),
+          altCount: 0,
+          altContentsHash: new Uint8Array(32),
+          builderTimestamp: BigInt(quoteTime.toString()),
+          builderSlot: BigInt(currentSlot),
+          expiresAt: BigInt(args.expiresAt.toString()),
+          expiresSlot: BigInt(currentSlot + 200),
+        }),
+        encodeSeal(args.seal),
+      );
+      const ed25519 = Ed25519Program.createInstructionWithPrivateKey({
+        privateKey: quoteSigner.secretKey,
+        message: encodeSeal(args.seal),
+      });
       const authorizationAccounts = {
         governance: payer.publicKey,
         config,
         registry: routeRegistry,
+        policy: quotePolicy,
         plan,
         vaultAuthority,
         source,
         destination,
         routerProgram: routerId,
         authorization,
+        quoteReceipt,
+        instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
         systemProgram: SystemProgram.programId,
       };
       const executionAccounts = {
         keeper: keeper.publicKey,
         config,
         registry: routeRegistry,
+        policy: quotePolicy,
         plan,
         authorization,
+        quoteReceipt,
         vaultAuthority,
         source,
         destination,
@@ -963,7 +1177,85 @@ test(
         isSigner: false,
         isWritable: key.isWritable,
       }));
+      const innerFlags = Buffer.from(
+        routerInstruction.keys.map(
+          (key, index) => Number(index === 0) | (Number(key.isWritable) << 1),
+        ),
+      );
+      const signedAttempt = (
+        changedSeal: Seal = args.seal,
+        changedAccounts = authorizationAccounts,
+        signer = quoteSigner,
+      ) =>
+        program.methods
+          .authorizeSwapLeg(args)
+          .accountsStrict(changedAccounts)
+          .preInstructions([
+            Ed25519Program.createInstructionWithPrivateKey({
+              privateKey: signer.secretKey,
+              message: encodeSeal(changedSeal),
+            }),
+          ])
+          .rpc();
       if (direction === "buy" && leg === 0 && revision === 0) {
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg(args)
+              .accountsStrict(authorizationAccounts)
+              .rpc(),
+          "missing Ed25519 verification",
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .authorizeSwapLeg(args)
+              .accountsStrict(authorizationAccounts)
+              .postInstructions([ed25519])
+              .rpc(),
+          "Ed25519 verification after authorization",
+        );
+        for (const [name, mutate] of [
+          [
+            "cross-instruction signature offset",
+            (data: Buffer) => data.writeUInt16LE(0, 4),
+          ],
+          [
+            "cross-instruction message offset",
+            (data: Buffer) => data.writeUInt16LE(0, 14),
+          ],
+          ["malformed key offset", (data: Buffer) => data.writeUInt16LE(17, 6)],
+          [
+            "multiple signatures",
+            (data: Buffer) => {
+              data[0] = 2;
+            },
+          ],
+          [
+            "ambiguous trailing message bytes",
+            (data: Buffer) => {
+              data[1] = 1;
+            },
+          ],
+        ] as const) {
+          const altered = Buffer.from(ed25519.data);
+          mutate(altered);
+          await expectFailure(
+            () =>
+              program.methods
+                .authorizeSwapLeg(args)
+                .accountsStrict(authorizationAccounts)
+                .preInstructions([
+                  new TransactionInstruction({
+                    keys: [],
+                    programId: Ed25519Program.programId,
+                    data: altered,
+                  }),
+                ])
+                .rpc(),
+            name,
+          );
+        }
         await expectFailure(
           () =>
             program.methods
@@ -976,70 +1268,79 @@ test(
               .rpc(),
           "attacker cannot authorize CPI",
         );
+        for (const [name, changed] of [
+          ["excess input", { inputAmount: new BN(input + 1) }],
+          ["minimum of one", { minimumOutput: new BN(1) }],
+          // A stronger Jupiter-rounded minimum is permitted. Reject an
+          // output that violates the signed slippage bound, not harmless
+          // one-base-unit rounding within that bound.
+          [
+            "quoted output violates minimum",
+            { quotedOutput: args.quotedOutput.addn(100) },
+          ],
+          ["slippage", { slippageBps: 101 }],
+          ["ALT", { altCount: 1 }],
+          [
+            "future timestamp",
+            { builderTimestamp: new BN(quoteTime.toNumber() + 100) },
+          ],
+          [
+            "expired timestamp",
+            { builderTimestamp: new BN(quoteTime.toNumber() - 100) },
+          ],
+          ["wrong vault context", { contextHash: Array(32).fill(5) }],
+          ["wrong nonce", { nonce: Array(32).fill(6) }],
+        ] as const) {
+          await expectFailure(
+            () => signedAttempt({ ...args.seal, ...changed }),
+            name,
+          );
+        }
+        for (const [name, changed] of [
+          ["quoted output", { quotedOutput: new BN(output + 1) }],
+          ["minimum output", { minimumOutput: args.minimumOutput.addn(1) }],
+          ["route hash", { routeHash: Array(32).fill(2) }],
+          ["instruction hash", { instructionHash: Array(32).fill(3) }],
+          ["ordered metas", { accountMetasHash: Array(32).fill(4) }],
+        ] as const) {
+          const altered = Buffer.from(ed25519.data);
+          encodeSeal({ ...args.seal, ...changed }).copy(altered, 112);
+          await expectFailure(
+            () =>
+              program.methods
+                .authorizeSwapLeg(args)
+                .accountsStrict(authorizationAccounts)
+                .preInstructions([
+                  new TransactionInstruction({
+                    keys: [],
+                    programId: Ed25519Program.programId,
+                    data: altered,
+                  }),
+                ])
+                .rpc(),
+            `${name} after signing`,
+          );
+        }
         await expectFailure(
           () =>
-            program.methods
-              .authorizeSwapLeg({ ...args, inputAmount: new BN(input + 1) })
-              .accountsStrict(authorizationAccounts)
-              .rpc(),
-          "excess input cannot be authorized",
+            signedAttempt(args.seal, authorizationAccounts, Keypair.generate()),
+          "wrong signing key",
         );
         await expectFailure(
           () =>
-            program.methods
-              .authorizeSwapLeg({ ...args, minimumOutput: new BN(output - 1) })
-              .accountsStrict(authorizationAccounts)
-              .rpc(),
-          "reduced minimum cannot be authorized",
+            signedAttempt(args.seal, {
+              ...authorizationAccounts,
+              routerProgram: SystemProgram.programId,
+            }),
+          "substituted router",
         );
         await expectFailure(
           () =>
-            program.methods
-              .authorizeSwapLeg({ ...args, minimumOutput: new BN(1) })
-              .accountsStrict(authorizationAccounts)
-              .rpc(),
-          "arbitrary minimum of one cannot be authorized",
-        );
-        await expectFailure(
-          () =>
-            program.methods
-              .authorizeSwapLeg({ ...args, quotedOutput: new BN(output + 1) })
-              .accountsStrict(authorizationAccounts)
-              .rpc(),
-          "quoted-output mutation cannot be authorized",
-        );
-        await expectFailure(
-          () =>
-            program.methods
-              .authorizeSwapLeg({
-                ...args,
-                quoteCreatedAt: new BN(quoteTime.toNumber() - 100),
-              })
-              .accountsStrict(authorizationAccounts)
-              .rpc(),
-          "expired quote cannot be authorized",
-        );
-        await expectFailure(
-          () =>
-            program.methods
-              .authorizeSwapLeg(args)
-              .accountsStrict({
-                ...authorizationAccounts,
-                routerProgram: SystemProgram.programId,
-              })
-              .rpc(),
-          "substituted router cannot be authorized",
-        );
-        await expectFailure(
-          () =>
-            program.methods
-              .authorizeSwapLeg(args)
-              .accountsStrict({
-                ...authorizationAccounts,
-                destination: attackerUsdc,
-              })
-              .rpc(),
-          "attacker destination cannot be authorized",
+            signedAttempt(args.seal, {
+              ...authorizationAccounts,
+              destination: attackerUsdc,
+            }),
+          "attacker destination",
         );
       }
       const ordinal = direction === "buy" ? leg : leg + 3;
@@ -1106,6 +1407,7 @@ test(
       await program.methods
         .authorizeSwapLeg(args)
         .accountsStrict(authorizationAccounts)
+        .preInstructions([ed25519])
         .rpc();
       const execute = (
         data: Buffer,
@@ -1113,7 +1415,7 @@ test(
         metas = remaining,
       ) =>
         program.methods
-          .executeSwapLeg(data)
+          .executeSwapLeg(data, innerFlags)
           .accountsStrict(accounts)
           .remainingAccounts(metas)
           .signers([keeper])
@@ -1162,7 +1464,7 @@ test(
       }
       if (!durable || !journalState) return execute(routerInstruction.data);
       const ix = await program.methods
-        .executeSwapLeg(routerInstruction.data)
+        .executeSwapLeg(routerInstruction.data, innerFlags)
         .accountsStrict(executionAccounts)
         .remainingAccounts(remaining)
         .instruction();

@@ -148,7 +148,7 @@ export function validateReconciledVaultSnapshot(
     snapshot.schemaVersion !== "c3-vault-snapshot/v1" ||
     !/^c3-snapshot-[a-f0-9]{32,64}$/.test(snapshot.snapshotId) ||
     snapshot.cluster !== "mainnet-beta" ||
-    snapshot.genesisHash !== "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh" ||
+    snapshot.genesisHash !== "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d" ||
     snapshot.configurationHash !== policy.configurationHash ||
     snapshot.vault !== policy.vault ||
     snapshot.shareMint !== policy.shareMint

@@ -6,6 +6,7 @@ const MIGRATION_ID = "0001_c3_state";
 const MANIFEST_MIGRATION_ID = "0002_c3_manifest_order";
 const PILOT_MIGRATION_ID = "0003_c3_owner_pilot";
 const BUILDER_MIGRATION_ID = "0004_c3_builder";
+const QUOTE_SEAL_MIGRATION_ID = "0005_c3_quote_seal";
 const MIGRATION_URL = new URL(
   "../migrations/0001_c3_state.sql",
   import.meta.url,
@@ -20,6 +21,10 @@ const PILOT_MIGRATION_URL = new URL(
 );
 const BUILDER_MIGRATION_URL = new URL(
   "../migrations/0004_c3_builder.sql",
+  import.meta.url,
+);
+const QUOTE_SEAL_MIGRATION_URL = new URL(
+  "../migrations/0005_c3_quote_seal.sql",
   import.meta.url,
 );
 
@@ -272,4 +277,57 @@ export async function assertC3BuilderSchemaCurrent(pool: Pool): Promise<void> {
       "C3 builder schema is absent or mismatched; bootstrap rejected.",
     );
   }
+}
+
+/** Explicit quote-evidence migration; never applied from application bootstrap. */
+export async function applyC3QuoteSealMigration(
+  client: PoolClient,
+): Promise<"applied" | "already_applied"> {
+  const quote = await migrationText(QUOTE_SEAL_MIGRATION_URL);
+  const builder = await migrationText(BUILDER_MIGRATION_URL);
+  await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+  try {
+    await client.query("SELECT pg_advisory_xact_lock(304137, 1)");
+    const found = await client.query<{
+      migration_id: string;
+      checksum_sha256: string;
+    }>(
+      "SELECT migration_id,checksum_sha256 FROM c3.schema_migrations WHERE migration_id IN ($1,$2)",
+      [BUILDER_MIGRATION_ID, QUOTE_SEAL_MIGRATION_ID],
+    );
+    const checksums = new Map(
+      found.rows.map((row) => [row.migration_id, row.checksum_sha256]),
+    );
+    if (checksums.get(BUILDER_MIGRATION_ID) !== builder.checksum)
+      throw new Error("C3 builder migration is absent or mismatched.");
+    if (checksums.has(QUOTE_SEAL_MIGRATION_ID)) {
+      if (checksums.get(QUOTE_SEAL_MIGRATION_ID) !== quote.checksum)
+        throw new Error("C3 quote migration checksum mismatch.");
+      await client.query("COMMIT");
+      return "already_applied";
+    }
+    await client.query(quote.sql);
+    await client.query(
+      "INSERT INTO c3.schema_migrations (migration_id,checksum_sha256) VALUES ($1,$2)",
+      [QUOTE_SEAL_MIGRATION_ID, quote.checksum],
+    );
+    await client.query("COMMIT");
+    return "applied";
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export async function assertC3QuoteSealSchemaCurrent(
+  pool: Pool,
+): Promise<void> {
+  await assertC3BuilderSchemaCurrent(pool);
+  const { checksum } = await migrationText(QUOTE_SEAL_MIGRATION_URL);
+  const result = await pool.query<{ checksum_sha256: string }>(
+    "SELECT checksum_sha256 FROM c3.schema_migrations WHERE migration_id=$1",
+    [QUOTE_SEAL_MIGRATION_ID],
+  );
+  if (result.rows.length !== 1 || result.rows[0]?.checksum_sha256 !== checksum)
+    throw new Error("C3 quote seal schema is absent or mismatched.");
 }

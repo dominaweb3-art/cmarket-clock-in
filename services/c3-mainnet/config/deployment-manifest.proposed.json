@@ -2,7 +2,7 @@
   "schemaVersion": "c3-mainnet-deployment/v1",
   "status": "proposed",
   "cluster": "mainnet-beta",
-  "genesisHash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh",
+  "genesisHash": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
   "executionCapability": false,
   "programs": {
     "symmetry": "BASKT7aKd8n7ibpUbwLP3Wiyxyi3yoiXsxBk4Hpumate",
@@ -181,5 +181,5 @@
     "routeRegistryApproved": false,
     "oracleEvidenceApproved": false
   },
-  "immutableConfigurationHash": "92667ae72a8e1d86c72e241a0856d781a6326e5307b7d59c3b75d198f41953d6"
+  "immutableConfigurationHash": "2b492ac26cf4a26f077822b713b0affd12a4ce29de2ca1052442626f7ac2c611"
 }

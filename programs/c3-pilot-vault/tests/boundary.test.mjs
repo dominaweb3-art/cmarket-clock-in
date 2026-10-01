@@ -18,7 +18,7 @@ test("production artifact excludes local mock entrypoints and protects stable mo
   const idl = JSON.parse(readFileSync(idlPath, "utf8"));
   const names = idl.instructions.map((ix) => ix.name);
   assert.equal(
-    names.some((name) => /mock/i.test(name)),
+    names.some((name) => /mock|probe/i.test(name)),
     false,
     "mock instruction must be absent from production IDL",
   );
@@ -46,6 +46,9 @@ test("production artifact excludes local mock entrypoints and protects stable mo
     "MOCK_LOCAL_ONLY",
     "mock_settle_deposit",
     "mock_settle_redemption",
+    "local_jupiter_probe",
+    "ISOLATED_JUPITER_CPI",
+    "c3-ordered-fork-v1",
     "7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ",
   ]) {
     assert.equal(

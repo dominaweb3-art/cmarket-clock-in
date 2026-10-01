@@ -138,6 +138,10 @@ pub struct SwapLegAuthorization {
     pub router_program: Pubkey,
     pub route_registry_version: u64,
     pub route_registry_hash: [u8; 32],
+    pub quote_policy_revision: u64,
+    pub quote_payload_hash: [u8; 32],
+    pub quote_receipt: Pubkey,
+    pub quote_expires_slot: u64,
     pub source: Pubkey,
     pub destination: Pubkey,
     pub input_mint: Pubkey,
@@ -151,6 +155,8 @@ pub struct SwapLegAuthorization {
     pub route_fingerprint: [u8; 32],
     pub instruction_hash: [u8; 32],
     pub account_metas_hash: [u8; 32],
+    pub alt_count: u8,
+    pub alt_contents_hash: [u8; 32],
     pub expires_at: i64,
     pub idempotency: [u8; 32],
     pub consumed: bool,
@@ -173,6 +179,37 @@ pub struct RouteProgramRegistry {
     pub expiry_slot: u64,
     pub program_count: u8,
     pub programs: [Pubkey; 16],
+    pub bump: u8,
+}
+
+/// Governance-controlled signing policy. An initialized policy is still disabled.
+#[account]
+#[derive(InitSpace)]
+pub struct QuoteAuthorityPolicy {
+    pub schema_version: u8,
+    pub vault: Pubkey,
+    pub governance: Pubkey,
+    pub config_version: u64,
+    pub revision: u64,
+    pub authority: Pubkey,
+    pub enabled: bool,
+    pub max_age_seconds: i64,
+    pub max_slippage_bps: u16,
+    pub genesis_hash: [u8; 32],
+    pub domain: [u8; 16],
+    pub bump: u8,
+}
+
+/// Globally unique quote identity. It remains allocated after execution.
+#[account]
+#[derive(InitSpace)]
+pub struct QuoteReceipt {
+    pub quote_id: [u8; 32],
+    pub nonce: [u8; 32],
+    pub payload_hash: [u8; 32],
+    pub plan: Pubkey,
+    pub authorization: Pubkey,
+    pub consumed: bool,
     pub bump: u8,
 }
 

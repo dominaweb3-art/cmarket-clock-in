@@ -28,7 +28,7 @@ export const C3_FEES = Object.freeze({
 
 export const C3_MAINNET = Object.freeze({
   cluster: "mainnet-beta" as const,
-  genesisHash: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2NZh",
+  genesisHash: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
   usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
   cbBtcMint: "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
   portalEthMint: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",

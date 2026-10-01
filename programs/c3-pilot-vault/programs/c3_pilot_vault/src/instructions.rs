@@ -66,6 +66,29 @@ pub struct GovernRouteRegistry<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeQuotePolicy<'info> {
+    #[account(mut, address = config.governance)]
+    pub governance: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(init, payer = governance, seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump,
+        space = 8 + QuoteAuthorityPolicy::INIT_SPACE)]
+    pub policy: Account<'info, QuoteAuthorityPolicy>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GovernQuotePolicy<'info> {
+    #[account(address = config.governance)]
+    pub governance: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Account<'info, VaultConfig>,
+    #[account(mut, seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump = policy.bump,
+        constraint = policy.vault == config.key(), constraint = policy.governance == config.governance)]
+    pub policy: Account<'info, QuoteAuthorityPolicy>,
+}
+
+#[derive(Accounts)]
 #[instruction(nonce: u64)]
 pub struct CreateDepositIntent<'info> {
     #[account(mut)]
@@ -237,6 +260,9 @@ pub struct AuthorizeSwapLeg<'info> {
     #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
         constraint = registry.vault == config.key())]
     pub registry: Box<Account<'info, RouteProgramRegistry>>,
+    #[account(seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump = policy.bump,
+        constraint = policy.vault == config.key())]
+    pub policy: Box<Account<'info, QuoteAuthorityPolicy>>,
     #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
         constraint = plan.vault == config.key())]
     pub plan: Box<Account<'info, SettlementPlan>>,
@@ -252,6 +278,12 @@ pub struct AuthorizeSwapLeg<'info> {
         seeds = [SWAP_AUTH_SEED, plan.key().as_ref(), args.idempotency.as_ref()], bump,
         space = 8 + SwapLegAuthorization::INIT_SPACE)]
     pub authorization: Box<Account<'info, SwapLegAuthorization>>,
+    #[account(init, payer = governance, seeds = [QUOTE_RECEIPT_SEED, args.quote_id.as_ref()], bump,
+        space = 8 + QuoteReceipt::INIT_SPACE)]
+    pub quote_receipt: Box<Account<'info, QuoteReceipt>>,
+    /// CHECK: Checked by address; contents parsed with checked sysvar helpers.
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -263,12 +295,18 @@ pub struct ExecuteSwapLeg<'info> {
     #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
         constraint = registry.vault == config.key())]
     pub registry: Box<Account<'info, RouteProgramRegistry>>,
+    #[account(seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump = policy.bump,
+        constraint = policy.vault == config.key())]
+    pub policy: Box<Account<'info, QuoteAuthorityPolicy>>,
     #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
         constraint = plan.vault == config.key())]
     pub plan: Box<Account<'info, SettlementPlan>>,
     #[account(mut, seeds = [SWAP_AUTH_SEED, plan.key().as_ref(), authorization.idempotency.as_ref()],
         bump = authorization.bump, constraint = authorization.plan == plan.key())]
     pub authorization: Box<Account<'info, SwapLegAuthorization>>,
+    #[account(mut, seeds = [QUOTE_RECEIPT_SEED, quote_receipt.quote_id.as_ref()], bump = quote_receipt.bump,
+        constraint = quote_receipt.authorization == authorization.key())]
+    pub quote_receipt: Box<Account<'info, QuoteReceipt>>,
     /// CHECK: Only the seed-derived PDA can sign an inner token operation.
     #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,

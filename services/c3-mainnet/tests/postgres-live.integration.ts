@@ -1,6 +1,6 @@
 /** Real disposable PostgreSQL integration tests. Run only through npm run test:postgres. */
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import pg from "pg";
@@ -11,9 +11,11 @@ import {
   applyC3ManifestOrderingMigration,
   applyC3PilotMigration,
   applyC3BuilderMigration,
+  applyC3QuoteSealMigration,
   assertC3SchemaCurrent,
   assertC3PilotSchemaCurrent,
   assertC3BuilderSchemaCurrent,
+  assertC3QuoteSealSchemaCurrent,
 } from "../src/migrations.ts";
 import { DisabledPilotRepository } from "../src/pilot-postgres.ts";
 import { requestIsolatedCandidate } from "../src/pilot-builder-boundary.ts";
@@ -233,6 +235,191 @@ test("disposable PostgreSQL: migration, durability, CAS, outbox and constraints"
       );
       assert.equal(configs.rows[0]?.count, "0");
       assert.equal(manifests.rows[0]?.count, "0");
+    },
+  );
+
+  await t.test(
+    "quote evidence migration is immutable, CAS-bound, and audited",
+    async () => {
+      const client = await pool.connect();
+      try {
+        assert.equal(await applyC3QuoteSealMigration(client), "applied");
+        assert.equal(
+          await applyC3QuoteSealMigration(client),
+          "already_applied",
+        );
+        await assertC3QuoteSealSchemaCurrent(pool);
+      } finally {
+        client.release();
+      }
+      const found = await pool.query<{ intent_id: string }>(
+        "SELECT intent_id FROM c3.c3_pilot_intents WHERE kind='deposit' LIMIT 1",
+      );
+      const intentId = found.rows[0]?.intent_id;
+      assert.ok(intentId);
+      const nonce = randomBytes(32);
+      const quoteId = createHash("sha256")
+        .update("c3-quote-id-v1")
+        .update(nonce)
+        .digest();
+      const payload = randomBytes(300);
+      Buffer.from("C3QUOTESEAL-V1!!").copy(payload, 0);
+      payload[16] = 1;
+      quoteId.copy(payload, 49);
+      nonce.copy(payload, 81);
+      const payloadHash = createHash("sha256").update(payload).digest();
+      const values = [
+        quoteId,
+        nonce,
+        intentId,
+        payload,
+        payloadHash,
+        randomBytes(32),
+        new Date(Date.now() + 20_000),
+      ];
+      const insert = `INSERT INTO c3.c3_quote_authorizations
+      (quote_id,nonce,intent_id,leg,policy_revision,registry_revision,registry_hash,
+       payload,payload_sha256,authority_pubkey,expires_at)
+      VALUES($1,$2,$3,0,1,1,decode(repeat('ab',32),'hex'),$4,$5,$6,$7)`;
+      await pool.query(insert, values);
+      await assert.rejects(pool.query(insert, values), /duplicate key/);
+      await assert.rejects(
+        pool.query(insert, [randomBytes(32), ...values.slice(1)]),
+        /C3 quote evidence invalid/,
+      );
+      const malformedPayload = Buffer.from(payload);
+      malformedPayload[49] = malformedPayload[49]! ^ 1;
+      await assert.rejects(
+        pool.query(insert, [
+          createHash("sha256")
+            .update("c3-quote-id-v1")
+            .update(randomBytes(32))
+            .digest(),
+          randomBytes(32),
+          intentId,
+          malformedPayload,
+          createHash("sha256").update(malformedPayload).digest(),
+          randomBytes(32),
+          new Date(Date.now() + 20_000),
+        ]),
+      );
+      const concurrentNonce = randomBytes(32);
+      const concurrentQuoteId = createHash("sha256")
+        .update("c3-quote-id-v1")
+        .update(concurrentNonce)
+        .digest();
+      const concurrentPayload = Buffer.from(payload);
+      concurrentQuoteId.copy(concurrentPayload, 49);
+      concurrentNonce.copy(concurrentPayload, 81);
+      await assert.rejects(
+        pool.query(insert, [
+          concurrentQuoteId,
+          concurrentNonce,
+          intentId,
+          concurrentPayload,
+          createHash("sha256").update(concurrentPayload).digest(),
+          randomBytes(32),
+          new Date(Date.now() + 20_000),
+        ]),
+        /duplicate key/,
+      );
+      await assert.rejects(
+        pool.query(
+          "UPDATE c3.c3_quote_authorizations SET payload=$2,revision=2 WHERE quote_id=$1",
+          [quoteId, randomBytes(300)],
+        ),
+        /immutable evidence/,
+      );
+      const signature = randomBytes(64);
+      const signed = await pool.query(
+        `UPDATE c3.c3_quote_authorizations SET state='signed',signature=$2,revision=revision+1
+       WHERE quote_id=$1 AND revision=1 RETURNING revision`,
+        [quoteId, signature],
+      );
+      assert.equal(signed.rows[0]?.revision, "2");
+      const competingValues = () => {
+        const competingNonce = randomBytes(32);
+        const competingId = createHash("sha256")
+          .update("c3-quote-id-v1")
+          .update(competingNonce)
+          .digest();
+        const competingPayload = Buffer.from(payload);
+        competingId.copy(competingPayload, 49);
+        competingNonce.copy(competingPayload, 81);
+        return [
+          competingId,
+          competingNonce,
+          intentId,
+          competingPayload,
+          createHash("sha256").update(competingPayload).digest(),
+          randomBytes(32),
+          new Date(Date.now() + 20_000),
+        ];
+      };
+      const competingInsert = insert.replace(
+        "VALUES($1,$2,$3,0,1,1,",
+        "VALUES($1,$2,$3,1,1,1,",
+      );
+      const contenders = await Promise.allSettled([
+        pool.query(competingInsert, competingValues()),
+        pool.query(competingInsert, competingValues()),
+      ]);
+      assert.equal(
+        contenders.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      assert.equal(
+        contenders.filter((result) => result.status === "rejected").length,
+        1,
+      );
+      const activeLeg = await pool.query<{ quote_id: Buffer }>(
+        "SELECT quote_id FROM c3.c3_quote_authorizations WHERE intent_id=$1 AND leg=1 AND state='prepared'",
+        [intentId],
+      );
+      assert.equal(activeLeg.rowCount, 1);
+      await assert.rejects(
+        pool.query(
+          "UPDATE c3.c3_quote_authorizations SET state='expired',revision=revision+1 WHERE quote_id=$1",
+          [activeLeg.rows[0]!.quote_id],
+        ),
+        /cannot expire before database time/,
+      );
+      await pool.query(
+        "UPDATE c3.c3_quote_authorizations SET state='manual_review',revision=revision+1 WHERE quote_id=$1",
+        [activeLeg.rows[0]!.quote_id],
+      );
+      const expiring = competingValues();
+      expiring[6] = new Date(Date.now() + 500);
+      await pool.query(competingInsert, expiring);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await pool.query(
+        "UPDATE c3.c3_quote_authorizations SET state='expired',revision=revision+1 WHERE quote_id=$1",
+        [expiring[0]],
+      );
+      await assert.rejects(
+        pool.query(
+          "UPDATE c3.c3_quote_authorizations SET state='signed',signature=$2,revision=revision+1 WHERE quote_id=$1",
+          [expiring[0], randomBytes(64)],
+        ),
+        /terminal evidence is immutable/,
+      );
+      await assert.rejects(
+        pool.query(
+          "UPDATE c3.c3_quote_authorizations SET signature=$2,revision=revision+1 WHERE quote_id=$1",
+          [quoteId, randomBytes(64)],
+        ),
+        /invalid final transition/,
+      );
+      const events = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM c3.c3_quote_events WHERE quote_id=$1",
+        [quoteId],
+      );
+      assert.equal(events.rows[0]?.count, "2");
+      await assert.rejects(
+        pool.query("DELETE FROM c3.c3_quote_authorizations WHERE quote_id=$1", [
+          quoteId,
+        ]),
+      );
     },
   );
 

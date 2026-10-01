@@ -33,6 +33,16 @@ pub struct RouteRegistryEvent {
     pub slot: u64,
 }
 
+#[event]
+pub struct QuotePolicyEvent {
+    pub vault: Pubkey,
+    pub revision: u64,
+    pub authority: Pubkey,
+    pub enabled: bool,
+    pub action: u8, // 1=initialized disabled, 2=rotated/enabled, 3=disabled
+    pub slot: u64,
+}
+
 pub mod kind {
     pub const INITIALIZED: u8 = 1;
     pub const PAUSED: u8 = 2;
