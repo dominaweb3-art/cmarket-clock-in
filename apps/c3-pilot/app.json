@@ -3,12 +3,17 @@
     "name": "C Market C3 Pilot",
     "slug": "c-market-c3-pilot",
     "version": "0.1.0",
+    "icon": "../mobile/assets/images/icon.png",
     "orientation": "portrait",
     "scheme": "cmarketc3pilot",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.dominaweb3.cmarket.c3pilot",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "../mobile/assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
       "permissions": ["android.permission.INTERNET"],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -17,6 +22,7 @@
         "android.permission.VIBRATE"
       ]
     },
+    "plugins": ["./plugins/with-local-readonly-network"],
     "extra": {
       "pilotExecutionEnabled": false,
       "mainnetExecutionEnabled": false

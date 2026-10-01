@@ -1,4 +1,19 @@
 export const en = {
+  home: "Home",
+  indices: "Indices",
+  loading: "Loading…",
+  refresh: "Refresh",
+  walletError:
+    "Wallet connection was cancelled or is unavailable. No transaction was requested.",
+  backendMissing:
+    "Connect a wallet and configure the read-only local backend to load activity.",
+  backendError:
+    "Backend unavailable or evidence rejected. No position is inferred.",
+  backendReady: "Read-only local journal connected.",
+  simulationNotice:
+    "LOCAL SIMULATION ONLY. These journal events are not a Mainnet purchase or a real user position. Wallet connection uses Devnet and cannot enable trading.",
+  localIntent: "Local test intent",
+  localState: "Journal state",
   title: "C Market · C3 Pilot",
   controlled: "Controlled test pilot · no real-fund execution",
   unavailable:
@@ -47,6 +62,21 @@ export const en = {
 export type TranslationKey = keyof typeof en;
 type Dictionary = Record<TranslationKey, string>;
 const es: Dictionary = {
+  home: "Inicio",
+  indices: "Índices",
+  loading: "Cargando…",
+  refresh: "Actualizar",
+  walletError:
+    "La conexión se canceló o no está disponible. No se solicitó ninguna transacción.",
+  backendMissing:
+    "Conecta una billetera y configura el backend local de solo lectura para cargar actividad.",
+  backendError:
+    "Backend no disponible o evidencia rechazada. No se infiere una posición.",
+  backendReady: "Diario local conectado en solo lectura.",
+  simulationNotice:
+    "SOLO SIMULACIÓN LOCAL. Estos eventos no son una compra Mainnet ni una posición real del usuario. La conexión de billetera usa Devnet y no habilita operaciones.",
+  localIntent: "Intent de prueba local",
+  localState: "Estado del diario",
   title: "C Market · Piloto C3",
   controlled: "Piloto de prueba controlado · sin ejecución con fondos reales",
   unavailable:
@@ -93,6 +123,18 @@ const es: Dictionary = {
   mainnet: "Mainnet está deshabilitada en esta versión.",
 };
 const zhCN: Dictionary = {
+  home: "首页",
+  indices: "指数",
+  loading: "加载中…",
+  refresh: "刷新",
+  walletError: "钱包连接已取消或不可用。未请求任何交易。",
+  backendMissing: "连接钱包并配置只读本地后端以加载活动。",
+  backendError: "后端不可用或证据被拒绝。不推断仓位。",
+  backendReady: "只读本地日志已连接。",
+  simulationNotice:
+    "仅本地模拟。这些日志不代表主网购买或真实仓位。钱包连接使用 Devnet，不能启用交易。",
+  localIntent: "本地测试意图",
+  localState: "日志状态",
   title: "C Market · C3 测试版",
   controlled: "受控测试版 · 不执行真实资金交易",
   unavailable: "未配置经过审核的测试部署。交易已禁用。",
@@ -134,6 +176,21 @@ const zhCN: Dictionary = {
   mainnet: "此版本禁用主网。",
 };
 const ptBR: Dictionary = {
+  home: "Início",
+  indices: "Índices",
+  loading: "Carregando…",
+  refresh: "Atualizar",
+  walletError:
+    "Conexão cancelada ou indisponível. Nenhuma transação foi solicitada.",
+  backendMissing:
+    "Conecte uma carteira e configure o backend local somente leitura para carregar atividade.",
+  backendError:
+    "Backend indisponível ou evidência rejeitada. Nenhuma posição é inferida.",
+  backendReady: "Diário local conectado somente leitura.",
+  simulationNotice:
+    "SOMENTE SIMULAÇÃO LOCAL. Estes eventos não são compras Mainnet ou posições reais. A conexão usa Devnet e não habilita operações.",
+  localIntent: "Intenção de teste local",
+  localState: "Estado do diário",
   title: "C Market · Piloto C3",
   controlled: "Piloto controlado · sem execução com fundos reais",
   unavailable:

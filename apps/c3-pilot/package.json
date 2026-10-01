@@ -11,10 +11,12 @@
     "doctor": "expo-doctor",
     "android:export": "NODE_ENV=production expo export --platform android --output-dir dist/release-check --clear",
     "android:prebuild": "NODE_ENV=production expo prebuild --platform android --no-install",
+    "android:qa-apk": "node scripts/build-qa-apk.mjs",
     "android:release": "NODE_ENV=production expo prebuild --platform android --clean --no-install && cd android && NODE_ENV=production ./gradlew assembleRelease"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "2.3.0",
     "expo": "57.0.25",
     "react": "19.2.3",
     "react-native": "0.86.3"
