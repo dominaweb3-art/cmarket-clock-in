@@ -1,12 +1,14 @@
 /** Independent read-only verifier. Local-validator evidence only; never promotes
  * PostgreSQL state, retries, signs or submits. Missing evidence is NOT success.
- * A production two-operator quorum and lifecycle promotion remain disabled.
+ * The local journal may consume this independently checked result through its
+ * own CAS transaction. A production two-operator quorum remains disabled.
  */
 import { createHash, createPublicKey, verify } from "node:crypto";
 import {
   Connection,
   AddressLookupTableAccount,
   PublicKey,
+  type AccountInfo,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
 import type { Pool } from "pg";
@@ -89,6 +91,121 @@ export type ExecutionExpectation = Readonly<{
   poolInput: string;
   poolOutput: string;
 }>;
+
+/** Exact fixed Anchor SettlementPlan v1 layout from state.rs (877 bytes).
+ * Require the next state, not merely a plausible token delta. A later plan
+ * revision must be reviewed separately, never silently attributed to this leg.
+ */
+export function verifyFinalizedPlan(
+  account: AccountInfo<Buffer> | null,
+  context: StoredQuoteContext,
+  debit: string,
+  credit: string,
+  seal: Buffer,
+): bigint {
+  check(
+    account && !account.executable && account.owner.equals(VAULT_PROGRAM),
+    "PLAN_OWNER",
+  );
+  const d = account!.data;
+  check(
+    d.length === 877 &&
+      d
+        .subarray(0, 8)
+        .equals(h(Buffer.from("account:SettlementPlan")).subarray(0, 8)) &&
+      d[8] === 1,
+    "PLAN_LAYOUT",
+  );
+  const key = (offset: number, expected: string) =>
+    check(
+      new PublicKey(d.subarray(offset, offset + 32)).toBase58() === expected,
+      "PLAN_BINDING",
+    );
+  check(d.readBigUInt64LE(9) === BigInt(context.configVersion), "PLAN_CONFIG");
+  key(17, context.vault);
+  key(49, context.intent);
+  key(81, context.wallet);
+  const [expectedPlan, bump] = PublicKey.findProgramAddressSync(
+    [Buffer.from("c3-plan-v1"), new PublicKey(context.intent).toBuffer()],
+    VAULT_PROGRAM,
+  );
+  check(
+    expectedPlan.toBase58() === context.plan && d[876] === bump,
+    "PLAN_PDA",
+  );
+  const leg = context.leg;
+  check(
+    Number.isInteger(leg) &&
+      leg >= 0 &&
+      leg < 3 &&
+      (context.direction === 1 || context.direction === 2),
+    "PLAN_LEG",
+  );
+  check(
+    d[145] === context.direction &&
+      d.readUInt16LE(154) === 4000 &&
+      d.readUInt16LE(156) === 3000 &&
+      d.readUInt16LE(158) === 3000,
+    "PLAN_POLICY",
+  );
+  key(160 + leg * 32, context.inputMint);
+  key(256 + leg * 32, context.outputMint);
+  key(352 + leg * 32, context.source);
+  key(448 + leg * 32, context.destination);
+  key(544, context.routerProgram);
+  check(
+    seal.length === 300 &&
+      d
+        .subarray(576 + leg * 32, 608 + leg * 32)
+        .equals(seal.subarray(139, 171)) &&
+      d.readBigUInt64LE(672 + leg * 8) === seal.readBigUInt64LE(131) &&
+      d.readUInt16LE(696) <= context.maxSlippageBps &&
+      d.readBigInt64LE(706) === BigInt(context.planExpiresAt),
+    "PLAN_QUOTE_BINDING",
+  );
+  const revision = d.readBigUInt64LE(716);
+  check(
+    BigInt(context.planRevision) === BigInt(leg) &&
+      revision === BigInt(context.planRevision) + 1n &&
+      d[714] === (1 << (leg + 1)) - 1,
+    "PLAN_REVISION",
+  );
+  check(
+    d[715] ===
+      (leg === 2
+        ? context.direction === 1
+          ? 3
+          : 6
+        : context.direction === 1
+          ? 2
+          : 5),
+    "PLAN_LIFECYCLE",
+  );
+  check(
+    d.readBigUInt64LE(756 + leg * 8) === BigInt(debit) &&
+      d.readBigUInt64LE(780 + leg * 8) === BigInt(credit),
+    "PLAN_EFFECTS",
+  );
+  check(
+    d.subarray(804, 868).equals(Buffer.alloc(64)) &&
+      d.readBigInt64LE(868) === 0n,
+    "PLAN_AUTHORIZATION_NOT_CONSUMED",
+  );
+  return revision;
+}
+
+export function verifyFinalizedAltBinding(
+  accounts: readonly { address: string; owner: string; data: Uint8Array }[],
+  slot: bigint,
+  seal: Buffer,
+): void {
+  check(seal.length === 300 && accounts.length === seal[235], "ALT_COUNT");
+  // count at 235, hash at 236..267; 228 would overlap the metas hash/count.
+  check(
+    quoteAltContentsHash(accounts, slot).equals(seal.subarray(236, 268)),
+    "ALT_CHANGED",
+  );
+}
 export function verifyFinalizedEffects(
   tx: VersionedTransactionResponse,
   e: ExecutionExpectation,
@@ -166,6 +283,32 @@ export function verifyFinalizedEffects(
       address,
     ),
     expectedData = outerData.subarray(12, 12 + rawLength);
+  const pda = (...seeds: Buffer[]) =>
+    PublicKey.findProgramAddressSync(seeds, VAULT_PROGRAM)[0].toBase58();
+  const fixed = [
+    e.context.keeper,
+    e.context.vault,
+    e.context.registry,
+    e.context.policy,
+    e.context.plan,
+    pda(
+      Buffer.from("c3-swap-auth-v1"),
+      new PublicKey(e.context.plan).toBuffer(),
+      e.seal.subarray(81, 113),
+    ),
+    pda(Buffer.from("c3-quote-receipt-v1"), e.seal.subarray(49, 81)),
+    VAULT_AUTHORITY.toBase58(),
+    e.context.source,
+    e.context.destination,
+    e.context.routerProgram,
+    c.tokenProgram,
+  ];
+  check(
+    JSON.stringify(
+      Array.from(outer.accountKeyIndexes.slice(0, 12), address),
+    ) === JSON.stringify(fixed),
+    "OUTER_FIXED_ACCOUNTS",
+  );
   check(
     tx.blockTime !== null &&
       tx.blockTime !== undefined &&
@@ -403,7 +546,7 @@ export async function reconcilePersistedOpenLeg(
   );
   const row = (
     await pool.query(
-      `SELECT q.canonical_payload,q.payload_hash,q.signature,q.authority,q.evidence,ctx.context,ctx.context_hash,l.submitted_signature,l.authorization_hash,i.wallet,i.vault
+      `SELECT q.quote_id,q.canonical_payload,q.payload_hash,q.signature,q.authority,q.evidence,ctx.context,ctx.context_hash,ctx.scope,l.submitted_signature,l.authorization_hash,i.wallet,i.vault,i.db_revision,i.chain_revision
     FROM c3_open.quote_authorizations q JOIN c3_open.quote_contexts ctx USING(intent_id,ordinal,intent_revision)
     JOIN c3_open.legs l USING(intent_id,ordinal) JOIN c3_open.intents i USING(intent_id)
     WHERE q.intent_id=$1 AND q.ordinal=$2 AND q.state IN ('signed','consumed') AND l.state IN ('submitted','uncertain','reconciliation_required')`,
@@ -421,7 +564,8 @@ export async function reconcilePersistedOpenLeg(
   const context = row.context as StoredQuoteContext,
     seal = row.canonical_payload as Buffer;
   check(
-    seal.length === 300 &&
+    row.scope === "LOCAL_CLONE" &&
+      seal.length === 300 &&
       h(seal).equals(row.payload_hash) &&
       row.authorization_hash === row.payload_hash.toString("hex") &&
       quoteContextHash(openQuoteContext(context)).equals(row.context_hash) &&
@@ -480,23 +624,97 @@ export async function reconcilePersistedOpenLeg(
       ).every(Boolean),
     "ALT_RPC_RESOLUTION_MISMATCH",
   );
-  const altHash = quoteAltContentsHash(
-    accounts.map((a, i) => {
+  // The authorization binds ALL ordered ALT accounts supplied to the CPI,
+  // including a table the compiler did not need for a lookup. Hashing only
+  // message.addressTableLookups would incorrectly omit that approved context.
+  const outer = tx!.transaction.message.compiledInstructions[1];
+  check(outer && outer.data.length >= 16, "OUTER_ABI");
+  const rawSize = Buffer.from(outer!.data).readUInt32LE(8);
+  check(rawSize <= 1024 && 16 + rawSize <= outer!.data.length, "OUTER_ABI");
+  const flagsSize = Buffer.from(outer!.data).readUInt32LE(12 + rawSize);
+  check(
+    outer!.data.length === 16 + rawSize + flagsSize &&
+      outer!.accountKeyIndexes.length === 12 + flagsSize + seal[235]!,
+    "OUTER_ABI",
+  );
+  const names = Array.from(
+    outer!.accountKeyIndexes.slice(12 + flagsSize),
+    (index) => {
+      const k = actualKeys.get(index);
+      check(k, "ACCOUNT_INDEX");
+      return k!;
+    },
+  );
+  check(
+    new Set(names.map((k) => k.toBase58())).size === names.length &&
+      tables.every((t) => names.some((k) => k.equals(t.accountKey))),
+    "ALT_TABLE_SUBSTITUTION",
+  );
+  const allAccounts = await rpc.getMultipleAccountsInfo(names, {
+    commitment: "finalized",
+    minContextSlot: tx!.slot,
+  });
+  check(allAccounts.length === names.length, "ALT_MISSING");
+  verifyFinalizedAltBinding(
+    allAccounts.map((a, i) => {
       check(a && !a.executable, "ALT_MISSING");
       return {
-        address: tables[i]!.accountKey.toBase58(),
+        address: names[i]!.toBase58(),
         owner: a!.owner.toBase58(),
         data: a!.data,
       };
     }),
     BigInt(tx!.slot),
+    seal,
   );
-  check(altHash.equals(seal.subarray(228, 260)), "ALT_CHANGED");
-  return verifyFinalizedEffects(tx!, {
+  const effects = verifyFinalizedEffects(tx!, {
     signature: row.submitted_signature,
     messageHash: row.evidence.executionMessageHash,
     context,
     seal,
     ...row.evidence.effectManifest,
+  });
+  const plan = await rpc.getAccountInfoAndContext(new PublicKey(context.plan), {
+    commitment: "finalized",
+    minContextSlot: tx!.slot,
+  });
+  check(plan.context.slot >= tx!.slot, "PLAN_STALE");
+  const chainRevision = verifyFinalizedPlan(
+    plan.value,
+    context,
+    effects.debit,
+    effects.credit,
+    seal,
+  );
+  check(
+    BigInt(row.chain_revision) + 1n === chainRevision,
+    "DURABLE_PLAN_REVISION",
+  );
+  const planStateHash = h(plan.value!.data).toString("hex"),
+    authorizationHash = row.payload_hash.toString("hex") as string,
+    quoteId = row.quote_id.toString("hex") as string;
+  const evidenceHash = h(
+    Buffer.from(
+      JSON.stringify({
+        effectsHash: effects.evidenceHash,
+        planStateHash,
+        authorizationHash,
+        quoteId,
+        contextHash: row.context_hash.toString("hex"),
+        chainRevision: chainRevision.toString(),
+        altContentsHash: seal.subarray(236, 268).toString("hex"),
+      }),
+    ),
+  ).toString("hex");
+  return Object.freeze({
+    ...effects,
+    evidenceHash,
+    planStateHash,
+    signature: row.submitted_signature as string,
+    plan: context.plan,
+    chainRevision,
+    dbRevision: BigInt(row.db_revision),
+    authorizationHash,
+    quoteId,
   });
 }

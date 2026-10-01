@@ -1,8 +1,10 @@
-/** MOCK_LOCAL_ONLY durable journal. Deliberately excluded from the production service build. */
+/** Isolated local durable journal. Deliberately excluded from the production service build. */
 import { createHash, createPublicKey, randomUUID, verify } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import type { Pool, PoolClient } from "pg";
+import type { Connection } from "@solana/web3.js";
+import { reconcilePersistedOpenLeg } from "./open-reconcile.ts";
 import { quoteContextHash } from "../src/quote-seal.ts";
 import { openQuoteContext, type StoredQuoteContext } from "./open-quote.ts";
 
@@ -130,7 +132,7 @@ async function signedOpenSeal(
   if (!enrolled.rowCount) return null; // historical mock-only regression fixtures
   const q = (
     await client.query(
-      `SELECT q.*,ctx.context,ctx.context_hash FROM c3_open.quote_authorizations q
+      `SELECT q.*,ctx.context,ctx.context_hash,ctx.scope AS context_scope FROM c3_open.quote_authorizations q
     JOIN c3_open.quote_contexts ctx USING(intent_id,ordinal,intent_revision)
     WHERE q.intent_id=$1 AND q.ordinal=$2 AND q.state='signed' AND encode(q.payload_hash,'hex')=$3 FOR SHARE OF q`,
       [intentId, ordinal, authorizationHash],
@@ -169,6 +171,7 @@ async function signedOpenSeal(
     canonical_payload: Buffer;
     intent_revision: string;
     context: StoredQuoteContext;
+    context_scope: "LOCAL_MOCK" | "LOCAL_CLONE";
   };
 }
 
@@ -383,7 +386,10 @@ async function legForUpdate(
   return result.rows[0]!;
 }
 
-/** The repository proves persistence, not independent RPC truth. All confirmations here are local-fixture only. */
+/** Local-only persistence. Real cloned Jupiter legs require the independent
+ * message/effects/plan verifier; mock attestations cannot confirm cloned legs.
+ * Neither is Mainnet production confirmation.
+ */
 export class OpenLocalSettlementRepository {
   private readonly pool: Pool;
   private constructor(pool: Pool) {
@@ -899,8 +905,62 @@ export class OpenLocalSettlementRepository {
       observedEffects: Record<string, unknown>;
     }>,
   ): Promise<OpenSnapshot> {
+    return this.#commitLocalLeg(scope, ordinal, attestation);
+  }
+  /** No caller-supplied effects or proof. Read-only loopback RPC first, short
+   * serializable CAS second. A failed/uncertain read never resends anything.
+   */
+  async reconcileLocalJupiterLeg(
+    scope: Scope,
+    ordinal: number,
+    rpc: Connection,
+  ): Promise<OpenSnapshot> {
+    const proof = await reconcilePersistedOpenLeg(
+      this.pool,
+      rpc,
+      scope.intentId,
+      ordinal,
+    );
     assert(
-      attestation.source === "MOCK_LOCAL_ONLY" &&
+      proof.dbRevision === scope.expectedDbRevision &&
+        proof.chainRevision === scope.expectedChainRevision + 1n,
+      "COMPARE_AND_SWAP_CONFLICT",
+    );
+    return this.#commitLocalLeg(scope, ordinal, {
+      source: "LOCAL_CHAIN_ONLY",
+      plan: proof.plan,
+      signature: proof.signature,
+      evidenceHash: proof.evidenceHash,
+      chainRevision: proof.chainRevision,
+      observedEffects: {
+        scope: proof.scope,
+        inputAmount: proof.debit,
+        outputAmount: proof.credit,
+        planStateHash: proof.planStateHash,
+        quoteId: proof.quoteId,
+        authorizationHash: proof.authorizationHash,
+        chainRevision: proof.chainRevision.toString(),
+      },
+      authorizationHash: proof.authorizationHash,
+      quoteId: proof.quoteId,
+    });
+  }
+  async #commitLocalLeg(
+    scope: Scope,
+    ordinal: number,
+    attestation: Readonly<{
+      source: "MOCK_LOCAL_ONLY" | "LOCAL_CHAIN_ONLY";
+      plan: string;
+      signature: string;
+      evidenceHash: string;
+      chainRevision: bigint;
+      observedEffects: Record<string, unknown>;
+      authorizationHash?: string;
+      quoteId?: string;
+    }>,
+  ): Promise<OpenSnapshot> {
+    assert(
+      ["MOCK_LOCAL_ONLY", "LOCAL_CHAIN_ONLY"].includes(attestation.source) &&
         KEY.test(attestation.plan) &&
         SIGNATURE.test(attestation.signature) &&
         HASH.test(attestation.evidenceHash) &&
@@ -951,21 +1011,47 @@ export class OpenLocalSettlementRepository {
           "RECOVERY_WINDOW_CLOSED",
         );
       }
-      const expectations = await client.query<{ expected_effects: unknown }>(
-        "SELECT expected_effects FROM c3_open.legs WHERE intent_id=$1 AND ordinal=$2",
-        [scope.intentId, ordinal],
-      );
-      const expected = expectations.rows[0]?.expected_effects;
-      assert(
-        expected && isDeepStrictEqual(expected, attestation.observedEffects),
-        "LOCAL_EFFECT_MISMATCH",
-      );
       const seal = await signedOpenSeal(
         client,
         scope.intentId,
         ordinal,
         leg.authorization_hash!,
       );
+      if (attestation.source === "MOCK_LOCAL_ONLY") {
+        assert(
+          !seal || seal.context_scope === "LOCAL_MOCK",
+          "CLONED_LEG_REQUIRES_RPC_VERIFICATION",
+        );
+        const expectations = await client.query<{ expected_effects: unknown }>(
+          "SELECT expected_effects FROM c3_open.legs WHERE intent_id=$1 AND ordinal=$2",
+          [scope.intentId, ordinal],
+        );
+        const expected = expectations.rows[0]?.expected_effects;
+        assert(
+          expected && isDeepStrictEqual(expected, attestation.observedEffects),
+          "LOCAL_EFFECT_MISMATCH",
+        );
+      } else {
+        assert(
+          seal &&
+            seal.context_scope === "LOCAL_CLONE" &&
+            seal.context.plan === attestation.plan &&
+            BigInt(seal.context.planRevision) === scope.expectedChainRevision &&
+            seal.context.leg === ordinal % 3 &&
+            seal.context.direction === (ordinal < 3 ? 1 : 2) &&
+            seal.quote_id.toString("hex") === attestation.quoteId &&
+            leg.authorization_hash === attestation.authorizationHash &&
+            seal.context.inputAmount ===
+              attestation.observedEffects.inputAmount &&
+            typeof attestation.observedEffects.outputAmount === "string" &&
+            /^(0|[1-9][0-9]{0,19})$/.test(
+              attestation.observedEffects.outputAmount,
+            ) &&
+            BigInt(attestation.observedEffects.outputAmount) >=
+              seal.canonical_payload.readBigUInt64LE(131),
+          "RPC_PROOF_OR_AUTHORIZATION_CHANGED",
+        );
+      }
       await client.query(
         `UPDATE c3_open.legs SET state='confirmed',chain_revision=$3,evidence_hash=$4,
           observed_effects=$5,updated_at=clock_timestamp() WHERE intent_id=$1 AND ordinal=$2`,
@@ -978,9 +1064,14 @@ export class OpenLocalSettlementRepository {
         ],
       );
       if (seal)
-        await client.query(
-          "UPDATE c3_open.quote_authorizations SET state='consumed',revision=revision+1 WHERE quote_id=$1 AND state='signed'",
-          [seal.quote_id],
+        assert(
+          (
+            await client.query(
+              "UPDATE c3_open.quote_authorizations SET state='consumed',revision=revision+1 WHERE quote_id=$1 AND state='signed'",
+              [seal.quote_id],
+            )
+          ).rowCount === 1,
+          "QUOTE_ALREADY_CONSUMED",
         );
       const next = await bump(
         client,

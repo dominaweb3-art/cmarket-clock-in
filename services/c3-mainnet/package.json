@@ -46,6 +46,7 @@
     "test:jupiter-fork-probe": "node --experimental-strip-types pilot-open-local/jupiter-fork-probe.ts",
     "test:jupiter-six-clone": "node --experimental-strip-types pilot-open-local/jupiter-six-clone.ts",
     "test:open-quote-postgres": "node scripts/test-postgres-local.mjs --open-quote",
+    "test:open-jupiter-recovery": "node scripts/test-postgres-local.mjs --open-jupiter-recovery",
     "c3:open:read-server": "node --experimental-strip-types pilot-open-local/read-server-cli.ts"
   },
   "devDependencies": {

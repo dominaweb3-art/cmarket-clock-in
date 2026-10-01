@@ -18,11 +18,13 @@ const role = `c3_test_${suffix}`;
 const database = `c3_test_${suffix}`;
 const password = randomBytes(32).toString("hex");
 let started = false;
-const testFile = process.argv.includes("--open-quote")
-  ? "pilot-open-local/open-quote.integration.ts"
-  : process.argv.includes("--open-local")
-    ? "pilot-open-local/orchestrator.integration.ts"
-    : "tests/postgres-live.integration.ts";
+const testFile = process.argv.includes("--open-jupiter-recovery")
+  ? "pilot-open-local/open-jupiter-recovery.integration.ts"
+  : process.argv.includes("--open-quote")
+    ? "pilot-open-local/open-quote.integration.ts"
+    : process.argv.includes("--open-local")
+      ? "pilot-open-local/orchestrator.integration.ts"
+      : "tests/postgres-live.integration.ts";
 const withVault = process.argv.includes("--open-local-cpi");
 
 function run(binary, args, env = process.env) {
