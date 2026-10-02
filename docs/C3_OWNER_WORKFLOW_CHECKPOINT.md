@@ -2,6 +2,7 @@
 
 Classification: SHARED. Starting HEAD `95336e29e7a81dc45c3d7b7856c62986ae18d5f5`,
 branch `feature/c3-open-pilot-vault`. **PARTIALLY_COMPLETED; NOT a monetary release.**
+Implementation checkpoint: `94445bbba9d51d2dfb1559e19c707fc435c0f78e`.
 This updates the mobile/API results of the previous plan-generation checkpoint,
 without superseding its preserved historical evidence or opening Mainnet.
 
@@ -113,8 +114,8 @@ Directory `artifacts/c3-pilot-candidate/2026-10-02-owner-workflow-disabled-final
 Prior QA/stable APKs and other worktrees remain intact. A matching certificate
 allowed data-preserving candidate installation. Standalone cold launch succeeded
 without Metro. Home, 40/30/30 Indices and truthful empty Activity passed on Seeker.
-Four-language switching/persistence passed on the preceding same-source-language
-candidate; final navigation received its own physical recheck. Phantom chooser
+Four-language switching/persistence and navigation passed on the exact final
+APK above after its data-preserving update. Phantom chooser
 opened; successful user connection/return and physical monetary MWA are not proven.
 
 Read-only official Mainnet rent evidence at `2026-10-02T22:00:05.426Z`:
