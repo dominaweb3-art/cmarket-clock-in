@@ -252,9 +252,28 @@ test(
       /INVALID_STATE|SIGNATURE_REQUIRES_MANUAL_REVIEW/,
     );
     a.s = await restarted.beginReconciliation(scope(a.s), 0);
+    // Intent expiry stops new operations, not accounting for the same already
+    // finalized signature within its durable recovery window (B3 regression).
+    await pool.query(
+      "UPDATE c3_open.intents SET expires_at=clock_timestamp()-interval '1 millisecond',db_revision=db_revision+1 WHERE intent_id=$1",
+      [a.id],
+    );
+    a.s = (await restarted.read(a.id))!;
     a.s = await restarted.reconcileLocalJupiterLeg(scope(a.s), 0, a.rpc);
     assert.equal(a.s.chainRevision, 1n);
     assert.equal((await restarted.readLeg(a.id, 0)).state, "confirmed");
+    for (const change of [
+      "observed_effects='{}'::jsonb",
+      "chain_revision=chain_revision+1",
+    ])
+      await assert.rejects(
+        () =>
+          pool.query(
+            `UPDATE c3_open.legs SET ${change} WHERE intent_id=$1 AND ordinal=0`,
+            [a.id],
+          ),
+        /FINALIZED_EVIDENCE_IMMUTABLE/,
+      );
     const quote = (
       await pool.query(
         "SELECT state FROM c3_open.quote_authorizations WHERE quote_id=$1",

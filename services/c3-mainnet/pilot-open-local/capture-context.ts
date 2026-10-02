@@ -228,7 +228,13 @@ export async function captureContext(
   const amount =
     ordinal < 3
       ? (1_000_000n * [4000n, 3000n, 3000n][ordinal]!) / 10000n
-      : tokens[0]!.data.readBigUInt64LE(64);
+      : BigInt(String((p.input_budgets as unknown[])?.[ordinal % 3]));
+  assert(
+    integer(p, "schema_version") === 2n &&
+      amount > 0n &&
+      tokens[0]!.data.readBigUInt64LE(64) >= amount,
+    "ACCOUNTED_INPUT_BUDGET",
+  );
   assert(
     integer(p, "direction") === BigInt(ordinal < 3 ? 1 : 2) &&
       integer(c, "btc_bps") === 4000n &&

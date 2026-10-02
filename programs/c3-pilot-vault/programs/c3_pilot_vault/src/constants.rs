@@ -21,6 +21,10 @@ pub const QUOTE_RECEIPT_SEED: &[u8] = b"c3-quote-receipt-v1";
 pub const QUOTE_DOMAIN: [u8; 16] = *b"C3QUOTESEAL-V1!!";
 pub const MAX_ROUTE_PROGRAMS: usize = 16;
 
+// A reviewed release must pin a PUBLIC bootstrap authority in source. None is
+// intentionally not an address and must never mean "the first caller wins".
+pub const PRODUCTION_BOOTSTRAP_AUTHORITY: Option<anchor_lang::prelude::Pubkey> = None;
+
 // The production binary contains the boundary but cannot execute it before a
 // separately reviewed configuration/release. Environment variables cannot flip it.
 #[cfg(not(any(feature = "local-mock", feature = "local-jupiter-cycle")))]

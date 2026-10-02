@@ -116,6 +116,8 @@ pub struct SettlementPlan {
     pub revision: u64,
     pub idempotency: [u8; 32],
     pub actual_inputs: [u64; 3],
+    /// Immutable accounted budget, never the total balance of a public ATA.
+    pub input_budgets: [u64; 3],
     pub actual_outputs: [u64; 3],
     pub failure_evidence: [u8; 32],
     pub active_swap_authorization: [u8; 32],

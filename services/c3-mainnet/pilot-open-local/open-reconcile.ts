@@ -92,7 +92,7 @@ export type ExecutionExpectation = Readonly<{
   poolOutput: string;
 }>;
 
-/** Exact fixed Anchor SettlementPlan v1 layout from state.rs (877 bytes).
+/** Exact fixed Anchor SettlementPlan v2 layout from state.rs (901 bytes).
  * Require the next state, not merely a plausible token delta. A later plan
  * revision must be reviewed separately, never silently attributed to this leg.
  */
@@ -109,11 +109,11 @@ export function verifyFinalizedPlan(
   );
   const d = account!.data;
   check(
-    d.length === 877 &&
+    d.length === 901 &&
       d
         .subarray(0, 8)
         .equals(h(Buffer.from("account:SettlementPlan")).subarray(0, 8)) &&
-      d[8] === 1,
+      d[8] === 2,
     "PLAN_LAYOUT",
   );
   const key = (offset: number, expected: string) =>
@@ -130,7 +130,7 @@ export function verifyFinalizedPlan(
     VAULT_PROGRAM,
   );
   check(
-    expectedPlan.toBase58() === context.plan && d[876] === bump,
+    expectedPlan.toBase58() === context.plan && d[900] === bump,
     "PLAN_PDA",
   );
   const leg = context.leg;
@@ -183,12 +183,15 @@ export function verifyFinalizedPlan(
   );
   check(
     d.readBigUInt64LE(756 + leg * 8) === BigInt(debit) &&
-      d.readBigUInt64LE(780 + leg * 8) === BigInt(credit),
+      d.readBigUInt64LE(780 + leg * 8) === BigInt(debit) &&
+      d.readBigUInt64LE(780 + leg * 8) === BigInt(context.inputAmount) &&
+      d.readBigUInt64LE(780 + leg * 8) === seal.readBigUInt64LE(113) &&
+      d.readBigUInt64LE(804 + leg * 8) === BigInt(credit),
     "PLAN_EFFECTS",
   );
   check(
-    d.subarray(804, 868).equals(Buffer.alloc(64)) &&
-      d.readBigInt64LE(868) === 0n,
+    d.subarray(828, 892).equals(Buffer.alloc(64)) &&
+      d.readBigInt64LE(892) === 0n,
     "PLAN_AUTHORIZATION_NOT_CONSUMED",
   );
   return revision;

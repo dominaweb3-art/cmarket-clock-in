@@ -13,7 +13,7 @@ import { C3_MAINNET } from "../src/constants.ts";
 import { quoteAltContentsHash } from "../src/quote-alt.ts";
 import { encodeQuoteSealV1, quoteIdForNonce } from "../src/quote-seal.ts";
 import type { StoredQuoteContext } from "./open-quote.ts";
-test("source Anchor IDL v1 plan layout binds all six revisions and actual effects", async () => {
+test("source Anchor IDL v2 plan layout binds all six revisions, accounted budgets and actual effects", async () => {
   for (let ordinal = 0; ordinal < 6; ordinal++) {
     const f = fixture(),
       intent = addr(45);
@@ -35,7 +35,7 @@ test("source Anchor IDL v1 plan layout binds all six revisions and actual effect
       planExpiresAt: "1050",
     } as StoredQuoteContext;
     const a = await finalizedPlanFixture(context, f.e.seal, "400000", "476");
-    assert.equal(a.data.length, 877);
+    assert.equal(a.data.length, 901);
     assert.equal(
       verifyFinalizedPlan(a, context, "400000", "476", f.e.seal),
       BigInt((ordinal % 3) + 1),
@@ -61,10 +61,11 @@ test("source Anchor IDL v1 plan layout binds all six revisions and actual effect
       716,
       756 + (ordinal % 3) * 8,
       780 + (ordinal % 3) * 8,
-      804,
-      836,
-      868,
-      876,
+      804 + (ordinal % 3) * 8,
+      828,
+      860,
+      892,
+      900,
     ]) {
       const bad = { ...a, data: Buffer.from(a.data) };
       bad.data[offset]! ^= 1;
@@ -88,12 +89,19 @@ test("source Anchor IDL v1 plan layout binds all six revisions and actual effect
     assert.throws(
       () =>
         verifyFinalizedPlan(
-          { ...a, data: a.data.subarray(0, 876) },
+          { ...a, data: a.data.subarray(0, 900) },
           context,
           "400000",
           "476",
           f.e.seal,
         ),
+      /PLAN_LAYOUT/,
+    );
+    const obsolete = { ...a, data: Buffer.alloc(877) };
+    a.data.subarray(0, 8).copy(obsolete.data);
+    obsolete.data[8] = 1;
+    assert.throws(
+      () => verifyFinalizedPlan(obsolete, context, "400000", "476", f.e.seal),
       /PLAN_LAYOUT/,
     );
   }

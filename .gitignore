@@ -25,6 +25,7 @@ credentials.json
 /apps/mobile/release-signing/
 /apps/mobile/dist/generated-results/
 /artifacts/releases/*.apk
+/artifacts/c3-pilot-candidate/
 /apps/identity/.vercel/
 /programs/c3-pilot-vault/target/
 /programs/c3-pilot-vault/.anchor/

@@ -232,6 +232,9 @@ try {
     "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
     "FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q",
     "83v8iPyZihDEjDdY8RdZddyZNyUtXngz69Lgo9Kt5d6d",
+    // Observed in fresh official SOL sell build during schema-v2 regression.
+    // warmPool still verifies owner/layout/mints/vaults; not trusted by address.
+    "H3f4q1Y7mo7qwL5rKFpbesmJ8nKjkFPR6xWtYXGKCKqK",
   ])
     await bank.warmPool(pool);
   // Public tables observed in these official build responses. They are not

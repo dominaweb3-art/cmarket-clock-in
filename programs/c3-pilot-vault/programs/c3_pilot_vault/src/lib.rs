@@ -57,11 +57,7 @@ pub mod c3_pilot_vault {
         weights: [u16; 3],
         max_tvl: u64,
     ) -> Result<()> {
-        require_keys_eq!(
-            ctx.accounts.payer.key(),
-            ctx.accounts.governance.key(),
-            VaultError::Unauthorized
-        );
+        bootstrap_authorized(ctx.accounts.payer.key(), ctx.accounts.governance.key())?;
         require!(
             keeper != Pubkey::default()
                 && ctx.accounts.emergency.key() != Pubkey::default()
@@ -98,14 +94,9 @@ pub mod c3_pilot_vault {
         vault_token(&ctx.accounts.vault_btc, &ctx.accounts.btc_mint, a)?;
         vault_token(&ctx.accounts.vault_eth, &ctx.accounts.eth_mint, a)?;
         vault_token(&ctx.accounts.vault_wsol, &ctx.accounts.wsol_mint, a)?;
-        for balance in [
-            ctx.accounts.vault_usdc.amount,
-            ctx.accounts.vault_btc.amount,
-            ctx.accounts.vault_eth.amount,
-            ctx.accounts.vault_wsol.amount,
-        ] {
-            require_eq!(balance, 0, VaultError::InvalidConfig);
-        }
+        // Public ATAs can receive unsolicited tokens even before bootstrap.
+        // They are not pilot capital; the deposit snapshots them and settlement
+        // accounts only for the six validated legs, never the whole balance.
         let c = &mut ctx.accounts.config;
         c.schema_version = SCHEMA_VERSION;
         c.config_version = CONFIG_VERSION;
@@ -469,14 +460,7 @@ pub mod c3_pilot_vault {
             c.usdc_mint,
             anchor_spl::token::ID,
         )?;
-        require_eq!(ctx.accounts.vault_usdc.amount, 0, VaultError::Settlement);
-        for a in [
-            &ctx.accounts.vault_btc,
-            &ctx.accounts.vault_eth,
-            &ctx.accounts.vault_wsol,
-        ] {
-            require_eq!(a.amount, 0, VaultError::Settlement);
-        }
+        // Record unsolicited balances, but the intent purchases exactly ONE_USDC.
         d.usdc_before = ctx.accounts.vault_usdc.amount;
         d.btc_before = ctx.accounts.vault_btc.amount;
         d.eth_before = ctx.accounts.vault_eth.amount;
@@ -519,7 +503,6 @@ pub mod c3_pilot_vault {
             VaultError::InvalidConfig
         );
         at(d.status, deposit_status::SETTLEMENT_PENDING)?;
-        live(d.expires_at)?;
         require_keys_eq!(p.vault, c.key(), VaultError::InvalidPlan);
         require_keys_eq!(p.wallet, d.wallet, VaultError::InvalidPlan);
         require_eq!(
@@ -572,25 +555,21 @@ pub mod c3_pilot_vault {
             ONE_USDC,
             VaultError::Settlement
         );
-        require_eq!(ctx.accounts.vault_usdc.amount, 0, VaultError::Settlement);
-        require_eq!(
+        backed(ctx.accounts.vault_usdc.amount, d.usdc_before)?;
+        backed(
             ctx.accounts.vault_btc.amount,
-            p.actual_outputs[0],
-            VaultError::Settlement
-        );
-        require_eq!(
+            add(d.btc_before, p.actual_outputs[0])?,
+        )?;
+        backed(
             ctx.accounts.vault_eth.amount,
-            p.actual_outputs[1],
-            VaultError::Settlement
-        );
-        require_eq!(
+            add(d.eth_before, p.actual_outputs[1])?,
+        )?;
+        backed(
             ctx.accounts.vault_wsol.amount,
-            p.actual_outputs[2],
-            VaultError::Settlement
-        );
-        d.btc_after = ctx.accounts.vault_btc.amount;
-        d.eth_after = ctx.accounts.vault_eth.amount;
-        d.wsol_after = ctx.accounts.vault_wsol.amount;
+            add(d.wsol_before, p.actual_outputs[2])?,
+        )?;
+        // Only independently measured CPI credits belong to this position.
+        [d.btc_after, d.eth_after, d.wsol_after] = p.actual_outputs;
         d.status = deposit_status::SETTLEMENT_RECORDED;
         emit_state(c.key(), d.key(), d.wallet, kind::DEPOSIT_SETTLED, ONE_USDC)
     }
@@ -683,7 +662,9 @@ pub mod c3_pilot_vault {
             max_slippage_bps,
             idempotency,
             ctx.bumps.plan,
-        )
+        )?;
+        ctx.accounts.plan.input_budgets = [r.btc_before, r.eth_before, r.wsol_before];
+        Ok(())
     }
 
     /// A governance-signed, single-use authorization bound to a plan revision.
@@ -718,22 +699,9 @@ pub mod c3_pilot_vault {
         require_eq!(c.total_shares_issued, 0, VaultError::PilotLimit);
         require_eq!(ctx.accounts.share_mint.supply, 0, VaultError::PilotLimit);
         require_eq!(ctx.accounts.owner_shares.amount, 0, VaultError::PilotLimit);
-        require_eq!(ctx.accounts.vault_usdc.amount, 0, VaultError::Settlement);
-        require_eq!(
-            ctx.accounts.vault_btc.amount,
-            d.btc_after,
-            VaultError::Settlement
-        );
-        require_eq!(
-            ctx.accounts.vault_eth.amount,
-            d.eth_after,
-            VaultError::Settlement
-        );
-        require_eq!(
-            ctx.accounts.vault_wsol.amount,
-            d.wsol_after,
-            VaultError::Settlement
-        );
+        backed(ctx.accounts.vault_btc.amount, d.btc_after)?;
+        backed(ctx.accounts.vault_eth.amount, d.eth_after)?;
+        backed(ctx.accounts.vault_wsol.amount, d.wsol_after)?;
         require!(
             d.btc_after > 0 && d.eth_after > 0 && d.wsol_after > 0,
             VaultError::Settlement
@@ -814,7 +782,6 @@ pub mod c3_pilot_vault {
         r.eth_before = ctx.accounts.vault_eth.amount;
         r.wsol_before = ctx.accounts.vault_wsol.amount;
         r.usdc_before = ctx.accounts.vault_usdc.amount;
-        require_eq!(r.usdc_before, 0, VaultError::Settlement);
         let d = &ctx.accounts.deposit;
         at(d.status, deposit_status::ACTIVE)?;
         require_eq!(
@@ -827,9 +794,13 @@ pub mod c3_pilot_vault {
             d.btc_after > 0 && d.eth_after > 0 && d.wsol_after > 0,
             VaultError::Settlement
         );
-        require_eq!(r.btc_before, d.btc_after, VaultError::Settlement);
-        require_eq!(r.eth_before, d.eth_after, VaultError::Settlement);
-        require_eq!(r.wsol_before, d.wsol_after, VaultError::Settlement);
+        backed(r.btc_before, d.btc_after)?;
+        backed(r.eth_before, d.eth_after)?;
+        backed(r.wsol_before, d.wsol_after)?;
+        // Sell the acquired position, not donations received by its token accounts.
+        r.btc_before = d.btc_after;
+        r.eth_before = d.eth_after;
+        r.wsol_before = d.wsol_after;
         r.fingerprint = hashv(&[
             b"c3-redemption-v1",
             c.key().as_ref(),
@@ -928,18 +899,14 @@ pub mod c3_pilot_vault {
             VaultError::Settlement
         );
         r.settlement_id = settlement_id;
-        require_eq!(ctx.accounts.vault_btc.amount, 0, VaultError::Settlement);
-        require_eq!(ctx.accounts.vault_eth.amount, 0, VaultError::Settlement);
-        require_eq!(ctx.accounts.vault_wsol.amount, 0, VaultError::Settlement);
         let realized_usdc = p
             .actual_outputs
             .iter()
             .try_fold(0u64, |sum, amount| add(sum, *amount))?;
-        require_eq!(
+        backed(
             ctx.accounts.vault_usdc.amount,
-            realized_usdc,
-            VaultError::Settlement
-        );
+            add(r.usdc_before, realized_usdc)?,
+        )?;
         r.usdc_claimable = realized_usdc;
         r.status = redemption_status::LIQUIDATION_RECORDED;
         r.status = redemption_status::USDC_CLAIMABLE;
@@ -964,11 +931,7 @@ pub mod c3_pilot_vault {
         at(r.status, redemption_status::USDC_CLAIMABLE)?;
         require_eq!(r.usdc_returned, 0, VaultError::InvalidState);
         require!(r.usdc_claimable > 0, VaultError::Settlement);
-        require_eq!(
-            ctx.accounts.vault_usdc.amount,
-            r.usdc_claimable,
-            VaultError::Settlement
-        );
+        backed(ctx.accounts.vault_usdc.amount, r.usdc_claimable)?;
         require_eq!(
             ctx.accounts.owner_shares.amount,
             SHARE_UNITS,

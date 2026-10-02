@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "C Market C3 Candidate",
+    "slug": "c-market-c3-mainnet-candidate",
+    "version": "0.1.0",
+    "icon": "../../../mobile/assets/images/icon.png",
+    "orientation": "portrait",
+    "scheme": "cmarketc3candidate",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.dominaweb3.cmarket.c3candidate",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "../../../mobile/assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": ["android.permission.INTERNET"],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "extra": {
+      "releaseScope": "MAINNET_CANDIDATE_DISABLED",
+      "mainnetMonetaryCapability": false,
+      "approvedConfiguration": null,
+      "feeCollection": false,
+      "skrDiscount": false
+    }
+  }
+}

@@ -29,6 +29,11 @@ const QUOTE_MIGRATION_URL = new URL(
   "./migrations/0003_open_quote_authority.sql",
   import.meta.url,
 );
+const FINALIZED_MIGRATION = "0004_open_finalized_evidence";
+const FINALIZED_MIGRATION_URL = new URL(
+  "./migrations/0004_open_finalized_evidence.sql",
+  import.meta.url,
+);
 const fail = (code: string): never => {
   throw new Error(`C3_OPEN_${code}`);
 };
@@ -247,6 +252,26 @@ export async function applyOpenLocalMigration(
         quoteExisting.rows[0]?.checksum_sha256 === quoteChecksum,
         "MIGRATION_CHECKSUM_MISMATCH",
       );
+    const finalizedSql = await readFile(FINALIZED_MIGRATION_URL, "utf8");
+    const finalizedHash = createHash("sha256")
+      .update(finalizedSql)
+      .digest("hex");
+    const finalizedExisting = await client.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [FINALIZED_MIGRATION],
+    );
+    if (!finalizedExisting.rows.length) {
+      await client.query(finalizedSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [FINALIZED_MIGRATION, finalizedHash],
+      );
+      changed = true;
+    } else
+      assert(
+        finalizedExisting.rows[0]!.checksum_sha256 === finalizedHash,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     await client.query("COMMIT");
     return changed ? "applied" : "already_applied";
   } catch (error) {
@@ -260,6 +285,7 @@ export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
     [MIGRATION, MIGRATION_URL],
     [RECOVERY_MIGRATION, RECOVERY_MIGRATION_URL],
     [QUOTE_MIGRATION, QUOTE_MIGRATION_URL],
+    [FINALIZED_MIGRATION, FINALIZED_MIGRATION_URL],
   ] as const) {
     const checksum = createHash("sha256")
       .update(await readFile(url))
@@ -953,6 +979,7 @@ export class OpenLocalSettlementRepository {
       observedEffects: Record<string, unknown>;
     }>,
   ): Promise<OpenSnapshot> {
+    assert(attestation.source === "MOCK_LOCAL_ONLY", "MOCK_SOURCE_REQUIRED");
     return this.#commitLocalLeg(scope, ordinal, attestation);
   }
   /** No caller-supplied effects or proof. Read-only loopback RPC first, short
@@ -1016,7 +1043,13 @@ export class OpenLocalSettlementRepository {
       "LOCAL_ATTESTATION_MISMATCH",
     );
     return atomic(this.pool, async (client) => {
-      const row = await locked(client, scope);
+      // Expiry forbids new execution, not recording an already finalized effect.
+      // The preserved signature and bounded recovery window are still mandatory.
+      const row = await locked(
+        client,
+        scope,
+        attestation.source === "LOCAL_CHAIN_ONLY",
+      );
       const expectedPlan = ordinal < 3 ? row.deposit_plan : row.redemption_plan;
       assert(attestation.plan === expectedPlan, "PLAN_MISMATCH");
       assert(
@@ -1046,12 +1079,16 @@ export class OpenLocalSettlementRepository {
           leg.submitted_signature === attestation.signature,
         "SUBMISSION_OR_SIGNATURE_MISMATCH",
       );
-      if (leg.state === "reconciliation_required") {
+      if (
+        attestation.source === "LOCAL_CHAIN_ONLY" ||
+        leg.state === "reconciliation_required"
+      ) {
         const clock = await client.query<{ now: Date }>(
           "SELECT clock_timestamp() AS now",
         );
         assert(
-          leg.recovery_attempts >= 1 &&
+          (leg.state !== "reconciliation_required" ||
+            leg.recovery_attempts >= 1) &&
             leg.recovery_attempts <= 3 &&
             leg.submitted_at !== null &&
             clock.rows[0]!.now.getTime() <

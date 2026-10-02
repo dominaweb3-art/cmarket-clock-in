@@ -297,6 +297,7 @@ pub fn authorize(
             && seal.slippage_bps <= policy.max_slippage_bps,
         VaultError::Expired
     );
+    require_eq!(p.schema_version, 2, VaultError::InvalidPlan);
     require_eq!(p.executed_bitmap, (1u8 << leg) - 1, VaultError::InvalidLeg);
     require!(
         p.active_swap_authorization == [0; 32] || p.active_swap_expires_at <= now,
@@ -397,6 +398,7 @@ pub fn authorize(
             .ok_or(VaultError::Math)?
             / u64::from(TOTAL_BPS);
         require_eq!(seal.input_amount, expected, VaultError::InvalidAmount);
+        require_eq!(p.input_budgets[leg], expected, VaultError::InvalidAmount);
     } else {
         require_eq!(
             p.direction,
@@ -405,7 +407,7 @@ pub fn authorize(
         );
         require_eq!(
             seal.input_amount,
-            ctx.accounts.source.amount,
+            p.input_budgets[leg],
             VaultError::InvalidAmount
         );
     }
@@ -724,6 +726,7 @@ pub fn execute<'info>(
     );
     require_keys_eq!(p.router_program, a.router_program, VaultError::SwapAccount);
     require_eq!(a.direction, p.direction, VaultError::InvalidPlan);
+    require_eq!(p.schema_version, 2, VaultError::InvalidPlan);
     require_eq!(a.expected_revision, p.revision, VaultError::InvalidState);
     require!(a.leg < 3, VaultError::InvalidLeg);
     let leg = usize::from(a.leg);

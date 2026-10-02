@@ -39,7 +39,7 @@ export async function finalizedPlanFixture(
     VAULT_PROGRAM,
   );
   const data = await coder.accounts.encode("SettlementPlan", {
-    schema_version: 1,
+    schema_version: 2,
     config_version: n(context.configVersion),
     vault: k(context.vault),
     intent: k(context.intent),
@@ -82,6 +82,7 @@ export async function finalizedPlanFixture(
     revision: n(BigInt(context.planRevision) + 1n),
     idempotency: zero(),
     actual_inputs: inputs,
+    input_budgets: inputs,
     actual_outputs: outputs,
     failure_evidence: zero(),
     active_swap_authorization: zero(),

@@ -370,6 +370,15 @@ test(
       )
     ).address;
     const poolAccounts = new Map<string, PublicKey>();
+    const attackerBtc = (
+      await getOrCreateAssociatedTokenAccount(
+        connection,
+        payer,
+        btcMint,
+        attacker.publicKey,
+      )
+    ).address;
+    await mintTo(connection, payer, btcMint, attackerBtc, payer, 1);
     for (const mint of [usdcMint, btcMint, ethMint, wsolMint]) {
       const account = await getOrCreateAssociatedTokenAccount(
         connection,
@@ -392,6 +401,8 @@ test(
       );
     }
     await mintTo(connection, payer, usdcMint, ownerUsdc, payer, 1_000_000);
+    // Isolated mock fixture only: an unrelated wallet holds one donation unit.
+    await mintTo(connection, payer, usdcMint, attackerUsdc, payer, 1);
     await setAuthority(
       connection,
       payer,
@@ -2096,6 +2107,18 @@ test(
     );
 
     const redemptionNonce = 1;
+    // A donor cannot force sale of unrelated inventory or prevent settlement.
+    await transferChecked(
+      connection,
+      payer,
+      attackerBtc,
+      btcMint,
+      vaultBtc,
+      attacker,
+      1,
+      6,
+    );
+    assert.equal(await balance(vaultBtc), 40_001n);
     const redemptionIntent = intent(
       "redemption",
       owner.publicKey,
@@ -2275,7 +2298,7 @@ test(
     await expectFailure(() => runRedemptionLeg(2, 0), "skipped sell leg");
     const redemptionLegSigs: string[] = [];
     redemptionLegSigs.push(await runRedemptionLeg(0, 0));
-    assert.equal(await balance(vaultBtc), 0n);
+    assert.equal(await balance(vaultBtc), 1n);
     assert.equal(await balance(vaultUsdc), 396_000n);
     await expectFailure(
       () => runRedemptionLeg(1, 1, redemptionHashes[0]),
@@ -2338,6 +2361,19 @@ test(
     const claimable = (await fetchState("redemptionIntent", redemptionIntent))
       .usdcClaimable as BN;
     assert.equal(claimable.toNumber(), 990_000);
+    // Public token accounts can receive dust from anybody. The claim must still
+    // pay only the accounted position and leave this unsolicited unit untouched.
+    await transferChecked(
+      connection,
+      payer,
+      attackerUsdc,
+      usdcMint,
+      vaultUsdc,
+      attacker,
+      1,
+      6,
+    );
+    assert.equal(await balance(vaultUsdc), 990_001n);
     const pauseBeforeClaimSig = await program.methods
       .pause()
       .accountsStrict({ authority: payer.publicKey, config })
@@ -2396,7 +2432,11 @@ test(
     }
     assert.equal(await balance(ownerUsdc), 990_000n);
     assert.equal(await balance(ownerShares, TOKEN_2022_PROGRAM_ID), 0n);
-    assert.equal(await balance(vaultUsdc), 0n);
+    assert.equal(
+      await balance(vaultUsdc),
+      1n,
+      "donation is not a position claim",
+    );
     assert.equal(
       (await fetchState("redemptionIntent", redemptionIntent)).status,
       6,

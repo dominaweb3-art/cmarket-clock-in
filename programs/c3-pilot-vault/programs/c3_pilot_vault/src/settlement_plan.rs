@@ -65,7 +65,7 @@ pub fn initialize(
         VaultError::InvalidConfig
     );
     require_keys_eq!(config.allowlisted_owner, wallet, VaultError::Unauthorized);
-    plan.schema_version = 1;
+    plan.schema_version = 2;
     plan.config_version = config.config_version;
     plan.vault = vault;
     plan.intent = intent;
@@ -95,6 +95,12 @@ pub fn initialize(
     plan.revision = 0;
     plan.idempotency = idempotency;
     plan.actual_inputs = [0; 3];
+    plan.input_budgets = if direction == plan_direction::DEPOSIT {
+        [400_000, 300_000, 300_000]
+    } else {
+        // Caller binds this immediately from the verified redemption intent.
+        [0; 3]
+    };
     plan.actual_outputs = [0; 3];
     plan.failure_evidence = [0; 32];
     plan.active_swap_authorization = [0; 32];
