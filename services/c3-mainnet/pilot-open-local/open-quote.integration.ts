@@ -1,6 +1,12 @@
 /** Disposable PG, ephemeral Ed25519 key, SYNTHETIC builder. Not real C3 execution. */
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  randomUUID,
+  generateKeyPairSync,
+  sign,
+} from "node:crypto";
 import { test } from "node:test";
 import pg from "pg";
 import { PublicKey } from "@solana/web3.js";
@@ -17,6 +23,7 @@ import {
 import { quoteContextHash } from "../src/quote-seal.ts";
 import { createReadServer } from "./read-server.ts";
 import { IsolatedOpenTestSigner } from "./isolated-test-signer.ts";
+import { OpenSigningJournal } from "../src/open-signing-journal.ts";
 const url = new URL(process.env.DATABASE_URL!);
 if (
   url.hostname !== "127.0.0.1" ||
@@ -51,7 +58,7 @@ const builder: OpenQuoteBuilder = {
     return material();
   },
 };
-async function fixture() {
+async function fixture(quoteAuthority = authority) {
   const id = randomUUID(),
     wallet = addr(2),
     vault = addr(3),
@@ -100,7 +107,7 @@ async function fixture() {
     routerProgram: addr(7),
     policyRevision: "1",
     inputAmount: "400000",
-    authority: authority.toString("hex"),
+    authority: quoteAuthority.toString("hex"),
     maxSlippageBps: 100,
     maxQuoteAgeSeconds: 30,
     planExpiresAt: String(Math.floor(Date.now() / 1000) + 600),
@@ -128,8 +135,183 @@ test("forward namespace migration and durable signer binding", async (t) => {
     null,
     "must not duplicate historical intents",
   );
-  const f = await fixture(),
-    service = new OpenQuoteAuthority(pool, builder);
+  const service = new OpenQuoteAuthority(pool, builder);
+  await t.test(
+    "durable signer restart, uncertain results, concurrency and tampering",
+    async () => {
+      const key = generateKeyPairSync("ed25519"),
+        pub = Buffer.from(
+          key.publicKey.export({ format: "der", type: "spki" }),
+        ).subarray(-32);
+      const results = new Map<string, Buffer>();
+      let signCalls = 0,
+        lookups = 0,
+        loseReply = true;
+      const remote = {
+        publicKey: pub,
+        signIdempotently: async (id: string, p: Uint8Array) => {
+          signCalls++;
+          const sig = sign(null, p, key.privateKey);
+          results.set(id, sig);
+          if (loseReply) {
+            loseReply = false;
+            throw Error("test lost remote reply");
+          }
+          return sig;
+        },
+        lookupSignature: async (id: string) => {
+          lookups++;
+          return results.get(id) ?? null;
+        },
+      };
+      const make = async () => {
+        const f = await fixture(pub),
+          id = await service.prepare(f.id, 0, 2n);
+        return (
+          await pool.query(
+            "SELECT * FROM c3_open.quote_authorizations WHERE quote_id=$1",
+            [Buffer.from(id, "hex")],
+          )
+        ).rows[0];
+      };
+      const q = await make();
+      await assert.rejects(
+        () =>
+          new OpenSigningJournal(pool, remote).obtain(
+            q.quote_id,
+            q.canonical_payload,
+            pub,
+          ),
+        /SIGNING_UNCERTAIN/,
+      );
+      const recovered = await new OpenSigningJournal(pool, remote).obtain(
+        q.quote_id,
+        q.canonical_payload,
+        pub,
+      );
+      assert.equal(signCalls, 1);
+      assert.equal(lookups, 1);
+      assert.equal(recovered.length, 64);
+      const again = await new OpenSigningJournal(pool, remote).obtain(
+        q.quote_id,
+        q.canonical_payload,
+        pub,
+      );
+      assert.deepEqual(again, recovered);
+      assert.equal(signCalls, 1);
+      await assert.rejects(
+        () =>
+          pool.query(
+            "UPDATE c3_open.signing_requests SET signature=repeat('x',64)::bytea,revision=revision+1 WHERE quote_id=$1",
+            [q.quote_id],
+          ),
+        /IMMUTABLE/,
+      );
+      await assert.rejects(
+        () =>
+          pool.query("DELETE FROM c3_open.signing_requests WHERE quote_id=$1", [
+            q.quote_id,
+          ]),
+        /IMMUTABLE/,
+      );
+      const corrupt = Buffer.from(q.canonical_payload);
+      corrupt[121] = corrupt[121]! ^ 1;
+      await assert.rejects(
+        () =>
+          new OpenSigningJournal(pool, remote).obtain(q.quote_id, corrupt, pub),
+        /REJECTED/,
+      );
+      const next = await make();
+      const concurrent = await Promise.allSettled(
+        Array.from({ length: 2 }, () =>
+          new OpenSigningJournal(pool, remote).obtain(
+            next.quote_id,
+            next.canonical_payload,
+            pub,
+          ),
+        ),
+      );
+      assert.ok(concurrent.some((v) => v.status === "fulfilled"));
+      assert.equal(signCalls, 2);
+      const uncertain = await make();
+      let impossibleCalls = 0;
+      const unavailable = {
+        publicKey: pub,
+        signIdempotently: async () => {
+          impossibleCalls++;
+          throw Error("transport unavailable");
+        },
+        lookupSignature: async () => null,
+      };
+      for (let n = 0; n < 5; n++)
+        await assert.rejects(
+          () =>
+            new OpenSigningJournal(pool, unavailable).obtain(
+              uncertain.quote_id,
+              uncertain.canonical_payload,
+              pub,
+            ),
+          /UNCERTAIN/,
+        );
+      assert.equal(impossibleCalls, 1);
+      const durable = (
+        await pool.query(
+          "SELECT state,recovery_attempts FROM c3_open.signing_requests WHERE quote_id=$1",
+          [uncertain.quote_id],
+        )
+      ).rows[0];
+      assert.deepEqual(durable, {
+        state: "manual_review",
+        recovery_attempts: 3,
+      });
+      await assert.rejects(
+        () =>
+          pool.query(
+            "UPDATE c3_open.signing_requests SET recovery_attempts=0,revision=revision+1 WHERE quote_id=$1",
+            [uncertain.quote_id],
+          ),
+        /IMMUTABLE/,
+      );
+      const single = new pg.Pool({
+        connectionString: url.toString(),
+        max: 1,
+        connectionTimeoutMillis: 1000,
+      });
+      try {
+        for (let n = 0; n < 8; n++) {
+          const item = await make();
+          const delayed = {
+            ...remote,
+            signIdempotently: async (id: string, bytes: Uint8Array) => {
+              // A remote call must not starve a one-connection pool.
+              await single.query("SELECT 1");
+              return remote.signIdempotently(id, bytes);
+            },
+          };
+          assert.equal(
+            (
+              await new OpenSigningJournal(single, delayed).obtain(
+                item.quote_id,
+                item.canonical_payload,
+                pub,
+              )
+            ).length,
+            64,
+          );
+          const clock = (
+            await single.query(
+              "SELECT extract(epoch from (recovery_deadline-created_at))::text AS seconds FROM c3_open.signing_requests WHERE quote_id=$1",
+              [item.quote_id],
+            )
+          ).rows[0];
+          assert.equal(Number(clock.seconds), 86400);
+        }
+      } finally {
+        await single.end();
+      }
+    },
+  );
+  const f = await fixture();
   const quoteId = await service.prepare(f.id, 0, 2n);
   const before = (
     await pool.query(

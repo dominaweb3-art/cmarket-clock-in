@@ -34,6 +34,16 @@ const FINALIZED_MIGRATION_URL = new URL(
   "./migrations/0004_open_finalized_evidence.sql",
   import.meta.url,
 );
+const SIGNING_MIGRATION = "0005_open_signing_journal";
+const SIGNING_MIGRATION_URL = new URL(
+  "./migrations/0005_open_signing_journal.sql",
+  import.meta.url,
+);
+const SIGNING_CLOCK_MIGRATION = "0006_signing_clock";
+const SIGNING_CLOCK_MIGRATION_URL = new URL(
+  "./migrations/0006_signing_clock.sql",
+  import.meta.url,
+);
 const fail = (code: string): never => {
   throw new Error(`C3_OPEN_${code}`);
 };
@@ -272,6 +282,42 @@ export async function applyOpenLocalMigration(
         finalizedExisting.rows[0]!.checksum_sha256 === finalizedHash,
         "MIGRATION_CHECKSUM_MISMATCH",
       );
+    const signingSql = await readFile(SIGNING_MIGRATION_URL, "utf8");
+    const signingHash = createHash("sha256").update(signingSql).digest("hex");
+    const signingExisting = await client.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [SIGNING_MIGRATION],
+    );
+    if (!signingExisting.rows.length) {
+      await client.query(signingSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [SIGNING_MIGRATION, signingHash],
+      );
+      changed = true;
+    } else
+      assert(
+        signingExisting.rows[0]?.checksum_sha256 === signingHash,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
+    const clockSql = await readFile(SIGNING_CLOCK_MIGRATION_URL, "utf8");
+    const clockHash = createHash("sha256").update(clockSql).digest("hex");
+    const clockExisting = await client.query<{ checksum_sha256: string }>(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [SIGNING_CLOCK_MIGRATION],
+    );
+    if (!clockExisting.rows.length) {
+      await client.query(clockSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [SIGNING_CLOCK_MIGRATION, clockHash],
+      );
+      changed = true;
+    } else
+      assert(
+        clockExisting.rows[0]?.checksum_sha256 === clockHash,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     await client.query("COMMIT");
     return changed ? "applied" : "already_applied";
   } catch (error) {
@@ -286,6 +332,8 @@ export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
     [RECOVERY_MIGRATION, RECOVERY_MIGRATION_URL],
     [QUOTE_MIGRATION, QUOTE_MIGRATION_URL],
     [FINALIZED_MIGRATION, FINALIZED_MIGRATION_URL],
+    [SIGNING_MIGRATION, SIGNING_MIGRATION_URL],
+    [SIGNING_CLOCK_MIGRATION, SIGNING_CLOCK_MIGRATION_URL],
   ] as const) {
     const checksum = createHash("sha256")
       .update(await readFile(url))

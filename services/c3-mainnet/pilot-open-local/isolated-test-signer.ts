@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import type { QuoteAuthoritySigner } from "../src/quote-seal.ts";
 import { loadOpenSignerRecord } from "./open-quote.ts";
+import { OpenSigningJournal } from "../src/open-signing-journal.ts";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 type Message = {
   kind: string;
@@ -144,7 +145,6 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
   const pool = new pg.Pool({
     connectionString: disposable(),
     max: 1,
-    options: "-c default_transaction_read_only=on",
   });
   const key = generateKeyPairSync("ed25519"),
     publicKey = Buffer.from(
@@ -153,6 +153,16 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
   await pool.query("SELECT 1");
   process.send?.({ kind: "ready", publicKey: publicKey.toString("hex") });
   let queue = Promise.resolve();
+  const localResults = new Map<string, Buffer>();
+  const journal = new OpenSigningJournal(pool, {
+    publicKey,
+    signIdempotently: async (id, bytes) => {
+      const result = localResults.get(id) ?? sign(null, bytes, key.privateKey);
+      localResults.set(id, result);
+      return result;
+    },
+    lookupSignature: async (id) => localResults.get(id) ?? null,
+  });
   process.on("message", (m: Message) => {
     queue = queue.then(async () => {
       try {
@@ -167,7 +177,12 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
         if (hash(row.canonical_payload) !== m.hash)
           throw new Error("C3_OPEN_SIGNER_PERSISTED_BYTES_MISMATCH");
         const signature =
-          row.signature ?? sign(null, row.canonical_payload, key.privateKey);
+          row.signature ??
+          (await journal.obtain(
+            row.quote_id,
+            row.canonical_payload,
+            publicKey,
+          ));
         process.send?.({
           kind: "signature",
           request: m.request,

@@ -19,7 +19,10 @@ test("missing source-reviewed approval prevents PG and isolated signer invocatio
   } as unknown as Pool;
   const signer = new OpenProductionRecordSigner(pool, {
     publicKey: new Uint8Array(32),
-    signExactQuote: async () => {
+    lookupSignature: async () => {
+      throw Error("unexpected provider call");
+    },
+    signIdempotently: async () => {
       calls++;
       return new Uint8Array(64);
     },

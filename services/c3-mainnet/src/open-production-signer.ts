@@ -13,16 +13,17 @@ import {
 import { C3_MAINNET } from "./constants.ts";
 import { publicKeyBytes } from "./solana.ts";
 import { requireOpenProductionPolicy } from "./open-production-policy.ts";
+import {
+  OpenSigningJournal,
+  type DurableQuoteSigningProvider,
+} from "./open-signing-journal.ts";
 const digest = (b: Uint8Array) => createHash("sha256").update(b).digest();
 const check = (c: unknown) => {
   if (!c) throw new Error("C3_OPEN_PRODUCTION_SIGNER_REJECTED");
 };
 
 /** Only public record ID/hash crosses this boundary; bytes come from PostgreSQL. */
-export interface IsolatedEd25519Provider {
-  readonly publicKey: Uint8Array;
-  signExactQuote(bytes: Uint8Array): Promise<Uint8Array>;
-}
+export type IsolatedEd25519Provider = DurableQuoteSigningProvider;
 export class OpenProductionRecordSigner {
   private readonly pool: Pool;
   private readonly provider: IsolatedEd25519Provider;
@@ -37,7 +38,8 @@ export class OpenProductionRecordSigner {
       /^[a-f0-9]{64}$/.test(quoteId) && /^[a-f0-9]{64}$/.test(expectedHash),
     );
     check(Buffer.from(this.provider.publicKey).equals(approvedKey));
-    const client = await this.pool.connect();
+    let client = await this.pool.connect();
+    let released = false;
     try {
       await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
       // Never hold an intent lock across a remote hardware-signing call.
@@ -141,9 +143,15 @@ export class OpenProductionRecordSigner {
           r.evidence.unsignedPacketBytes <= 1232,
       );
       await client.query("COMMIT");
+      client.release();
+      released = true;
       const signature =
         r.signature ??
-        Buffer.from(await this.provider.signExactQuote(Buffer.from(bytes)));
+        (await new OpenSigningJournal(this.pool, this.provider).obtain(
+          r.quote_id,
+          bytes,
+          approvedKey,
+        ));
       const publicKey = createPublicKey({
         key: Buffer.concat([
           Buffer.from("302a300506032b6570032100", "hex"),
@@ -155,6 +163,8 @@ export class OpenProductionRecordSigner {
       check(
         signature.length === 64 && verify(null, bytes, publicKey, signature),
       );
+      client = await this.pool.connect();
+      released = false;
       await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
       const current = await client.query(
         `SELECT i.db_revision,i.state AS intent_state,i.expires_at AS intent_expiry,
@@ -192,10 +202,10 @@ export class OpenProductionRecordSigner {
       await client.query("COMMIT");
       return Buffer.from(signature); // ONLY after durable signature commit
     } catch {
-      await client.query("ROLLBACK");
+      if (!released) await client.query("ROLLBACK");
       throw new Error("C3_OPEN_PRODUCTION_SIGNER_REJECTED");
     } finally {
-      client.release();
+      if (!released) client.release();
     }
   }
 }
