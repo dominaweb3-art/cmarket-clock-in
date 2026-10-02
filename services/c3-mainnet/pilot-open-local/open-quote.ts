@@ -290,17 +290,29 @@ export class OpenQuoteAuthority {
       material.unsignedPacketBytes > 0 && material.unsignedPacketBytes <= 1232,
       "TRANSACTION_SIZE",
     );
-    assert(
-      material.slippageBps > 0 &&
-        material.slippageBps <= row.context.maxSlippageBps &&
-        material.builderTimestamp <= BigInt(Math.floor(Date.now() / 1000)) &&
-        material.expiresAt > BigInt(Math.floor(Date.now() / 1000)) &&
-        material.expiresAt - material.builderTimestamp <=
-          BigInt(row.context.maxQuoteAgeSeconds) &&
-        material.expiresAt <= BigInt(row.context.planExpiresAt) &&
+    const time = BigInt(Math.floor(Date.now() / 1000));
+    const freshness = [
+      [
+        material.slippageBps > 0 &&
+          material.slippageBps <= row.context.maxSlippageBps,
+        "SLIPPAGE",
+      ],
+      [material.builderTimestamp <= time, "FUTURE_TIMESTAMP"],
+      [material.expiresAt > time, "EXPIRED"],
+      [
+        material.expiresAt > material.builderTimestamp &&
+          material.expiresAt - material.builderTimestamp <=
+            BigInt(row.context.maxQuoteAgeSeconds),
+        "AGE",
+      ],
+      [material.expiresAt <= BigInt(row.context.planExpiresAt), "PLAN_EXPIRY"],
+      [
         material.expiresAt * 1000n <= BigInt(row.expires_at.getTime()),
-      "FRESHNESS_OR_POLICY",
-    );
+        "INTENT_EXPIRY",
+      ],
+    ] as const;
+    for (const [valid, reason] of freshness)
+      assert(valid, "FRESHNESS_OR_POLICY_" + reason);
     const nonce = Buffer.from(material.authorizationNonce),
       quoteId = quoteIdForNonce(nonce);
     const seal: QuoteSealV1 = {

@@ -215,28 +215,39 @@ try {
   for (const mint of [c.usdcMint, ...assets])
     tokenFixture(new PublicKey(vaultAta(mint)), mint, VAULT_AUTHORITY, 0n);
   // Warm all directions, but NEVER execute these quotes or pre-fund sell assets.
+  const warmFresh = async (r: RouterRequest): Promise<RouterBuild> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const build = await jupiter.getExactInQuote(r);
+      validateDirectWhirlpoolRoute(build, {
+        authority: r.taker,
+        source: vaultAta(r.inputMint),
+        destination: vaultAta(r.outputMint),
+        inputMint: r.inputMint,
+        outputMint: r.outputMint,
+        inputAmount: r.amount,
+        maxSlippageBps: 100,
+      });
+      try {
+        await bank.warm(build);
+        return build;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          !error.message.startsWith("C3_BANK_PUBLIC_ACCOUNT_MISSING:") ||
+          attempt === 2
+        )
+          throw error;
+      }
+    }
+    throw Error("C3_BANK_FRESH_PREPARATION_EXHAUSTED");
+  };
   for (let n = 0; n < 3; n++) {
-    const buy = await jupiter.getExactInQuote(
-      request(n, n === 0 ? 400_000n : 300_000n),
-    );
-    await bank.warm(buy);
-    const sell = await jupiter.getExactInQuote(
-      request(n + 3, BigInt(buy.outAmount)),
-    );
-    await bank.warm(sell);
+    const buy = await warmFresh(request(n, n === 0 ? 400_000n : 300_000n));
+    await warmFresh(request(n + 3, BigInt(buy.outAmount)));
   }
-  // Other pools actually observed in fresh official SOL routes during bounded
-  // failures. Clone authentic pool/vault/tick state before starting this bank;
-  // NEVER inject assets or overwrite accounts after the deposit.
-  for (const pool of [
-    "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
-    "FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q",
-    "83v8iPyZihDEjDdY8RdZddyZNyUtXngz69Lgo9Kt5d6d",
-    // Observed in fresh official SOL sell build during schema-v2 regression.
-    // warmPool still verifies owner/layout/mints/vaults; not trusted by address.
-    "H3f4q1Y7mo7qwL5rKFpbesmJ8nKjkFPR6xWtYXGKCKqK",
-  ])
-    await bank.warmPool(pool);
+  // Clone bounded authenticated asset-pair pools, not a growing hardcoded list
+  // of pools from failed quotes. No mutation is allowed after bank.start().
+  await bank.warmAssetPairPools();
   // Public tables observed in these official build responses. They are not
   // trusted by address alone: warmLookupTable checks current RPC ownership and
   // activity, and each selected authorization binds exact resolved contents.

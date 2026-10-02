@@ -40,6 +40,7 @@ import {
   type ValidatedQuoteMaterial,
 } from "./open-quote.ts";
 import { validateDirectWhirlpoolRoute } from "./jupiter-route-v2.ts";
+import { awaitQuoteClock } from "./quote-clock.ts";
 const hash = (...parts: Uint8Array[]) =>
   createHash("sha256").update(Buffer.concat(parts)).digest();
 const assert = (c: unknown, code: string): void => {
@@ -167,6 +168,10 @@ export class JupiterOpenBuilder implements OpenQuoteBuilder {
       slippageBps: ctx.maxSlippageBps,
       maxAccounts: 16,
     });
+    await awaitQuoteClock(
+      build.blockhashWithMetadata.fetchedAtEpochMs,
+      ctx.maxQuoteAgeSeconds * 1000,
+    );
     assert(
       build.otherInstructions.length === 0 && !build.tipInstruction,
       "EXTRA_INSTRUCTIONS",

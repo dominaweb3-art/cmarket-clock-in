@@ -220,6 +220,56 @@ export class CloneBank {
       this.dump(addresses[i]!.toBase58(), account);
     });
   }
+  /** Discover a bounded authentic pool set BEFORE funding the cloned bank.
+   * Fresh routes still pass verifyRoute; this never overwrites a running bank.
+   */
+  async warmAssetPairPools(): Promise<void> {
+    if (this.child) throw Error("C3_BANK_RUNNING_REMOTE_OVERWRITE_FORBIDDEN");
+    if ((await this.remote.getGenesisHash()) !== c.genesisHash)
+      throw Error("C3_BANK_REMOTE_IDENTITY");
+    const pools = new Set<string>();
+    for (const asset of [c.cbBtcMint, c.portalEthMint, c.wrappedSolMint]) {
+      for (const [a, b] of [
+        [c.usdcMint, asset],
+        [asset, c.usdcMint],
+      ]) {
+        const rows = await this.remote.getProgramAccounts(
+          new PublicKey(WHIRL),
+          {
+            commitment: "finalized",
+            dataSlice: { offset: 0, length: 0 },
+            filters: [
+              { dataSize: 653 },
+              { memcmp: { offset: 101, bytes: a! } },
+              { memcmp: { offset: 181, bytes: b! } },
+            ],
+          },
+        );
+        for (const row of rows) {
+          if (
+            !row.account.owner.equals(new PublicKey(WHIRL)) ||
+            row.account.executable
+          )
+            throw Error("C3_BANK_DISCOVERED_POOL_OWNER");
+          pools.add(row.pubkey.toBase58());
+        }
+        if (pools.size > 96) throw Error("C3_BANK_POOL_DISCOVERY_LIMIT");
+        await wait(500);
+      }
+    }
+    for (const pool of pools) {
+      await this.warmPool(pool);
+      await wait(500);
+    }
+    appendFileSync(
+      join(this.directory, "preparation.jsonl"),
+      JSON.stringify({
+        kind: "official-pool-discovery",
+        pools: [...pools],
+        at: new Date().toISOString(),
+      }) + "\n",
+    );
+  }
   async warm(build: RouterBuild): Promise<void> {
     if (this.child) throw Error("C3_BANK_RUNNING_REMOTE_OVERWRITE_FORBIDDEN");
     if ((await this.remote.getGenesisHash()) !== c.genesisHash)
@@ -276,6 +326,17 @@ export class CloneBank {
             });
             continue;
           }
+          appendFileSync(
+            join(this.directory, "preparation.jsonl"),
+            JSON.stringify({
+              kind: "missing-fresh-account",
+              address: a,
+              meta: meta ?? null,
+              route: build.routePlan,
+              alt: Object.keys(build.addressesByLookupTableAddress),
+              at: new Date().toISOString(),
+            }) + "\n",
+          );
           throw Error("C3_BANK_PUBLIC_ACCOUNT_MISSING:" + a);
         }
         this.dump(a, account);
