@@ -1,5 +1,9 @@
 # C3 open-vault implementation checkpoint — 2026-10-01
 
+Latest append-only renewal and renewed cloned-cycle results:
+[2026-10-02 recovery checkpoint](C3_PLAN_GENERATION_RECOVERY_CHECKPOINT.md).
+The monetary APK/backend integration remains partial; Mainnet remains blocked.
+
 > Historical checkpoint through `f54bba0`. The independent-probe and missing-device
 > statements below describe that earlier state, not today's integrated result.
 > See `C3_INTEGRATED_CLONE_ACCEPTANCE.md` for the subsequent single-bank,

@@ -53,6 +53,30 @@ export class OpenSigningJournal {
     let fresh = false;
     try {
       await client.query("BEGIN");
+      // Same lock order as owner renewal and quote consumption. A quote-only
+      // lock allowed dispatch to race a renewal's intent lock/pending query.
+      const identity = (
+        await client.query(
+          "SELECT intent_id FROM c3_open.quote_authorizations WHERE quote_id=$1",
+          [quoteId],
+        )
+      ).rows[0];
+      if (!identity) reject();
+      await client.query(
+        "SELECT intent_id FROM c3_open.intents WHERE intent_id=$1 FOR UPDATE",
+        [identity.intent_id],
+      );
+      // A wallet-signed renewal is a possibly executed chain operation. Do not
+      // dispatch an incompatible quote until that signature is reconciled.
+      const renewal = await client.query(
+        `SELECT 1 FROM c3_open.renewal_submissions s
+        JOIN c3_open.renewal_requests r USING(request_id)
+        LEFT JOIN c3_open.plan_generations g USING(request_id)
+        LEFT JOIN c3_open.renewal_outcomes o USING(request_id)
+        WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL LIMIT 1`,
+        [identity.intent_id],
+      );
+      if (renewal.rowCount) reject();
       const q = (
         await client.query(
           `SELECT *,clock_timestamp() AS db_now FROM c3_open.quote_authorizations WHERE quote_id=$1 FOR UPDATE`,

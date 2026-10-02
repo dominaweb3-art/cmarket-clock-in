@@ -254,12 +254,23 @@ test(
     a.s = await restarted.beginReconciliation(scope(a.s), 0);
     // Intent expiry stops new operations, not accounting for the same already
     // finalized signature within its durable recovery window (B3 regression).
-    await pool.query(
-      "UPDATE c3_open.intents SET expires_at=clock_timestamp()-interval '1 millisecond',db_revision=db_revision+1 WHERE intent_id=$1",
-      [a.id],
+    await assert.rejects(
+      () =>
+        pool.query(
+          "UPDATE c3_open.intents SET expires_at=clock_timestamp()-interval '1 millisecond',db_revision=db_revision+1 WHERE intent_id=$1",
+          [a.id],
+        ),
+      /ORIGINAL_EXPIRY_IMMUTABLE/,
     );
-    a.s = (await restarted.read(a.id))!;
-    a.s = await restarted.reconcileLocalJupiterLeg(scope(a.s), 0, a.rpc);
+    // Controlled application-clock fixture: no historical deadline mutation.
+    // The signing recovery deadline still uses the real PostgreSQL clock.
+    const actualNow = Date.now;
+    Date.now = () => a.s.expiresAt.getTime() + 1;
+    try {
+      a.s = await restarted.reconcileLocalJupiterLeg(scope(a.s), 0, a.rpc);
+    } finally {
+      Date.now = actualNow;
+    }
     assert.equal(a.s.chainRevision, 1n);
     assert.equal((await restarted.readLeg(a.id, 0)).state, "confirmed");
     for (const change of [

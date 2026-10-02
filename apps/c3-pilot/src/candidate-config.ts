@@ -6,6 +6,13 @@ export const CANDIDATE_CHAIN = "solana:mainnet" as const;
 export function requireCandidateMoneyGate(): never {
   throw new Error("C3_MAINNET_PILOT_NOT_APPROVED");
 }
+/** Keeps direct calls closed as well as disabled UI/navigation. */
+export async function runCandidateMonetarySession<T>(
+  session: () => Promise<T>,
+): Promise<T> {
+  requireCandidateMoneyGate();
+  return session();
+}
 export function candidateHttpsEndpoint(
   value: string | undefined,
 ): string | null {

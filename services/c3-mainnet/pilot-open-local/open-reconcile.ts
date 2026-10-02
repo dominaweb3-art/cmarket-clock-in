@@ -33,6 +33,45 @@ const publicKey = (raw: Uint8Array) =>
   });
 const WHIRL = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc";
 const EVENT_AUTHORITY = "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf";
+/** Official Orca swap / swap_v2 ABI. V2 remains limited to legacy SPL Token
+ * pairs and remaining_accounts_info=None. An invoked Memo/Token2022 program
+ * remains an UNKNOWN_INNER_PROGRAM: readonly presence does not allow execution.
+ */
+export function verifyWhirlpoolCpi(
+  data: Buffer,
+  accounts: readonly string[],
+  route: Buffer,
+  ordered: readonly string[],
+  debit: bigint,
+): void {
+  const legacy = route.length === 40 && route[34] === 17;
+  const v2 = route.length === 41 && route[34] === 47 && route[36] === 0;
+  check(
+    (legacy || v2) &&
+      data.length === (legacy ? 42 : 43) &&
+      data
+        .subarray(0, 8)
+        .equals(
+          h(Buffer.from(legacy ? "global:swap" : "global:swap_v2")).subarray(
+            0,
+            8,
+          ),
+        ) &&
+      data.readBigUInt64LE(8) === debit &&
+      data[40] === 1 &&
+      data[41] === route[35] &&
+      (legacy || data[42] === 0) &&
+      JSON.stringify(accounts) === JSON.stringify(ordered.slice(11)) &&
+      accounts.length === (legacy ? 11 : 15) &&
+      accounts[0] === c.tokenProgram &&
+      (legacy
+        ? accounts[1] === VAULT_AUTHORITY.toBase58()
+        : accounts[1] === c.tokenProgram &&
+          accounts[2] === "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr" &&
+          accounts[3] === VAULT_AUTHORITY.toBase58()),
+    "HOSTILE_WHIRLPOOL_INSTRUCTION",
+  );
+}
 export function verifyJupiterSwapEvent(
   data: Buffer,
   accounts: readonly string[],
@@ -490,23 +529,10 @@ export function verifyFinalizedEffects(
         swapEvents++;
       }
     } else if (program === WHIRL) {
+      verifyWhirlpoolCpi(data, accounts, expectedData, expectedInner, debit);
       check(
-        expectedData.length === 40 &&
-          expectedData[34] === 17 &&
-          data.length === 42 &&
-          data
-            .subarray(0, 8)
-            .equals(h(Buffer.from("global:swap")).subarray(0, 8)) &&
-          data.readBigUInt64LE(8) === debit &&
-          data[40] === 1 &&
-          data[41] === expectedData[35] &&
-          JSON.stringify(accounts) ===
-            JSON.stringify(expectedInner.slice(11)) &&
-          accounts.length === 11 &&
-          accounts[0] === c.tokenProgram &&
-          accounts[1] === VAULT_AUTHORITY.toBase58() &&
-          accounts[2] === e.pool,
-        "HOSTILE_WHIRLPOOL_INSTRUCTION",
+        accounts[expectedData[34] === 17 ? 2 : 4] === e.pool,
+        "WHIRLPOOL_POOL_BINDING",
       );
       whirlCalls++;
     } else throw new Error("C3_RECONCILE_UNKNOWN_INNER_PROGRAM");
@@ -552,7 +578,8 @@ export async function reconcilePersistedOpenLeg(
       `SELECT q.quote_id,q.canonical_payload,q.payload_hash,q.signature,q.authority,q.evidence,ctx.context,ctx.context_hash,ctx.scope,l.submitted_signature,l.authorization_hash,i.wallet,i.vault,i.db_revision,i.chain_revision
     FROM c3_open.quote_authorizations q JOIN c3_open.quote_contexts ctx USING(intent_id,ordinal,intent_revision)
     JOIN c3_open.legs l USING(intent_id,ordinal) JOIN c3_open.intents i USING(intent_id)
-    WHERE q.intent_id=$1 AND q.ordinal=$2 AND q.state IN ('signed','consumed') AND l.state IN ('submitted','uncertain','reconciliation_required')`,
+    WHERE q.intent_id=$1 AND q.ordinal=$2 AND encode(q.payload_hash,'hex')=l.authorization_hash
+      AND q.state IN ('signed','consumed') AND l.state IN ('submitted','uncertain','reconciliation_required')`,
       [intentId, ordinal],
     )
   ).rows[0];
@@ -713,6 +740,9 @@ export async function reconcilePersistedOpenLeg(
     ...effects,
     evidenceHash,
     planStateHash,
+    // Public program account image, NOT an unsigned transaction or key. Keep
+    // immutable verified history readable after later owner renewals.
+    planStateBase64: plan.value!.data.toString("base64"),
     signature: row.submitted_signature as string,
     plan: context.plan,
     chainRevision,

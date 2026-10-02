@@ -36,7 +36,17 @@ const accounts = [
   meta("D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf"),
   meta(c.jupiterProgram),
   meta("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"),
+  meta(c.tokenProgram),
+  meta(expected.authority),
   meta("HxA6SKW5qA4o12fjVgTpXdq2YnZ5Zv1s7SB4FFomsyLM", false, true),
+  meta(expected.destination, false, true),
+  meta("9ma53jxdWJ3RmumpJBJGSSmDJB9ENNEey6frh8iTGvM4", false, true),
+  meta(expected.source, false, true),
+  meta("htf1KLePyGs8R6xUZ1oEYmkStQ21uP1Hq8GY5P5Mp2G", false, true),
+  meta("5gmJQbntd9YfkRyKUrpw88qHUa99LfQVVAipaabAFfRF", false, true),
+  meta("48Sj9e1Bymfe7dT5F3o9xtHrGfN2zG8vAprgxSBvxMV2", false, true),
+  meta("DLHT8eMw7zuuw1j8AvyQsySk31FRELGdUmbjZQHQczZR", false, true),
+  meta("31HfnCJfkAmdiAqXTRPVCPo9uDXLRstpK7tU2kk5zYB7"),
 ];
 type MutableBuild = { -readonly [K in keyof RouterBuild]: RouterBuild[K] };
 const build = () =>
@@ -64,7 +74,7 @@ const build = () =>
       {
         bps: 10000,
         swapInfo: {
-          ammKey: accounts[11]!.pubkey,
+          ammKey: accounts[13]!.pubkey,
           inputMint: c.usdcMint,
           outputMint: c.cbBtcMint,
           inAmount: "400000",
@@ -81,7 +91,7 @@ const build = () =>
 test("actual route_v2 bytes bind exact amount/output, fees, ordered duplicate accounts and single route", () => {
   assert.deepEqual(validateDirectWhirlpoolRoute(build(), expected), {
     aToB: false,
-    pool: accounts[11]!.pubkey,
+    pool: accounts[13]!.pubkey,
     legacy: true,
   });
   const v2 = build();
@@ -93,8 +103,48 @@ test("actual route_v2 bytes bind exact amount/output, fees, ordered duplicate ac
   v2.swapInstruction = {
     ...v2.swapInstruction,
     data: bytes.toString("base64"),
+    accounts: [
+      ...accounts.slice(0, 11),
+      meta(c.tokenProgram),
+      meta(c.tokenProgram),
+      meta("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+      meta(expected.authority),
+      accounts[13]!,
+      meta(c.cbBtcMint),
+      meta(c.usdcMint),
+      ...accounts.slice(14, 21),
+      meta(accounts[21]!.pubkey, false, true),
+    ],
   };
   assert.equal(validateDirectWhirlpoolRoute(v2, expected).aToB, false);
+  // Reserve/oracle identities are checked against resolved pool state by the
+  // builder, not inferred from the untrusted route JSON here.
+  for (const n of [11, 12, 13, 14, 15, 16, 17, 18, 20]) {
+    const bad = {
+      ...v2,
+      swapInstruction: {
+        ...v2.swapInstruction,
+        accounts: v2.swapInstruction.accounts.map((a) => ({ ...a })),
+      },
+    };
+    bad.swapInstruction.accounts[n]!.pubkey = c.systemProgram;
+    assert.throws(
+      () => validateDirectWhirlpoolRoute(bad, expected),
+      /ORDERED_WHIRLPOOL_V2/,
+    );
+  }
+  assert.throws(() =>
+    validateDirectWhirlpoolRoute(
+      {
+        ...v2,
+        swapInstruction: {
+          ...v2.swapInstruction,
+          accounts: [...v2.swapInstruction.accounts, meta(c.systemProgram)],
+        },
+      },
+      expected,
+    ),
+  );
 });
 test("hostile header, route graph, enum, bool, trailing bytes and fee changes fail closed", () => {
   for (const offset of [0, 8, 16, 24, 26, 28, 30, 34, 35, 36, 38, 39]) {

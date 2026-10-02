@@ -1,5 +1,9 @@
 # Controlled C3 pilot candidate — PARTIALLY_COMPLETED / BLOCKED
 
+Latest 2026-10-02 append-only renewal, renewed cloned cycle, disabled APK and
+remaining integration evidence: [plan-generation recovery checkpoint](C3_PLAN_GENERATION_RECOVERY_CHECKPOINT.md).
+It supersedes current-result statements below, preserved as historical provenance.
+
 ## Latest implementation checkpoint — 2026-10-02
 
 Classification: SHARED. Resumed at `599e242c29c053676e5c0111b4b71ae7c28cc6bd`.

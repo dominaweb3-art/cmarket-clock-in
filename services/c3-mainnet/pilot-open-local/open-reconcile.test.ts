@@ -1,14 +1,68 @@
 /** Synthetic finalized RPC evidence, never submitted. */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { C3_MAINNET as c } from "../src/constants.ts";
 import { encodeBase58, decodeBase58 } from "../src/solana.ts";
 import {
   verifyFinalizedEffects,
   verifyJupiterSwapEvent,
+  verifyWhirlpoolCpi,
 } from "./open-reconcile.ts";
 import type { StoredQuoteContext } from "./open-quote.ts";
 import { fixture, addr } from "./open-reconcile.fixture.ts";
+import { VAULT_AUTHORITY } from "./jupiter-vault-cpi-inspection.ts";
+test("strict Whirlpool V2 CPI shape rejects hooks, memo substitution and extra accounts", () => {
+  const route = Buffer.alloc(41);
+  route[34] = 47;
+  route[35] = 1;
+  const data = Buffer.alloc(43);
+  createHash("sha256")
+    .update("global:swap_v2")
+    .digest()
+    .subarray(0, 8)
+    .copy(data);
+  data.writeBigUInt64LE(2499913n, 8);
+  data[40] = 1;
+  data[41] = 1;
+  const rest = [
+    c.tokenProgram,
+    c.tokenProgram,
+    "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    VAULT_AUTHORITY.toBase58(),
+    ...Array.from({ length: 11 }, (_, i) => addr(50 + i).toBase58()),
+  ];
+  const ordered = [...Array(11).fill(c.jupiterProgram), ...rest];
+  verifyWhirlpoolCpi(data, rest, route, ordered, 2499913n);
+  for (const offset of [0, 8, 40, 41, 42]) {
+    const bad = Buffer.from(data);
+    bad[offset] = 255;
+    assert.throws(
+      () => verifyWhirlpoolCpi(bad, rest, route, ordered, 2499913n),
+      /HOSTILE_WHIRLPOOL/,
+    );
+  }
+  const bad = [...rest];
+  bad[2] = c.systemProgram;
+  assert.throws(() =>
+    verifyWhirlpoolCpi(
+      data,
+      bad,
+      route,
+      [...ordered.slice(0, 11), ...bad],
+      2499913n,
+    ),
+  );
+  assert.throws(() =>
+    verifyWhirlpoolCpi(
+      data,
+      [...rest, c.systemProgram],
+      route,
+      ordered,
+      2499913n,
+    ),
+  );
+});
 test("finalized v0 signature and exact closed token effects; missing evidence never confirms", () => {
   const f = fixture();
   assert.deepEqual(

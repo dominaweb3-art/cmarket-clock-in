@@ -416,10 +416,30 @@ export async function verifyLocalLifecycle(
       pda("c3-plan-v1", key(state.intent)).equals(plan),
     "PLAN_CONTEXT",
   );
-  const revision = to === "funded" || to === "redemption_requested" ? 0n : 3n;
+  // Every owner renewal adds one revision; executed legs add one each.
+  // Derive the exact revision from immutable generations and confirmed effects,
+  // never accept >=3 or treat a current account as a historical snapshot.
+  const initial = to === "funded" || to === "redemption_requested";
+  const start = to === "active" || to === "funded" ? 0 : 3;
+  const generations = await pool.query(
+    "SELECT count(*)::text AS n FROM c3_open.plan_generations WHERE intent_id=$1 AND plan=$2",
+    [intentId, plan.toBase58()],
+  );
+  const legs = await pool.query(
+    "SELECT ordinal,chain_revision FROM c3_open.legs WHERE intent_id=$1 AND ordinal BETWEEN $2 AND $3 AND state='confirmed' ORDER BY ordinal",
+    [intentId, start, start + 2],
+  );
+  const revision = initial ? 0n : 3n + BigInt(generations.rows[0].n);
+  check(
+    initial ||
+      (legs.rows.length === 3 &&
+        BigInt(legs.rows[2].chain_revision) === revision &&
+        BigInt(row.chain_revision) === revision),
+    "JOURNAL_REVISION",
+  );
   check(
     String(state.revision) === String(revision) &&
-      Number(state.executed_bitmap) === (revision === 0n ? 0 : 7),
+      Number(state.executed_bitmap) === (initial ? 0 : 7),
     "PLAN_REVISION",
   );
   const expectedLifecycle = {

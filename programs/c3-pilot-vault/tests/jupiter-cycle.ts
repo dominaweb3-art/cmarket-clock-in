@@ -62,6 +62,11 @@ import { validateDirectWhirlpoolRoute } from "../../../services/c3-mainnet/pilot
 import { createReadServer } from "../../../services/c3-mainnet/pilot-open-local/read-server.ts";
 import { createCycleController } from "../../../services/c3-mainnet/pilot-open-local/cycle-controller.ts";
 import { reconcilePersistedOpenLeg } from "../../../services/c3-mainnet/pilot-open-local/open-reconcile.ts";
+import {
+  prepareLocalRenewal,
+  reconcileLocalRenewal,
+  recordLocalRenewalSignature,
+} from "../../../services/c3-mainnet/pilot-open-local/plan-generations.ts";
 const idl = JSON.parse(
   readFileSync(
     new URL("../target/idl/c3_pilot_vault.json", import.meta.url),
@@ -418,6 +423,9 @@ try {
       c.jupiterProgram,
       "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
       c.tokenProgram,
+      // Official Orca SwapV2 readonly account. Legacy SPL mints have no memo
+      // extension: the economic verifier still rejects any actual Memo CPI.
+      "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
     ].map((v) => new PublicKey(v)),
     slot = await local.getSlot(),
     end = slot + 10_000;
@@ -526,7 +534,10 @@ try {
         Array.from({ length: 3 }, (_, i) => Array(32).fill(i + 1)),
         [new BN(1), new BN(1), new BN(1)],
         new BN(timestamp),
-        new BN(timestamp + 120),
+        new BN(
+          timestamp +
+            (!selling && process.argv.includes("--renew-plan") ? 5 : 120),
+        ),
         100,
         selling ? redemptionSettlement : depositSettlement,
       ],
@@ -551,6 +562,63 @@ try {
     idl,
     [depositSig, planSig],
   );
+  if (process.argv.includes("--renew-plan")) {
+    stage = "owner-durable-renewal";
+    const old = await local.getAccountInfo(depositPlan, "finalized");
+    assert.ok(old);
+    const expires = Number(old.data.readBigInt64LE(706));
+    const deadline = Date.now() + 20000;
+    const finalizedNow = async () => {
+      const clock = await local!.getAccountInfo(
+        new PublicKey("SysvarC1ock11111111111111111111111111111111"),
+        "finalized",
+      );
+      assert.ok(clock);
+      return Number(clock.data.readBigInt64LE(32));
+    };
+    while ((await finalizedNow()) < expires) {
+      assert.ok(Date.now() < deadline, "bounded local Clock expiry wait");
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const renewal = await prepareLocalRenewal(
+      journal.pool,
+      local,
+      idl,
+      scope(),
+    );
+    const signed = VersionedTransaction.deserialize(renewal.transaction);
+    signed.sign([owner]); // ephemeral LOCAL test key, NOT user MWA approval
+    await recordLocalRenewalSignature(
+      journal.pool,
+      local,
+      idl,
+      scope(),
+      renewal.requestId,
+      signed.serialize(),
+    );
+    const signature = await local.sendTransaction(signed, {
+      skipPreflight: false,
+      maxRetries: 0,
+    });
+    await finalized(signature);
+    const proof = await reconcileLocalRenewal(
+      journal.pool,
+      local,
+      idl,
+      scope(),
+      renewal.requestId,
+      signature,
+    );
+    state = (await db.read(state.intentId))!;
+    assert.equal(state.chainRevision, 1n);
+    report.ownerRenewal = {
+      signature,
+      generation: proof.generation.toString(),
+      revision: state.chainRevision.toString(),
+      evidenceHash: proof.evidenceHash,
+      mwaUserApproval: false,
+    };
+  }
   const buys: bigint[] = [];
   for (let ordinal = 0; ordinal < 6; ordinal++) {
     if (ordinal === 3) {

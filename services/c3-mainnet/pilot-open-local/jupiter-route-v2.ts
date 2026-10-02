@@ -98,11 +98,47 @@ export function validateDirectWhirlpoolRoute(
     "ORDERED_FIXED_ACCOUNTS",
   );
   const pool = build.routePlan[0]!.swapInfo.ammKey;
-  check(
-    build.swapInstruction.accounts.some(
-      (a) => a.pubkey === pool && a.isWritable && !a.isSigner,
-    ),
-    "POOL",
-  );
+  const rest = build.swapInstruction.accounts.slice(11);
+  const role = (i: number, key: string, writable: boolean) =>
+    rest[i]?.pubkey === key &&
+    !rest[i]!.isSigner &&
+    rest[i]!.isWritable === writable;
+  if (variant === 17) {
+    check(
+      rest.length === 11 &&
+        role(0, C3_MAINNET.tokenProgram, false) &&
+        role(1, expected.authority, false) &&
+        role(2, pool, true) &&
+        role(3, data[35] ? expected.source : expected.destination, true) &&
+        role(5, data[35] ? expected.destination : expected.source, true) &&
+        [4, 6, 7, 8, 9].every(
+          (i) => rest[i] && !rest[i]!.isSigner && rest[i]!.isWritable,
+        ) &&
+        rest[10] &&
+        !rest[10]!.isSigner &&
+        !rest[10]!.isWritable,
+      "ORDERED_WHIRLPOOL_ACCOUNTS",
+    );
+  } else {
+    // Official Orca SwapV2: exactly 15 accounts, legacy SPL mints only, no
+    // transfer-hook/supplemental slices. Memo is readonly metadata, never an
+    // approved CPI effect for these legacy Token accounts.
+    check(
+      rest.length === 15 &&
+        role(0, C3_MAINNET.tokenProgram, false) &&
+        role(1, C3_MAINNET.tokenProgram, false) &&
+        role(2, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr", false) &&
+        role(3, expected.authority, false) &&
+        role(4, pool, true) &&
+        role(5, data[35] ? expected.inputMint : expected.outputMint, false) &&
+        role(6, data[35] ? expected.outputMint : expected.inputMint, false) &&
+        role(7, data[35] ? expected.source : expected.destination, true) &&
+        role(9, data[35] ? expected.destination : expected.source, true) &&
+        [8, 10, 11, 12, 13, 14].every(
+          (i) => rest[i] && !rest[i]!.isSigner && rest[i]!.isWritable,
+        ),
+      "ORDERED_WHIRLPOOL_V2_ACCOUNTS",
+    );
+  }
   return Object.freeze({ aToB: data[35] === 1, pool, legacy: variant === 17 });
 }

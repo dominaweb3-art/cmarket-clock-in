@@ -44,6 +44,11 @@ const SIGNING_CLOCK_MIGRATION_URL = new URL(
   "./migrations/0006_signing_clock.sql",
   import.meta.url,
 );
+const GENERATION_MIGRATION = "0007_plan_generations";
+const GENERATION_MIGRATION_URL = new URL(
+  "./migrations/0007_plan_generations.sql",
+  import.meta.url,
+);
 const fail = (code: string): never => {
   throw new Error(`C3_OPEN_${code}`);
 };
@@ -318,6 +323,26 @@ export async function applyOpenLocalMigration(
         clockExisting.rows[0]?.checksum_sha256 === clockHash,
         "MIGRATION_CHECKSUM_MISMATCH",
       );
+    const generationSql = await readFile(GENERATION_MIGRATION_URL, "utf8");
+    const generationHash = createHash("sha256")
+      .update(generationSql)
+      .digest("hex");
+    const generationExisting = await client.query(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [GENERATION_MIGRATION],
+    );
+    if (!generationExisting.rowCount) {
+      await client.query(generationSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [GENERATION_MIGRATION, generationHash],
+      );
+      changed = true;
+    } else
+      assert(
+        generationExisting.rows[0].checksum_sha256 === generationHash,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     await client.query("COMMIT");
     return changed ? "applied" : "already_applied";
   } catch (error) {
@@ -334,6 +359,7 @@ export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
     [FINALIZED_MIGRATION, FINALIZED_MIGRATION_URL],
     [SIGNING_MIGRATION, SIGNING_MIGRATION_URL],
     [SIGNING_CLOCK_MIGRATION, SIGNING_CLOCK_MIGRATION_URL],
+    [GENERATION_MIGRATION, GENERATION_MIGRATION_URL],
   ] as const) {
     const checksum = createHash("sha256")
       .update(await readFile(url))
@@ -390,7 +416,23 @@ async function locked(
       BigInt(row.chain_revision) === scope.expectedChainRevision,
     "COMPARE_AND_SWAP_CONFLICT",
   );
-  if (!allowExpired) assert(row.expires_at.getTime() > Date.now(), "EXPIRED");
+  if (!allowExpired) {
+    const window = await client.query(
+      `SELECT 1 FROM c3_open.plan_generations WHERE intent_id=$1
+      AND plan=$2 AND expires_at>clock_timestamp() AND base_revision<=$3
+      AND generation=(SELECT max(generation) FROM c3_open.plan_generations WHERE intent_id=$1 AND plan=$2)`,
+      [
+        scope.intentId,
+        ["redemption_requested", "selling", "claimable", "redeemed"].includes(
+          row.state,
+        )
+          ? row.redemption_plan
+          : row.deposit_plan,
+        row.chain_revision,
+      ],
+    );
+    assert(row.expires_at.getTime() > Date.now() || window.rowCount, "EXPIRED");
+  }
   const used = await client.query(
     "SELECT 1 FROM c3_open.events WHERE idempotency_hash=$1",
     [scope.idempotencyHash],
@@ -659,7 +701,9 @@ export class OpenLocalSettlementRepository {
     };
     assert(required[to]?.includes(from), "INVALID_TRANSITION");
     return atomic(this.pool, async (client) => {
-      const row = await locked(client, scope);
+      // Actual finalized lifecycle evidence remains ingestible after expiry;
+      // expiry must not turn a successful share issue/claim into lost rights.
+      const row = await locked(client, scope, !mock);
       assert(row.state === from, "INVALID_PREVIOUS_STATE");
       if (mock) {
         const cloned = await client.query(
@@ -1060,6 +1104,7 @@ export class OpenLocalSettlementRepository {
         inputAmount: proof.debit,
         outputAmount: proof.credit,
         planStateHash: proof.planStateHash,
+        planStateBase64: proof.planStateBase64,
         quoteId: proof.quoteId,
         authorizationHash: proof.authorizationHash,
         chainRevision: proof.chainRevision.toString(),

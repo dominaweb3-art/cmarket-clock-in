@@ -249,7 +249,7 @@ export class JupiterOpenBuilder implements OpenQuoteBuilder {
           PROGRAMS.has(meta.pubkey) &&
             ctx.reviewedPrograms.includes(meta.pubkey) &&
             !meta.isWritable,
-          "PROGRAM_NOT_REVIEWED",
+          "PROGRAM_NOT_REVIEWED:" + meta.pubkey,
         );
       else if (meta.isWritable)
         assert(
@@ -313,6 +313,19 @@ export class JupiterOpenBuilder implements OpenQuoteBuilder {
         }
       }
     }
+    const rest = metas.slice(11);
+    const reserveA = new PublicKey(
+      poolState!.data.subarray(133, 165),
+    ).toBase58();
+    const reserveB = new PublicKey(
+      poolState!.data.subarray(213, 245),
+    ).toBase58();
+    assert(
+      rest[route.legacy ? 4 : 8]!.pubkey === reserveA &&
+        rest[route.legacy ? 6 : 10]!.pubkey === reserveB &&
+        rest[route.legacy ? 10 : 14]!.pubkey === oracle.toBase58(),
+      "ORDERED_POOL_RESERVES_OR_ORACLE",
+    );
     for (const [address, mint] of [
       [ctx.source, ctx.inputMint],
       [ctx.destination, ctx.outputMint],

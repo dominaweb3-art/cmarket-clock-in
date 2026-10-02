@@ -6,6 +6,7 @@ import {
   APPROVED_CANDIDATE_CONFIGURATION,
   requireCandidateMoneyGate,
   candidateHttpsEndpoint,
+  runCandidateMonetarySession,
 } from "../src/candidate-config.ts";
 import {
   candidateLanguages,
@@ -47,7 +48,15 @@ test("entrypoint physically excludes clone launcher and signing callbacks", () =
     new URL("../src/candidate-wallet.ts", import.meta.url),
     "utf8",
   );
-  assert.doesNotMatch(wallet, /wallet\.(?:sign|send)/);
+  assert.doesNotMatch(wallet, /wallet\.(?:signAndSend|send)/);
+  const signing = wallet.slice(
+    wallet.indexOf("export async function requestCandidateMonetarySignature"),
+  );
+  assert.ok(
+    signing.indexOf("requireCandidateMoneyGate();") <
+      signing.indexOf("return runCandidateMonetarySession("),
+  );
+  assert.match(signing, /wallet\.signTransactions/);
   const config = JSON.parse(
     readFileSync(
       new URL("../variants/mainnet/app.json", import.meta.url),
@@ -56,4 +65,16 @@ test("entrypoint physically excludes clone launcher and signing callbacks", () =
   ).expo;
   assert.equal(config.android.package, "com.dominaweb3.cmarket.c3candidate");
   assert.equal(config.extra.mainnetMonetaryCapability, false);
+});
+test("direct monetary entry cannot invoke even a mock MWA session", async () => {
+  let calls = 0;
+  await assert.rejects(
+    () =>
+      runCandidateMonetarySession(async () => {
+        calls++;
+        return "signed";
+      }),
+    /NOT_APPROVED/,
+  );
+  assert.equal(calls, 0);
 });

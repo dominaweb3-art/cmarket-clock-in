@@ -136,6 +136,7 @@ type Loaded = {
   submitted_signature: string | null;
   expires_at: Date;
   scope: string;
+  recovery_expires_at: Date | null;
 };
 async function load(
   pool: Pool,
@@ -153,7 +154,9 @@ async function load(
   const result = await pool.query<Loaded>(
     `SELECT q.context,q.context_hash,q.scope,i.db_revision,i.chain_revision,
     i.wallet,i.vault,i.deposit_plan,i.redemption_plan,i.configuration_hash,i.state,i.expires_at,
-    l.state AS leg_state,l.submitted_signature
+    l.state AS leg_state,l.submitted_signature,
+    (SELECT max(g.expires_at) FROM c3_open.plan_generations g WHERE g.intent_id=i.intent_id
+      AND g.plan=q.context->>'plan' AND g.base_revision<=i.chain_revision) AS recovery_expires_at
     FROM c3_open.quote_contexts q JOIN c3_open.intents i USING(intent_id)
     JOIN c3_open.legs l ON l.intent_id=q.intent_id AND l.ordinal=q.ordinal
     WHERE q.intent_id=$1 AND q.ordinal=$2 AND q.intent_revision=$3`,
@@ -161,6 +164,15 @@ async function load(
   );
   const row = result.rows[0];
   assert(row && BigInt(row.db_revision) === revision, "CAS_CONFLICT");
+  const renewing = await pool.query(
+    `SELECT 1 FROM c3_open.renewal_submissions s
+    JOIN c3_open.renewal_requests r USING(request_id)
+    LEFT JOIN c3_open.plan_generations g USING(request_id)
+    LEFT JOIN c3_open.renewal_outcomes o USING(request_id)
+    WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL LIMIT 1`,
+    [intentId],
+  );
+  assert(!renewing.rowCount, "RENEWAL_RECONCILIATION_REQUIRED");
   const c = openQuoteContext(row!.context);
   assert(
     row!.scope === "LOCAL_CLONE" || row!.scope === "LOCAL_MOCK",
@@ -181,7 +193,8 @@ async function load(
     "CONTEXT_HASH_MISMATCH",
   );
   assert(
-    row!.expires_at.getTime() > Date.now() &&
+    (row!.expires_at.getTime() > Date.now() ||
+      (row!.recovery_expires_at?.getTime() ?? 0) > Date.now()) &&
       !row!.submitted_signature &&
       ["pending", "leased", "prepared"].includes(row!.leg_state) &&
       ["funded", "buying", "redemption_requested", "selling"].includes(
@@ -307,7 +320,13 @@ export class OpenQuoteAuthority {
       ],
       [material.expiresAt <= BigInt(row.context.planExpiresAt), "PLAN_EXPIRY"],
       [
-        material.expiresAt * 1000n <= BigInt(row.expires_at.getTime()),
+        material.expiresAt * 1000n <=
+          BigInt(
+            Math.max(
+              row.expires_at.getTime(),
+              row.recovery_expires_at?.getTime() ?? 0,
+            ),
+          ),
         "INTENT_EXPIRY",
       ],
     ] as const;

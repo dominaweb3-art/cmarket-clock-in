@@ -18,13 +18,15 @@ const role = `c3_test_${suffix}`;
 const database = `c3_test_${suffix}`;
 const password = randomBytes(32).toString("hex");
 let started = false;
-const testFile = process.argv.includes("--open-jupiter-recovery")
-  ? "pilot-open-local/open-jupiter-recovery.integration.ts"
-  : process.argv.includes("--open-quote")
-    ? "pilot-open-local/open-quote.integration.ts"
-    : process.argv.includes("--open-local")
-      ? "pilot-open-local/orchestrator.integration.ts"
-      : "tests/postgres-live.integration.ts";
+const testFile = process.argv.includes("--open-generations")
+  ? "pilot-open-local/plan-generations.integration.ts"
+  : process.argv.includes("--open-jupiter-recovery")
+    ? "pilot-open-local/open-jupiter-recovery.integration.ts"
+    : process.argv.includes("--open-quote")
+      ? "pilot-open-local/open-quote.integration.ts"
+      : process.argv.includes("--open-local")
+        ? "pilot-open-local/orchestrator.integration.ts"
+        : "tests/postgres-live.integration.ts";
 const withVault = process.argv.includes("--open-local-cpi");
 const withReadServer = process.argv.includes("--open-read-server");
 const withJupiterCycle = process.argv.includes("--open-jupiter-cycle");
@@ -96,6 +98,7 @@ try {
         ? [
             "--experimental-strip-types",
             "tests/jupiter-cycle.ts",
+            ...(process.argv.includes("--renew-plan") ? ["--renew-plan"] : []),
             ...(process.argv.includes("--app-control")
               ? ["--app-control"]
               : []),
