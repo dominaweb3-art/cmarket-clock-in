@@ -225,7 +225,9 @@ async function expectFailure(
 }
 
 test(
-  "MOCK_LOCAL_ONLY: exact one-owner buy, hold, full redemption and USDC claim on isolated validator",
+  process.env.C3_LOCAL_RECOVERY_ONLY
+    ? `MOCK_LOCAL_ONLY: targeted expired funded deposit recovery (${process.env.C3_LOCAL_RECOVERY_ONLY})`
+    : "MOCK_LOCAL_ONLY: exact one-owner buy, hold, full redemption and USDC claim on isolated validator",
   { timeout: 240_000 },
   async (t) => {
     await airdrop(payer.publicKey, 20_000_000_000);
@@ -708,7 +710,12 @@ test(
 
     const depositNonce = 1;
     const depositIntent = intent("deposit", owner.publicKey, depositNonce);
-    const expires = () => new BN(Math.floor(Date.now() / 1000) + 1800);
+    const recoveryOnly = process.env.C3_LOCAL_RECOVERY_ONLY;
+    assert.ok(
+      !recoveryOnly || recoveryOnly === "plan" || recoveryOnly === "no-plan",
+    );
+    const expires = () =>
+      new BN(Math.floor(Date.now() / 1000) + (recoveryOnly ? 20 : 1800));
     const createDeposit = (who: Keypair, amount: number, nonce: number) =>
       program.methods
         .createDepositIntent(
@@ -868,6 +875,168 @@ test(
     await checkpoint("draft", "funded", depositPlanAddress, 0n, depositSig);
     assert.equal(await balance(ownerUsdc), 0n);
     assert.equal(await balance(vaultUsdc), 1_000_000n);
+    if (recoveryOnly) {
+      assert.equal(
+        durable,
+        null,
+        "targeted recovery does not falsify a PG checkpoint",
+      );
+      const now = async () => {
+        const slot = await connection.getSlot("confirmed");
+        const time = await connection.getBlockTime(slot);
+        assert.notEqual(time, null);
+        return time!;
+      };
+      const until = async (time: number) => {
+        for (let n = 0; n < 90; n++) {
+          if ((await now()) >= time) return;
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        throw Error("LOCAL_RECOVERY_CLOCK_TIMEOUT");
+      };
+      const refundAccounts = {
+        owner: owner.publicKey,
+        config,
+        intent: depositIntent,
+        plan: depositPlanAddress,
+        vaultAuthority,
+        vaultUsdc,
+        ownerUsdc,
+        usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      };
+      const refund = () =>
+        program.methods
+          .refundUnswappedDeposit()
+          .accountsStrict(refundAccounts)
+          .signers([owner])
+          .rpc();
+      await expectFailure(refund, "refund before owner expiry");
+      const d = (await fetchState("depositIntent", depositIntent)) as {
+        expiresAt: BN;
+      };
+      await until(d.expiresAt.toNumber());
+      if (recoveryOnly === "plan") {
+        const create = async (actor: Keypair) => {
+          const t = await now();
+          return program.methods
+            .createDepositSettlementPlan(
+              [1, 2, 3].map((n) => Array(32).fill(n)),
+              [40000, 30000, 30000].map((n) => new BN(n)),
+              new BN(t),
+              new BN(t + 3),
+              100,
+              Array(32).fill(1),
+            )
+            .accountsStrict({
+              keeper: actor.publicKey,
+              config,
+              intent: depositIntent,
+              plan: depositPlanAddress,
+              systemProgram: SystemProgram.programId,
+            })
+            .signers([actor])
+            .rpc();
+        };
+        await expectFailure(
+          () => create(keeper),
+          "expired keeper cannot enlarge owner authorization",
+        );
+        await create(owner);
+        await expectFailure(refund, "live plan cannot be refunded");
+        type PlanState = {
+          expiresAt: BN;
+          revision: BN;
+          executedBitmap: number;
+          inputBudgets: BN[];
+          actualOutputs: BN[];
+        };
+        const p = (await fetchState(
+          "settlementPlan",
+          depositPlanAddress,
+        )) as PlanState;
+        await expectFailure(
+          () =>
+            program.methods
+              .renewSettlementPlan(
+                new BN(0),
+                new BN(p.expiresAt.toNumber() + 10),
+              )
+              .accountsStrict({
+                owner: attacker.publicKey,
+                config,
+                plan: depositPlanAddress,
+              })
+              .signers([attacker])
+              .rpc(),
+          "attacker renewal",
+        );
+        await until(p.expiresAt.toNumber());
+        const n = await now();
+        await program.methods
+          .renewSettlementPlan(new BN(0), new BN(n + 3))
+          .accountsStrict({
+            owner: owner.publicKey,
+            config,
+            plan: depositPlanAddress,
+          })
+          .signers([owner])
+          .rpc();
+        const renewed = (await fetchState(
+          "settlementPlan",
+          depositPlanAddress,
+        )) as PlanState;
+        assert.equal(renewed.revision.toString(), "1");
+        assert.equal(renewed.executedBitmap, 0);
+        assert.deepEqual(
+          renewed.inputBudgets.map(String),
+          p.inputBudgets.map(String),
+        );
+        assert.deepEqual(
+          renewed.actualOutputs.map(String),
+          p.actualOutputs.map(String),
+        );
+        await expectFailure(
+          () =>
+            program.methods
+              .renewSettlementPlan(new BN(0), new BN(n + 5))
+              .accountsStrict({
+                owner: owner.publicKey,
+                config,
+                plan: depositPlanAddress,
+              })
+              .signers([owner])
+              .rpc(),
+          "renew stale CAS",
+        );
+        await until(renewed.expiresAt.toNumber());
+      }
+      await program.methods
+        .pause()
+        .accountsStrict({ authority: payer.publicKey, config })
+        .rpc();
+      await expectFailure(
+        () =>
+          program.methods
+            .refundUnswappedDeposit()
+            .accountsStrict({ ...refundAccounts, owner: attacker.publicKey })
+            .signers([attacker])
+            .rpc(),
+        "attacker refund",
+      );
+      await refund();
+      assert.equal(await balance(ownerUsdc), 1_000_000n);
+      assert.equal(await balance(vaultUsdc), 0n);
+      assert.equal(
+        (await fetchState("depositIntent", depositIntent)).status,
+        7,
+      );
+      await expectFailure(refund, "duplicate refunded deposit");
+      console.log(
+        `LOCAL_RECOVERY_PASS ${recoveryOnly}: expired owner recovery, pause, exact USDC, no keeper, duplicate rejected`,
+      );
+      return;
+    }
     await expectFailure(
       () =>
         program.methods

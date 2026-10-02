@@ -42,6 +42,12 @@ const result = spawnSync(anchor, ["test", "--", "--features", "local-mock"], {
   stdio: "inherit",
   env: {
     ...process.env,
+    ...(process.argv.includes("--recovery-plan")
+      ? { C3_LOCAL_RECOVERY_ONLY: "plan" }
+      : {}),
+    ...(process.argv.includes("--recovery-no-plan")
+      ? { C3_LOCAL_RECOVERY_ONLY: "no-plan" }
+      : {}),
     ANCHOR_PROVIDER_URL: "http://127.0.0.1:8899",
     ANCHOR_WALLET: wallet,
   },

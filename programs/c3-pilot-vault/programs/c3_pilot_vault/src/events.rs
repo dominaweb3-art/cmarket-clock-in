@@ -59,6 +59,7 @@ pub mod kind {
     pub const CLOSED: u8 = 13;
     pub const KEEPER_CHANGED: u8 = 14;
     pub const SHARES_LOCKED: u8 = 15;
+    pub const DEPOSIT_REFUNDED: u8 = 16;
 }
 
 pub fn emit_state(

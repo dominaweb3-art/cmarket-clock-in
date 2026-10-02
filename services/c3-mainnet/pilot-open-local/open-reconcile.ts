@@ -165,7 +165,7 @@ export function verifyFinalizedPlan(
   );
   const revision = d.readBigUInt64LE(716);
   check(
-    BigInt(context.planRevision) === BigInt(leg) &&
+    BigInt(context.planRevision) >= BigInt(leg) &&
       revision === BigInt(context.planRevision) + 1n &&
       d[714] === (1 << (leg + 1)) - 1,
     "PLAN_REVISION",

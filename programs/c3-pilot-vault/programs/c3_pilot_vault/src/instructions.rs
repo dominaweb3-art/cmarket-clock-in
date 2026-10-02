@@ -366,6 +366,39 @@ pub struct CloseCompletedIntent<'info> {
     pub redemption: Box<Account<'info, RedemptionIntent>>,
 }
 
+#[derive(Accounts)]
+pub struct RenewSettlementPlan<'info> {
+    pub owner: Signer<'info>,
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub config: Box<Account<'info, VaultConfig>>,
+    #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
+      constraint = plan.vault == config.key(), constraint = plan.wallet == owner.key())]
+    pub plan: Box<Account<'info, SettlementPlan>>,
+}
+
+/// Refund only an untouched deposit. The plan PDA may not yet exist.
+#[derive(Accounts)]
+pub struct RefundUnswappedDeposit<'info> {
+    pub owner: Signer<'info>,
+    #[account(mut, seeds = [VAULT_SEED], bump)]
+    pub config: Box<Account<'info, VaultConfig>>,
+    #[account(mut, seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
+    pub intent: Box<Account<'info, DepositIntent>>,
+    /// CHECK: Exact PDA; if allocated, checked ownership and decoded plan in handler.
+    #[account(mut, seeds = [PLAN_SEED, intent.key().as_ref()], bump)]
+    pub plan: UncheckedAccount<'info>,
+    /// CHECK: PDA transfer signer checked by seeds/bump.
+    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(mut, address = config.vault_usdc)]
+    pub vault_usdc: Box<Account<'info, TokenAccount>>,
+    #[account(mut, constraint = owner_usdc.owner == owner.key(), constraint = owner_usdc.mint == config.usdc_mint)]
+    pub owner_usdc: Box<Account<'info, TokenAccount>>,
+    #[account(address = config.usdc_mint)]
+    pub usdc_mint: Box<Account<'info, Mint>>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[cfg(feature = "local-mock")]
 #[derive(Accounts)]
 pub struct MockSettle<'info> {

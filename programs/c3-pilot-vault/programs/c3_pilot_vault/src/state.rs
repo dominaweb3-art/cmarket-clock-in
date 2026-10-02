@@ -90,7 +90,7 @@ pub struct RedemptionIntent {
 /// One immutable three-leg intent. Signatures and finality evidence live in the durable indexer,
 /// since a Solana program cannot know its enclosing transaction signature at execution time.
 #[account]
-#[derive(InitSpace)]
+#[derive(InitSpace, Default)]
 pub struct SettlementPlan {
     pub schema_version: u8,
     pub config_version: u64,
@@ -241,6 +241,7 @@ pub mod deposit_status {
     pub const SHARES_ISSUED: u8 = 4;
     pub const ACTIVE: u8 = 5;
     pub const EXPIRED: u8 = 6;
+    pub const REFUNDED: u8 = 7;
 }
 
 pub mod redemption_status {

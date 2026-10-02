@@ -492,9 +492,8 @@ pub mod c3_pilot_vault {
         let c = &ctx.accounts.config;
         let d = &mut ctx.accounts.intent;
         let p = &ctx.accounts.plan;
-        require_keys_eq!(
-            ctx.accounts.keeper.key(),
-            c.keeper,
+        require!(
+            ctx.accounts.keeper.key() == c.keeper || ctx.accounts.keeper.key() == d.wallet,
             VaultError::Unauthorized
         );
         require_eq!(
@@ -516,7 +515,7 @@ pub mod c3_pilot_vault {
             plan_lifecycle::ACTIVE,
             VaultError::InvalidState
         );
-        require_eq!(p.revision, 3, VaultError::InvalidState);
+        require!(p.revision >= 3, VaultError::InvalidState);
         require!(
             p.actual_inputs == [400_000, 300_000, 300_000],
             VaultError::Settlement
@@ -586,13 +585,17 @@ pub mod c3_pilot_vault {
         require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let d = &ctx.accounts.intent;
-        require_keys_eq!(
-            ctx.accounts.keeper.key(),
-            c.keeper,
+        require!(
+            ctx.accounts.keeper.key() == c.keeper || ctx.accounts.keeper.key() == d.wallet,
             VaultError::Unauthorized
         );
         at(d.status, deposit_status::SETTLEMENT_PENDING)?;
-        live(d.expires_at)?;
+        // A funded owner retains recovery rights after intent expiry; the new
+        // plan itself still requires a fresh bounded quote/time window.
+        // Expiry ends the keeper's authorization, not the owner's custody rights.
+        if ctx.accounts.keeper.key() != d.wallet {
+            live(d.expires_at)?;
+        }
         require_eq!(d.deposited, ONE_USDC, VaultError::InvalidAmount);
         require_eq!(
             d.config_version,
@@ -632,9 +635,8 @@ pub mod c3_pilot_vault {
         require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
         let c = &ctx.accounts.config;
         let r = &ctx.accounts.intent;
-        require_keys_eq!(
-            ctx.accounts.keeper.key(),
-            c.keeper,
+        require!(
+            ctx.accounts.keeper.key() == c.keeper || ctx.accounts.keeper.key() == r.wallet,
             VaultError::Unauthorized
         );
         at(r.status, redemption_status::LIQUIDATION_PENDING)?;
@@ -859,9 +861,8 @@ pub mod c3_pilot_vault {
         let c = &ctx.accounts.config;
         let r = &mut ctx.accounts.intent;
         let p = &ctx.accounts.plan;
-        require_keys_eq!(
-            ctx.accounts.keeper.key(),
-            c.keeper,
+        require!(
+            ctx.accounts.keeper.key() == c.keeper || ctx.accounts.keeper.key() == r.wallet,
             VaultError::Unauthorized
         );
         require_eq!(
@@ -883,7 +884,7 @@ pub mod c3_pilot_vault {
             plan_lifecycle::CLAIMABLE,
             VaultError::InvalidState
         );
-        require_eq!(p.revision, 3, VaultError::InvalidState);
+        require!(p.revision >= 3, VaultError::InvalidState);
         require!(
             p.actual_inputs == [r.btc_before, r.eth_before, r.wsol_before],
             VaultError::Settlement
@@ -1015,6 +1016,126 @@ pub mod c3_pilot_vault {
             d.wallet,
             kind::EXPIRED,
             0,
+        )
+    }
+
+    /// Explicit owner extension: no cancellation, inventory release or progress reset.
+    pub fn renew_settlement_plan(
+        ctx: Context<RenewSettlementPlan>,
+        expected_revision: u64,
+        expires_at: i64,
+    ) -> Result<()> {
+        let c = &ctx.accounts.config;
+        let p = &mut ctx.accounts.plan;
+        require_keys_eq!(
+            ctx.accounts.owner.key(),
+            c.allowlisted_owner,
+            VaultError::Unauthorized
+        );
+        require_eq!(
+            p.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        settlement_plan::renew(
+            p,
+            expected_revision,
+            Clock::get()?.unix_timestamp,
+            expires_at,
+        )
+    }
+
+    /// Partial positions never enter this branch. Late old envelopes fail their
+    /// plan lifecycle/revision atomically. Refund remains available under pause.
+    pub fn refund_unswapped_deposit(ctx: Context<RefundUnswappedDeposit>) -> Result<()> {
+        let c = &mut ctx.accounts.config;
+        let d = &mut ctx.accounts.intent;
+        let now = Clock::get()?.unix_timestamp;
+        require_keys_eq!(
+            ctx.accounts.owner.key(),
+            c.allowlisted_owner,
+            VaultError::Unauthorized
+        );
+        require_keys_eq!(d.wallet, ctx.accounts.owner.key(), VaultError::Unauthorized);
+        require_keys_eq!(d.vault, c.key(), VaultError::InvalidPlan);
+        require_eq!(
+            d.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        at(d.status, deposit_status::SETTLEMENT_PENDING)?;
+        require!(
+            c.lifecycle == 1
+                && c.total_shares_issued == 0
+                && d.shares_issued == 0
+                && d.deposited == ONE_USDC,
+            VaultError::InvalidState
+        );
+        if ctx.accounts.plan.lamports() > 0 && !ctx.accounts.plan.data_is_empty() {
+            require_keys_eq!(*ctx.accounts.plan.owner, crate::ID, VaultError::InvalidPlan);
+            let mut p =
+                SettlementPlan::try_deserialize(&mut &ctx.accounts.plan.try_borrow_data()?[..])?;
+            require!(
+                p.vault == c.key()
+                    && p.intent == d.key()
+                    && p.wallet == d.wallet
+                    && p.config_version == c.config_version
+                    && p.direction == plan_direction::DEPOSIT
+                    && p.schema_version == 2
+                    && p.executed_bitmap == 0
+                    && p.actual_inputs == [0; 3]
+                    && p.actual_outputs == [0; 3]
+                    && p.lifecycle == plan_lifecycle::FUNDED
+                    && now >= p.expires_at,
+                VaultError::InvalidPlan
+            );
+            p.revision = add(p.revision, 1)?;
+            p.lifecycle = plan_lifecycle::MANUAL_REVIEW;
+            p.active_swap_authorization = [0; 32];
+            p.active_swap_expires_at = 0;
+            p.try_serialize(&mut &mut ctx.accounts.plan.try_borrow_mut_data()?[..])?;
+        } else {
+            require!(now >= d.expires_at, VaultError::Expired);
+            require_keys_eq!(
+                *ctx.accounts.plan.owner,
+                anchor_lang::system_program::ID,
+                VaultError::InvalidPlan
+            );
+        }
+        ata(
+            ctx.accounts.owner_usdc.key(),
+            d.wallet,
+            c.usdc_mint,
+            anchor_spl::token::ID,
+        )?;
+        backed(
+            ctx.accounts.vault_usdc.amount,
+            add(d.usdc_before, d.deposited)?,
+        )?;
+        let bump = [c.authority_bump];
+        let signer: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+        token::transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.vault_usdc.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
+                    to: ctx.accounts.owner_usdc.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[signer],
+            ),
+            d.deposited,
+            6,
+        )?;
+        d.status = deposit_status::REFUNDED;
+        c.lifecycle = 4;
+        emit_state(
+            c.key(),
+            d.key(),
+            d.wallet,
+            kind::DEPOSIT_REFUNDED,
+            d.deposited,
         )
     }
 

@@ -650,9 +650,9 @@ pub fn execute<'info>(
 ) -> Result<()> {
     require!(ROUTER_EXECUTION_ENABLED, VaultError::SwapDisabled);
     require!(!ctx.accounts.config.paused, VaultError::Paused);
-    require_keys_eq!(
-        ctx.accounts.keeper.key(),
-        ctx.accounts.config.keeper,
+    require!(
+        ctx.accounts.keeper.key() == ctx.accounts.config.keeper
+            || ctx.accounts.keeper.key() == ctx.accounts.plan.wallet,
         VaultError::Unauthorized
     );
     require!(
