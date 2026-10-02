@@ -86,13 +86,16 @@ const run = spawnSync("./gradlew", ["--init-script", init, "assembleRelease"], {
   stdio: "inherit",
 });
 if (run.status !== 0) process.exit(run.status ?? 1);
-const output = join(dist, "c-market-c3-pilot-0.1.0-qa.apk");
+const output = join(dist, "c-market-c3-pilot-0.1.1-local-cycle-qa.apk");
 copyFileSync(
   join(root, "android/app/build/outputs/apk/release/app-release.apk"),
   output,
 );
 const hash = createHash("sha256").update(readFileSync(output)).digest("hex");
-writeFileSync(output + ".sha256", `${hash}  c-market-c3-pilot-0.1.0-qa.apk\n`);
+writeFileSync(
+  output + ".sha256",
+  `${hash}  c-market-c3-pilot-0.1.1-local-cycle-qa.apk\n`,
+);
 console.log(
   `QA_APK=${output}\nSHA256=${hash}\nCERTIFICATE_SCOPE=LOCAL_QA_ONLY`,
 );

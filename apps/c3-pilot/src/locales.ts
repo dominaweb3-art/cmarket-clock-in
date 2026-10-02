@@ -1,4 +1,13 @@
 export const en = {
+  cloneTitle: "Isolated cloned Jupiter cycle",
+  cloneNotice:
+    "Synthetic 1 USDC and ephemeral test wallet. Actual local-validator execution, NOT a Mainnet purchase or your position. MWA is not used to sign this test.",
+  cloneUnavailable:
+    "Start the isolated local cycle service on the computer. No evidence available.",
+  cloneStart: "Start one LOCAL test cycle",
+  cloneLegs: "Finalized and reconciled swap legs",
+  cloneShares: "Test shares issued / burned (base units)",
+  cloneReturned: "Test USDC returned",
   home: "Home",
   indices: "Indices",
   loading: "Loading…",
@@ -62,6 +71,15 @@ export const en = {
 export type TranslationKey = keyof typeof en;
 type Dictionary = Record<TranslationKey, string>;
 const es: Dictionary = {
+  cloneTitle: "Ciclo Jupiter clonado y aislado",
+  cloneNotice:
+    "1 USDC sintético y billetera efímera de prueba. Ejecución real del validador local, NO compra Mainnet ni tu posición. MWA no firma este ensayo.",
+  cloneUnavailable:
+    "Inicia el servicio de ensayo aislado en el computador. No hay evidencia disponible.",
+  cloneStart: "Iniciar un solo ciclo de prueba LOCAL",
+  cloneLegs: "Piernas de swap finalizadas y conciliadas",
+  cloneShares: "Participaciones de prueba emitidas / quemadas (unidades base)",
+  cloneReturned: "USDC de prueba devuelto",
   home: "Inicio",
   indices: "Índices",
   loading: "Cargando…",
@@ -123,6 +141,14 @@ const es: Dictionary = {
   mainnet: "Mainnet está deshabilitada en esta versión.",
 };
 const zhCN: Dictionary = {
+  cloneTitle: "隔离的 Jupiter 克隆测试周期",
+  cloneNotice:
+    "使用合成 1 USDC 和临时测试钱包。真实本地验证器执行，不是主网购买或您的仓位。MWA 不签署此测试。",
+  cloneUnavailable: "请在电脑上启动隔离测试服务。暂无证据。",
+  cloneStart: "启动一次本地测试周期",
+  cloneLegs: "已最终确认并对账的兑换步骤",
+  cloneShares: "测试份额已发行 / 已销毁（基础单位）",
+  cloneReturned: "已返还的测试 USDC",
   home: "首页",
   indices: "指数",
   loading: "加载中…",
@@ -176,6 +202,15 @@ const zhCN: Dictionary = {
   mainnet: "此版本禁用主网。",
 };
 const ptBR: Dictionary = {
+  cloneTitle: "Ciclo Jupiter clonado e isolado",
+  cloneNotice:
+    "1 USDC sintético e carteira efêmera de teste. Execução real no validador local, NÃO uma compra Mainnet nem sua posição. MWA não assina este teste.",
+  cloneUnavailable:
+    "Inicie o serviço de teste isolado no computador. Nenhuma evidência disponível.",
+  cloneStart: "Iniciar um único ciclo de teste LOCAL",
+  cloneLegs: "Etapas de swap finalizadas e reconciliadas",
+  cloneShares: "Cotas de teste emitidas / queimadas (unidades base)",
+  cloneReturned: "USDC de teste devolvido",
   home: "Início",
   indices: "Índices",
   loading: "Carregando…",

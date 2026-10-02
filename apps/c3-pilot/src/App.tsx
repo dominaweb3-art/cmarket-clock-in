@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import { connectReadOnlyWallet } from "./wallet";
 import { loadStatus, READ_ONLY_BACKEND, type PilotStatus } from "./backend";
+import { LocalCyclePanel } from "./LocalCyclePanel";
 import {
   Alert,
   Pressable,
@@ -186,6 +187,12 @@ export default function App() {
         )}
         {tab === "activity" && (
           <>
+            {READ_ONLY_BACKEND === "http://127.0.0.1:8787" && (
+              <LocalCyclePanel
+                endpoint={READ_ONLY_BACKEND}
+                language={language}
+              />
+            )}
             <View style={styles.card}>
               <Text style={styles.heading}>{t("progress")}</Text>
               <Text style={styles.muted}>{t("progressEmpty")}</Text>

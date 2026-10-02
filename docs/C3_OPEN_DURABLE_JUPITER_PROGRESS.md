@@ -1,5 +1,11 @@
 # C3 open-vault implementation checkpoint — 2026-10-01
 
+> Historical checkpoint through `f54bba0`. The independent-probe and missing-device
+> statements below describe that earlier state, not today's integrated result.
+> See `C3_INTEGRATED_CLONE_ACCEPTANCE.md` for the subsequent single-bank,
+> PostgreSQL, physical-Seeker acceptance and the still-blocked Mainnet gate.
+> Preserve this record; do not reinterpret earlier simulations as acquisitions.
+
 Classification: SHARED. Starting commit: `270eac6a0066095bdae76b558af5bf1ff56b794e`.
 
 ## Verified boundaries (not a Mainnet purchase)
