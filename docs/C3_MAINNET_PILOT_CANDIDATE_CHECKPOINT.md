@@ -1,5 +1,123 @@
 # Controlled C3 pilot candidate — PARTIALLY_COMPLETED / BLOCKED
 
+## Latest implementation checkpoint — 2026-10-02
+
+Classification: SHARED. Resumed at `599e242c29c053676e5c0111b4b71ae7c28cc6bd`.
+Verified commits: `e71170166acad69b65ef1b9d961a7ef407214c57` (durable signer),
+`c1105e54d8bbf1b7c3d6534b86ef4ca12536bf94` (owner recovery primitives),
+`ee4c69ab5d11bcc6b8ef6ddf5b51815a4a1f8542` (bounded clone preparation/quote clocks).
+This section supersedes the current-result statements below; the older checkpoint
+is intentionally preserved as provenance. No source capability or approval was enabled.
+
+### Verified implementation, not a Mainnet release
+
+- Isolated signer now records canonical request identity and dispatch in PostgreSQL
+  **before** contacting the external provider. Connections/locks are released during
+  the provider call. A lost result permits lookup only, never another blind signature.
+  Ed25519 result, immutable bytes, revision, three lookup attempts and database-clock
+  24-hour deadline are durable. Additive migrations 0005/0006 preserve prior checksums.
+  Disposable PostgreSQL tests: 2/2, including concurrent callers, restart/lost reply,
+  altered bytes, lookup exhaustion and pool-size-one deadlock regression.
+- HTTPS external adapter has a stable request ID, eight-second timeout, 4,096-byte
+  response cap, public identity binding and no retry. It is not an enrolled production
+  HSM. Source policy null/capability false prevents production invocation. External
+  transport and disabled/quorum tests: 6/6. Short transactions follow the PostgreSQL
+  best-practices skill; no least-privilege production role was invented.
+- Owner can renew an expired partial plan with exact revision comparison while
+  preserving completed legs, budgets, minimums, inventory and user rights. Revision
+  increments and old active authorization is invalidated. Keeper cannot create an
+  expired deposit plan; owner fallback retains the same quote/route restrictions.
+  Intact, unswapped expired deposits may be refunded by their owner, including under
+  pause; partial positions cannot use this refund. Actual local-validator targeted
+  tests passed for plan/no-plan refund, unauthorized owner, stale revision and duplicate
+  refund. Rust 9/9 includes partial buy/sell inventory preservation; this is not a
+  complete durable backend recovery integration.
+- Clone preparation discovers canonical USDC pairs through official read-only RPC,
+  checks pool/reserve/tick/program/ALT accounts, caps unique pools at 96 and quote
+  attempts at three. It never overwrites a running bank. A missing required account
+  remains a blocker, not permission to omit it. Quote clock waits at most 5.1 seconds
+  without changing Jupiter creation time or expiry; stale/future/policy errors remain
+  closed. Four focused clock tests and four economic-effect tests passed. A separate
+  read-only reviewer reproduced and verified correction of the delayed-timer LOW.
+
+### Updated integrated cycle: PASS_LOCAL_CLONED_JUPITER_CYCLE
+
+Ignored evidence: `programs/c3-pilot-vault/results/jupiter-cycle-RfSq7y/report.json`.
+One PostgreSQL intent `9f369332-6d48-4165-a6b5-14a9e77ecf80`, isolated ephemeral
+quote signer, Ed25519 on-chain verification and real cloned Jupiter/Whirlpool CPI:
+
+- All six legs finalized and independently reconciled against actual local RPC.
+- Buy inputs 400000/300000/300000 synthetic USDC units. Their expected outputs /
+  Jupiter thresholds / signed minimums were 464/460/460, 11032/10922/10922 and
+  2462356/2437733/2437733. No seal authorized less than its exact validated threshold.
+- Sell inputs 464 cbBTC units, 11023 Portal ETH units and 2459711 WSOL units came
+  from actual buy effects in this same bank, not independently pre-funded fixtures.
+  Expected output / threshold / minimum were 398016/394036/394036,
+  299430/296436/296436 and 299780/296783/296783 USDC units respectively.
+- 1,000,000 local share units issued and burned; 997861 USDC units returned;
+  duplicate claim rejected on-chain. Execution packets were 753–846 bytes.
+- New OS process recovered the same intent/revision/signature; an uncertain leg
+  reconciled read-only with no resend; competing workers and duplicate confirmation
+  were rejected. Three malicious mutations of actual finalized evidence failed closed.
+
+**This is cloned execution with synthetic input, not Mainnet acquisition, a real
+user position, an external audit or production approval.** The independent reviewer
+checked source/report but did not repeat the cycle or independently query its signatures.
+
+### Preserved disabled artifacts and current costs
+
+New ignored directory: `artifacts/c3-pilot-candidate/2026-10-02-recovery-disabled`.
+Previous artifacts remain intact. Default Anchor build (no local feature flags):
+
+- SO: 692864 bytes, SHA-256 `d4aca9adebad10179b51f9d03b40fe399b8619347586370123105c985171beb1`.
+- IDL: SHA-256 `7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb`;
+  plan remains schema 2/901 bytes. No mock/probe handlers. Macro/deprecation/toolchain
+  warnings remain; a compile is not authorization to deploy this disabled artifact.
+- APK preserved byte-for-byte: SHA-256
+  `2279f28ff2112b9c862ee42a119699a6e0224b51fa0535f7f4c35f26e3d8df00`.
+  Android signature reverified using the existing QA-only certificate. No new APK
+  monetary implementation, installation, wallet chooser or physical Seeker QA this run.
+- Current candidate Android export: 661 source-map modules; zero clone launcher,
+  quote journal/external signer, pg or node-forge modules. Mobile tests 8/8, TypeScript,
+  lint/format pass. Expo Doctor still 18/19: pinned 57.0.25 versus recommended 57.0.26;
+  no unrelated upgrade. Metro dependency export fallback warning remains visible.
+- Official public Mainnet genesis/rent checks at `2026-10-02T06:23:14.914Z`:
+  persistent capital **3584366720 lamports (3.58436672 SOL)**;
+  recoverable temporary buffer **3520587320 lamports (3.52058732 SOL)**;
+  peak capital **7104954040 lamports (7.10495404 SOL)**. Deposit remains separate 1 USDC.
+  Consumed deployment/priority/swap fees and service costs are **not measured/approved**.
+  Six authorization/receipt pairs are included; additional recovery generations need
+  additional retained accounts and an updated budget. No all-in budget is claimed.
+  Estimator now accepts an exact preserved artifact directory and writes evidence
+  exclusively; rent/IDL inspection alone does not prove binary execution capability.
+- Service production npm audit: zero findings; Rust/service package boundaries pass.
+
+### Exact remaining technical links — no fund authorization
+
+1. Backend renewal is NOT connected: `capture-context.ts` still requires PostgreSQL
+   chain revision to equal plan revision; `open-lifecycle.ts` fixes final revision at 3.
+   A renewed plan needs a finalized owner-renewal checkpoint with before/after inventory,
+   revision and expiry, persisted append-only and applied by CAS. Do not loosen equality
+   without this evidence. Original authorization deadlines and signatures must remain.
+2. Existing prepared leg fields and quotes are immutable. A crashed builder loses its
+   memory-only envelope; safe replacement needs explicit authorization generations and
+   a durable supersession proof, not resetting a leg or blindly signing/submitting again.
+   Renewing before uncertain-signature reconciliation can invalidate historical evidence.
+   Expired redemption requests before share locking also lack a complete backend path.
+3. Productive capture/economic verification is not connected to a reviewed two-operator
+   RPC pair or production c3_open enrollment. Agreement alone is not economic proof.
+   HTTPS signer transport is tested, but no durable external provider enrollment exists.
+4. Candidate mobile still supports connection-only MWA, disabled Buy/Sell and no productive
+   backend position/monetary packet path. No real NAV or holding is displayed.
+
+The next implementation is the append-only owner-renewal/attempt checkpoint, including
+late/uncertain historical verification, then productive quorum and mobile monetary binding.
+No owner decision or secret is needed to implement that code. Public authorities,
+operators, governance and exact-budget approval remain required only after technical gates
+close. Mainnet and user monetary actions remain disabled. `PHONE_REQUIRED_NEXT: NO`.
+
+## Historical checkpoint preserved below
+
 Classification: SHARED. Evidence captured 2026-10-02 UTC (2026-10-01 Colombia).
 Started at `843d5482f7a2153abc764b16dffea27267b46d5c`; implementation checkpoint
 `b9a650515c363375710f733ce25d3b3d0849ee54`. This is not a deployment approval,

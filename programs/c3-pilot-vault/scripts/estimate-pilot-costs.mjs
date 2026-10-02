@@ -1,13 +1,41 @@
 /** Official public Mainnet RPC, READ ONLY. No wallet, secret, transaction,
  * blockhash, signing, submission or deploy command is constructed here. */
-import { readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  readFileSync,
+  statSync,
+  lstatSync,
+  mkdirSync,
+  writeFileSync,
+  realpathSync,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
-const binary = join(root, "target/pilot-candidate-disabled/c3_pilot_vault.so");
-const idlFile = join(root, "target/idl/c3_pilot_vault.json");
+const args = process.argv.slice(2);
+if (args.length !== 0 && (args.length !== 2 || args[0] !== "--artifact-dir"))
+  throw new Error("EXPECTED_ARTIFACT_DIRECTORY_ARGUMENT");
+const artifactBase = realpathSync(
+  join(root, "../../artifacts/c3-pilot-candidate"),
+);
+const directory = args.length ? realpathSync(resolve(args[1])) : null;
+if (directory && !directory.startsWith(artifactBase + "/"))
+  throw new Error("ISOLATED_ARTIFACT_DIRECTORY_REQUIRED");
+const binary = directory
+  ? join(directory, "c3_pilot_vault-disabled.so")
+  : join(root, "target/pilot-candidate-disabled/c3_pilot_vault.so");
+const idlFile = directory
+  ? join(directory, "c3_pilot_vault-disabled.idl.json")
+  : join(root, "target/idl/c3_pilot_vault.json");
+if (
+  [binary, idlFile].some(
+    (p) => !lstatSync(p).isFile() || lstatSync(p).isSymbolicLink(),
+  )
+)
+  throw new Error("REGULAR_ARTIFACT_FILES_REQUIRED");
 const idl = JSON.parse(readFileSync(idlFile, "utf8"));
+if (idl.instructions.some((v) => /mock|probe/.test(v.name)))
+  throw new Error("DEFAULT_DISABLED_IDL_REQUIRED");
 const rpc = "https://api.mainnet-beta.solana.com";
 let sequence = 0;
 async function read(method, params = []) {
@@ -147,8 +175,25 @@ const result = {
   ],
 };
 mkdirSync(join(root, "results"), { recursive: true });
-const output = join(root, "results/mainnet-pilot-costs.json");
-writeFileSync(output, JSON.stringify(result, null, 2) + "\n");
+const output = directory
+  ? join(directory, "public-rent-estimate.json")
+  : join(root, "results/mainnet-pilot-costs.json");
+if (
+  directory &&
+  (() => {
+    try {
+      statSync(output);
+      return true;
+    } catch (e) {
+      if (e.code === "ENOENT") return false;
+      throw e;
+    }
+  })()
+)
+  throw new Error("PRESERVED_COST_EVIDENCE_ALREADY_EXISTS");
+writeFileSync(output, JSON.stringify(result, null, 2) + "\n", {
+  flag: directory ? "wx" : "w",
+});
 console.log(
   JSON.stringify({
     timestamp: result.timestamp,
@@ -157,6 +202,8 @@ console.log(
     transientPeakRentSOL: (persistent + buffer) / 1e9,
     depositUSDC: 1,
     budget: "INCOMPLETE",
+    artifactScope: "DISABLED_NOT_DEPLOYABLE",
+    capabilityProof: "SOURCE_AND_BUILD_REVIEW_REQUIRED_NOT_PROVEN_BY_RENT",
     report: output,
   }),
 );
