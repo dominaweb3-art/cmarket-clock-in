@@ -26,6 +26,25 @@ const en = {
   risk: "SOL account rent, deployment and operation costs are separate from 1 USDC. Fees and SKR discounts remain disabled. No returns are guaranteed.",
   configuration:
     "Public release configuration and owner approvals are missing.",
+  ownerWorkflow:
+    "Owner flow: deposit → settlement → shares → redemption → USDC claim. Real operations remain blocked.",
+  readPosition: "Read reconciled position",
+  shares: "C3 shares",
+  baseUnits: "base units (6 decimals)",
+  noOperation: "No owner operation recorded.",
+  issue: "Issue reconciled shares · blocked",
+  claim: "Claim reconciled USDC · blocked",
+  approve: "Review and authorize with MWA",
+  recover: "Read-only recovery (no retry)",
+  operationError:
+    "Operation blocked or evidence unavailable. An uncertain signature must be reconciled; do not retry.",
+  reviewNotice:
+    "Review the exact program, accounts and amount before approval. A wallet signature is not a settled C3 position.",
+  review: "Awaiting explicit review",
+  authorizing: "Wallet authorization pending",
+  signed: "Signature recorded; effects not yet verified",
+  uncertain: "Uncertain result: reconciliation required",
+  finalized: "Economic effects reconciled",
 } as const;
 type Dictionary = Record<keyof typeof en, string>;
 export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
@@ -57,6 +76,25 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     risk: "La renta de cuentas, despliegue y operación en SOL es adicional a 1 USDC. Comisiones y descuentos SKR deshabilitados. Sin rendimientos garantizados.",
     configuration:
       "Faltan configuración pública y aprobaciones del propietario.",
+    ownerWorkflow:
+      "Recorrido del propietario: depósito → liquidación → participaciones → rescate → reclamo USDC. Operaciones reales bloqueadas.",
+    readPosition: "Consultar posición conciliada",
+    shares: "Participaciones C3",
+    baseUnits: "unidades base (6 decimales)",
+    noOperation: "Sin operación del propietario registrada.",
+    issue: "Emitir participaciones conciliadas · bloqueado",
+    claim: "Reclamar USDC conciliado · bloqueado",
+    approve: "Revisar y autorizar con MWA",
+    recover: "Recuperación de solo lectura (sin reenvío)",
+    operationError:
+      "Operación bloqueada o evidencia no disponible. Una firma incierta debe conciliarse; no reintentes.",
+    reviewNotice:
+      "Revisa programa, cuentas e importe exactos antes de autorizar. Una firma no es una posición C3 liquidada.",
+    review: "Esperando revisión explícita",
+    authorizing: "Autorización de wallet pendiente",
+    signed: "Firma registrada; efectos aún no verificados",
+    uncertain: "Resultado incierto: requiere conciliación",
+    finalized: "Efectos económicos conciliados",
   },
   "zh-CN": {
     title: "C Market · C3 候选版",
@@ -80,6 +118,25 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     sell: "全额赎回 · 已阻止",
     risk: "SOL 账户租金、部署及操作成本不包含在 1 USDC 中。手续费和 SKR 折扣尚未启用。不保证收益。",
     configuration: "缺少公开发布配置及所有者批准。",
+    ownerWorkflow:
+      "所有者流程：存入 → 结算 → 份额 → 赎回 → 领取 USDC。真实资金操作仍被阻止。",
+    readPosition: "读取已核对持仓",
+    shares: "C3 份额",
+    baseUnits: "基本单位（6 位小数）",
+    noOperation: "尚无所有者操作记录。",
+    issue: "发行已核对份额 · 已阻止",
+    claim: "领取已核对 USDC · 已阻止",
+    approve: "审核并通过 MWA 授权",
+    recover: "只读恢复（不重试）",
+    operationError:
+      "操作被阻止或证据不可用。结果不明的签名须先核对，不要重试。",
+    reviewNotice:
+      "授权前审核准确的程序、账户和金额。钱包签名不等于已结算的 C3 持仓。",
+    review: "等待明确审核",
+    authorizing: "等待钱包授权",
+    signed: "已记录签名；经济效果尚未验证",
+    uncertain: "结果不明：须核对",
+    finalized: "经济效果已核对",
   },
   "pt-BR": {
     title: "C Market · C3 Candidato",
@@ -106,5 +163,24 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     sell: "Resgate total · bloqueado",
     risk: "Aluguel de contas, implantação e operação em SOL são adicionais a 1 USDC. Taxas e descontos SKR desativados. Sem garantia de retorno.",
     configuration: "Faltam configuração pública e aprovações do proprietário.",
+    ownerWorkflow:
+      "Fluxo do proprietário: depósito → liquidação → cotas → resgate → retirada USDC. Operações reais bloqueadas.",
+    readPosition: "Consultar posição reconciliada",
+    shares: "Cotas C3",
+    baseUnits: "unidades base (6 casas decimais)",
+    noOperation: "Nenhuma operação do proprietário registrada.",
+    issue: "Emitir cotas reconciliadas · bloqueado",
+    claim: "Retirar USDC reconciliado · bloqueado",
+    approve: "Revisar e autorizar com MWA",
+    recover: "Recuperação somente leitura (sem reenvio)",
+    operationError:
+      "Operação bloqueada ou evidência indisponível. Uma assinatura incerta deve ser reconciliada; não tente novamente.",
+    reviewNotice:
+      "Revise programa, contas e valor exatos antes de aprovar. Uma assinatura não é uma posição C3 liquidada.",
+    review: "Aguardando revisão explícita",
+    authorizing: "Autorização da carteira pendente",
+    signed: "Assinatura registrada; efeitos ainda não verificados",
+    uncertain: "Resultado incerto: requer reconciliação",
+    finalized: "Efeitos econômicos reconciliados",
   },
 };

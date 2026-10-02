@@ -120,7 +120,10 @@ async function pending(pool: Pool, intentId: string, ownRequest?: string) {
       LEFT JOIN c3_open.plan_generations g USING(request_id)
       LEFT JOIN c3_open.renewal_outcomes o USING(request_id)
       WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL
-        AND ($2::uuid IS NULL OR r.request_id<>$2::uuid) LIMIT 1`,
+        AND ($2::uuid IS NULL OR r.request_id<>$2::uuid)
+    UNION ALL SELECT 1 FROM c3_open.owner_requests r
+      LEFT JOIN c3_open.owner_message_receipts m USING(request_id)
+      WHERE r.intent_id=$1 AND m.request_id IS NULL LIMIT 1`,
     [intentId, ownRequest ?? null],
   );
   check(!r.rowCount, "RECONCILE_PENDING_FIRST");

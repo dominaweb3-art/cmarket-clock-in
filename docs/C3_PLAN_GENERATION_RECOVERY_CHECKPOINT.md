@@ -1,5 +1,8 @@
 # Append-only C3 recovery checkpoint — 2026-10-02
 
+Current connected owner/API and APK results are recorded in
+`C3_OWNER_WORKFLOW_CHECKPOINT.md`. The historical results below are preserved.
+
 Classification: SHARED. Starting commit `6dc7a486982fa6ac87a142dd101fc2257a5caa85`,
 branch `feature/c3-open-pilot-vault`. Overall **PARTIALLY_COMPLETED**, not an
 approved monetary release. This supersedes older current-result statements in

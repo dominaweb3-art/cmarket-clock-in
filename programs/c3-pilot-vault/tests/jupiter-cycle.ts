@@ -67,6 +67,14 @@ import {
   reconcileLocalRenewal,
   recordLocalRenewalSignature,
 } from "../../../services/c3-mainnet/pilot-open-local/plan-generations.ts";
+import { createIsolatedOwnerServer } from "../../../services/c3-mainnet/pilot-open-local/owner-server.ts";
+import { recordLocalFinalizedOwnerMessage } from "../../../services/c3-mainnet/pilot-open-local/owner-operations.ts";
+import { ownerBackend } from "../../../apps/c3-pilot/src/owner-backend.ts";
+import { OwnerController } from "../../../apps/c3-pilot/src/owner-controller.ts";
+import type {
+  MoneyAction,
+  OwnerPolicy,
+} from "../../../apps/c3-pilot/src/owner-policy.ts";
 const idl = JSON.parse(
   readFileSync(
     new URL("../target/idl/c3_pilot_vault.json", import.meta.url),
@@ -74,6 +82,7 @@ const idl = JSON.parse(
   ),
 ) as Idl;
 const bank = new CloneBank();
+let ownerServer: ReturnType<typeof createIsolatedOwnerServer> | undefined;
 const governance = Keypair.generate(),
   owner = Keypair.generate(),
   keeper = Keypair.generate(),
@@ -462,7 +471,11 @@ try {
       })),
     )
     .rpc();
-  await instruction("unpause", [], { authority: governance.publicKey, config });
+  const unpauseSig = await instruction("unpause", [], {
+    authority: governance.publicKey,
+    config,
+  });
+  await finalized(unpauseSig);
   const intent = (seed: string) =>
     PublicKey.findProgramAddressSync(
       [
@@ -497,31 +510,100 @@ try {
     expectedChainRevision: state.chainRevision,
     idempotencyHash: cycleHash(Buffer.from(randomUUID())),
   });
-  await instruction(
-    "createDepositIntent",
-    [new BN(1), new BN(1_000_000), new BN(1), new BN((await now()) + 1800)],
-    {
-      owner: owner.publicKey,
-      config,
-      intent: depositIntent,
-      systemProgram: SystemProgram.programId,
-    },
-    [owner],
+  const clientPolicy: OwnerPolicy = {
+    wallet: owner.publicKey.toBytes(),
+    program: VAULT_PROGRAM.toBytes(),
+    accounts: Object.fromEntries(
+      Object.entries({
+        config,
+        deposit_intent: depositIntent,
+        redemption_intent: redemptionIntent,
+        deposit: depositIntent,
+        system_program: SystemProgram.programId,
+        vault_authority: VAULT_AUTHORITY,
+        share_mint: share.publicKey,
+        owner_shares: ownerShares,
+        owner_usdc: ownerUsdc,
+        usdc_mint: new PublicKey(c.usdcMint),
+        token_program: TOKEN_PROGRAM_ID,
+        share_token_program: TOKEN_2022_PROGRAM_ID,
+        vault_usdc: holdings.vaultUsdc,
+        vault_btc: holdings.vaultBtc,
+        vault_eth: holdings.vaultEth,
+        vault_wsol: holdings.vaultWsol,
+      }).map(([name, key]) => [name, key.toBytes()]),
+    ),
+  };
+  ownerServer = createIsolatedOwnerServer(
+    journal.pool,
+    local,
+    idl,
+    id,
+    (code) => console.error("LOCAL_OWNER_GATE", code),
   );
-  const depositSig = await instruction(
-    "depositUsdc",
-    [],
-    {
-      owner: owner.publicKey,
-      config,
-      intent: depositIntent,
-      ownerUsdc,
-      ...holdings,
-      usdcMint: new PublicKey(c.usdcMint),
-      tokenProgram: TOKEN_PROGRAM_ID,
-    },
-    [owner],
+  await new Promise<void>((resolve) =>
+    ownerServer!.listen(0, "127.0.0.1", resolve),
   );
+  const ownerAddress = ownerServer.address();
+  assert.ok(ownerAddress && typeof ownerAddress !== "string");
+  const backend = ownerBackend(
+    `http://127.0.0.1:${ownerAddress.port}`,
+    (b) => Buffer.from(b).toString("base64"),
+    (s) => new Uint8Array(Buffer.from(s, "base64")),
+  );
+  let stored = "",
+    signedPacket: Uint8Array | undefined;
+  const flow = new OwnerController({
+    gate: () => assert.match(local!.rpcEndpoint, /^http:\/\/127\.0\.0\.1:/),
+    wallet: owner.publicKey.toBase58(),
+    policy: clientPolicy,
+    backend,
+    evidenceScope: "LOCAL_CLONE",
+    now: () => Math.floor(Date.now() / 1000),
+    save: async (r) => {
+      stored = JSON.stringify(r);
+    },
+    signature: (b) =>
+      encodeBase58(VersionedTransaction.deserialize(b).signatures[0]!),
+    sign: async (b) => {
+      const tx = VersionedTransaction.deserialize(b);
+      tx.sign([owner]);
+      signedPacket = tx.serialize();
+      return signedPacket;
+    },
+  });
+  const ownerOperation = async (action: MoneyAction) => {
+    if (flow.snapshot) {
+      await flow.restore(stored);
+      await flow.recover();
+      assert.equal(flow.snapshot.state, "finalized");
+    }
+    signedPacket = undefined;
+    await flow.prepare(id, action);
+    await flow.approve();
+    assert.ok(signedPacket);
+    assert.equal(JSON.parse(stored).state, "signed");
+    // Ephemeral LOCAL owner, not MWA. Only this isolated harness broadcasts.
+    const signature = await local!.sendRawTransaction(signedPacket, {
+      skipPreflight: false,
+      maxRetries: 0,
+    });
+    await finalized(signature);
+    await recordLocalFinalizedOwnerMessage(
+      journal!.pool,
+      local!,
+      idl,
+      scope(),
+      flow.snapshot!.requestId,
+    );
+    await flow.restore(stored);
+    await flow.recover();
+    assert.equal(flow.snapshot!.signature, signature);
+    report.ownerBackendProtocol =
+      "same mobile controller: atomic owner packets, real HTTP+PG receipt before explicit local broadcast, restart GET recovery and effect-gated advancement; not physical MWA";
+    return signature;
+  };
+  const depositSig = await ownerOperation("deposit");
   const depositSettlement = Array(32).fill(1),
     redemptionSettlement = Array(32).fill(2);
   const createPlan = async (selling: boolean) => {
@@ -635,21 +717,8 @@ try {
         },
         [keeper],
       );
-      const shareSig = await instruction(
-        "issueInitialShares",
-        [],
-        {
-          owner: owner.publicKey,
-          config,
-          intent: depositIntent,
-          vaultAuthority: VAULT_AUTHORITY,
-          shareMint: share.publicKey,
-          ownerShares,
-          ...holdings,
-          shareTokenProgram: TOKEN_2022_PROGRAM_ID,
-        },
-        [owner],
-      );
+      await finalized(recordSig);
+      const shareSig = await ownerOperation("issue_shares");
       await finalized(shareSig);
       state = await db.reconcileLocalLifecycle(
         scope(),
@@ -671,33 +740,7 @@ try {
         1_000_000n,
       );
       report.sharesIssued = "1000000";
-      const createSig = await instruction(
-        "createRedemptionIntent",
-        [new BN(1), new BN(1_000_000), new BN(1), new BN((await now()) + 1800)],
-        {
-          owner: owner.publicKey,
-          config,
-          deposit: depositIntent,
-          intent: redemptionIntent,
-          ownerShares,
-          ...holdings,
-          systemProgram: SystemProgram.programId,
-        },
-        [owner],
-      );
-      const lockSig = await instruction(
-        "lockSharesForRedemption",
-        [],
-        {
-          owner: owner.publicKey,
-          config,
-          intent: redemptionIntent,
-          ownerShares,
-          shareMint: share.publicKey,
-          shareTokenProgram: TOKEN_2022_PROGRAM_ID,
-        },
-        [owner],
-      );
+      const createSig = await ownerOperation("request_redemption");
       const redPlanSig = await createPlan(true);
       await finalized(redPlanSig);
       state = await db.reconcileLocalLifecycle(
@@ -706,7 +749,7 @@ try {
         "redemption_requested",
         local,
         idl,
-        [createSig, lockSig, redPlanSig],
+        [createSig, redPlanSig],
       );
     }
     stage = `leg-${ordinal}-fresh-route`;
@@ -979,7 +1022,7 @@ try {
     shareTokenProgram: TOKEN_2022_PROGRAM_ID,
     tokenProgram: TOKEN_PROGRAM_ID,
   };
-  const claimSig = await instruction("claimUsdc", [], claimAccounts, [owner]);
+  const claimSig = await ownerOperation("claim");
   await finalized(claimSig);
   state = await db.reconcileLocalLifecycle(
     scope(),
@@ -1027,6 +1070,8 @@ try {
   }
   bank.writeReport(report);
   signer?.close();
+  if (ownerServer)
+    await new Promise<void>((resolve) => ownerServer!.close(() => resolve()));
   await journal?.close();
   bank.close();
   console.log("C3_CYCLE_REPORT", bank.directory);

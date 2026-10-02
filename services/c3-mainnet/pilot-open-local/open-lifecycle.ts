@@ -37,6 +37,7 @@ export function verifyLifecycleInner(
     fields.every((f, i) => accounts[i] === named.get(f));
   const token2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   const expected =
+    name === "create_deposit_intent" ||
     name === "deposit_usdc" ||
     name === "issue_initial_shares" ||
     name === "create_redemption_intent" ||
@@ -85,7 +86,8 @@ export function verifyLifecycleInner(
           new PublicKey(d.subarray(20, 52)).equals(VAULT_PROGRAM) &&
           exact(
             ix.accounts,
-            name === "create_redemption_intent"
+            name === "create_redemption_intent" ||
+              name === "create_deposit_intent"
               ? ["owner", "intent"]
               : ["keeper", "plan"],
           ),
@@ -149,8 +151,34 @@ export async function verifyLocalLifecycle(
     claimable: ["record_redemption_settlement"],
     redeemed: ["claim_usdc"],
   };
+  const firstTx =
+    to === "funded" && signatures.length === 2
+      ? await rpc.getTransaction(signatures[0]!, {
+          commitment: "finalized",
+          maxSupportedTransactionVersion: 0,
+        })
+      : null;
+  const atomic =
+    (to === "redemption_requested" && signatures.length === 2) ||
+    (to === "funded" &&
+      firstTx?.transaction.message.compiledInstructions.filter((ix) =>
+        firstTx.transaction.message.staticAccountKeys[
+          ix.programIdIndex
+        ]?.equals(VAULT_PROGRAM),
+      ).length === 2);
+  const groups = atomic
+    ? to === "funded"
+      ? [
+          ["create_deposit_intent", "deposit_usdc"],
+          ["create_deposit_settlement_plan"],
+        ]
+      : [
+          ["create_redemption_intent", "lock_shares_for_redemption"],
+          ["create_redemption_settlement_plan"],
+        ]
+    : defs[to].map((n) => [n]);
   check(
-    signatures.length === defs[to].length &&
+    signatures.length === groups.length &&
       new Set(signatures).size === signatures.length,
     "SIGNATURE_SET",
   );
@@ -194,12 +222,17 @@ export async function verifyLocalLifecycle(
           }
         : undefined,
     );
-    const ix = msg.compiledInstructions.filter((v) =>
+    const compiled = msg.compiledInstructions;
+    const ix = compiled.filter((v) =>
       keys.get(v.programIdIndex)?.equals(VAULT_PROGRAM),
     );
-    check(ix.length === 1, "OUTER_COUNT");
+    check(ix.length === groups[i]!.length, "OUTER_COUNT");
     check(
-      msg.compiledInstructions.every((v) => {
+      msg.version === 0 ? msg.addressTableLookups.length === 0 : true,
+      "LIFECYCLE_ALT_FORBIDDEN",
+    );
+    check(
+      compiled.every((v) => {
         const program = keys.get(v.programIdIndex)?.toBase58();
         return (
           program === VAULT_PROGRAM.toBase58() ||
@@ -230,151 +263,168 @@ export async function verifyLocalLifecycle(
         "CRYPTOGRAPHIC_SIGNATURE",
       );
     }
-    const name = defs[to][i]!,
-      definition = idl.instructions.find((v) => v.name === name);
-    check(definition, "IDL_METHOD");
-    const instruction = ix[0]!;
-    check(
-      instruction.accountKeyIndexes.length === definition!.accounts.length,
-      "EXTRA_ACCOUNTS",
-    );
-    check(
-      Buffer.from(instruction.data)
-        .subarray(0, 8)
-        .equals(Buffer.from(definition!.discriminator)),
-      "METHOD",
-    );
-    const named = new Map(
-      definition!.accounts.map((a, index) => [
-        a.name,
-        keys.get(instruction.accountKeyIndexes[index]!)!.toBase58(),
-      ]),
-    );
-    check(named.get("config") === row.vault, "CONFIG_BINDING");
-    const ownerMethod = [
-      "deposit_usdc",
-      "issue_initial_shares",
-      "create_redemption_intent",
-      "lock_shares_for_redemption",
-      "claim_usdc",
-    ].includes(name);
-    const signer = ownerMethod ? row.wallet : key(cfg.keeper).toBase58();
-    check(named.get(ownerMethod ? "owner" : "keeper") === signer, "SIGNER");
-    check(
-      [...Array(msg.header.numRequiredSignatures).keys()].some(
-        (index) => keys.get(index)?.toBase58() === signer,
-      ),
-      "REQUIRED_SIGNER",
-    );
-    for (const [field, mint] of [
-      ["vault_usdc", c.usdcMint],
-      ["vault_btc", c.cbBtcMint],
-      ["vault_eth", c.portalEthMint],
-      ["vault_wsol", c.wrappedSolMint],
-    ])
-      if (named.has(field!))
-        check(named.get(field!) === vaultAta(mint!), "VAULT_ACCOUNT");
-    if (named.has("plan")) planAddress = named.get("plan")!;
-    // Every observed token delta is accounted for. No arbitrary user token debit.
-    const pre = tx!.meta!.preTokenBalances,
-      post = tx!.meta!.postTokenBalances;
-    check(pre && post, "BALANCE_EVIDENCE");
-    const mintChanges = new Map<string, bigint>();
-    for (const b of pre!) {
-      const after = post!.find((a) => a.accountIndex === b.accountIndex);
+    for (const [groupIndex, name] of groups[i]!.entries()) {
+      const definition = idl.instructions.find((v) => v.name === name);
+      check(definition, "IDL_METHOD");
+      const instruction = ix[groupIndex]!;
       check(
-        after &&
-          after.mint === b.mint &&
-          after.owner === b.owner &&
-          after.programId === b.programId,
-        "TOKEN_ACCOUNT_CHANGED",
-      );
-      const delta =
-        BigInt(after!.uiTokenAmount.amount) - BigInt(b.uiTokenAmount.amount);
-      if (delta === 0n) continue;
-      const address = keys.get(b.accountIndex)!.toBase58();
-      check(
-        b.mint === c.usdcMint || b.mint === row.share_mint,
-        "UNRELATED_MINT_DELTA",
+        instruction.accountKeyIndexes.length === definition!.accounts.length,
+        "EXTRA_ACCOUNTS",
       );
       check(
-        b.owner === row.wallet || b.owner === VAULT_AUTHORITY.toBase58(),
-        "UNRELATED_OWNER_DELTA",
+        Buffer.from(instruction.data)
+          .subarray(0, 8)
+          .equals(Buffer.from(definition!.discriminator)),
+        "METHOD",
       );
-      if (b.mint === c.usdcMint) {
+      const named = new Map(
+        definition!.accounts.map((a, index) => [
+          a.name,
+          keys.get(instruction.accountKeyIndexes[index]!)!.toBase58(),
+        ]),
+      );
+      check(named.get("config") === row.vault, "CONFIG_BINDING");
+      const ownerMethod = [
+        "create_deposit_intent",
+        "deposit_usdc",
+        "issue_initial_shares",
+        "create_redemption_intent",
+        "lock_shares_for_redemption",
+        "claim_usdc",
+      ].includes(name);
+      const signer = ownerMethod ? row.wallet : key(cfg.keeper).toBase58();
+      check(named.get(ownerMethod ? "owner" : "keeper") === signer, "SIGNER");
+      check(
+        [...Array(msg.header.numRequiredSignatures).keys()].some(
+          (index) => keys.get(index)?.toBase58() === signer,
+        ),
+        "REQUIRED_SIGNER",
+      );
+      for (const [field, mint] of [
+        ["vault_usdc", c.usdcMint],
+        ["vault_btc", c.cbBtcMint],
+        ["vault_eth", c.portalEthMint],
+        ["vault_wsol", c.wrappedSolMint],
+      ])
+        if (named.has(field!))
+          check(named.get(field!) === vaultAta(mint!), "VAULT_ACCOUNT");
+      if (named.has("plan")) planAddress = named.get("plan")!;
+      // Every observed token delta is accounted for. No arbitrary user token debit.
+      if (groupIndex === groups[i]!.length - 1) {
+        const pre = tx!.meta!.preTokenBalances,
+          post = tx!.meta!.postTokenBalances;
+        check(pre && post, "BALANCE_EVIDENCE");
+        const mintChanges = new Map<string, bigint>();
+        for (const b of pre!) {
+          const after = post!.find((a) => a.accountIndex === b.accountIndex);
+          check(
+            after &&
+              after.mint === b.mint &&
+              after.owner === b.owner &&
+              after.programId === b.programId,
+            "TOKEN_ACCOUNT_CHANGED",
+          );
+          const delta =
+            BigInt(after!.uiTokenAmount.amount) -
+            BigInt(b.uiTokenAmount.amount);
+          if (delta === 0n) continue;
+          const address = keys.get(b.accountIndex)!.toBase58();
+          check(
+            b.mint === c.usdcMint || b.mint === row.share_mint,
+            "UNRELATED_MINT_DELTA",
+          );
+          check(
+            b.owner === row.wallet || b.owner === VAULT_AUTHORITY.toBase58(),
+            "UNRELATED_OWNER_DELTA",
+          );
+          if (b.mint === c.usdcMint) {
+            check(
+              name === "deposit_usdc" || name === "claim_usdc",
+              "UNEXPECTED_USDC",
+            );
+            check(
+              address === vaultAta(c.usdcMint) ||
+                address ===
+                  PublicKey.findProgramAddressSync(
+                    [
+                      new PublicKey(row.wallet).toBuffer(),
+                      new PublicKey(c.tokenProgram).toBuffer(),
+                      new PublicKey(c.usdcMint).toBuffer(),
+                    ],
+                    new PublicKey(c.associatedTokenProgram),
+                  )[0].toBase58(),
+              "USDC_DESTINATION",
+            );
+            if (name === "deposit_usdc")
+              check(
+                delta === (b.owner === row.wallet ? -1_000_000n : 1_000_000n),
+                "DEPOSIT_AMOUNT",
+              );
+            else {
+              check(
+                delta !== 0n &&
+                  (b.owner === row.wallet ? delta > 0n : delta < 0n),
+                "CLAIM_DIRECTION",
+              );
+              if (b.owner === row.wallet) claimCredit += delta;
+            }
+          } else
+            check(
+              b.owner === row.wallet &&
+                delta ===
+                  (name === "issue_initial_shares"
+                    ? 1_000_000n
+                    : name === "claim_usdc"
+                      ? -1_000_000n
+                      : 0n),
+              "SHARE_EFFECT",
+            );
+          mintChanges.set(b.mint, (mintChanges.get(b.mint) ?? 0n) + delta);
+        }
         check(
-          name === "deposit_usdc" || name === "claim_usdc",
-          "UNEXPECTED_USDC",
-        );
-        check(
-          address === vaultAta(c.usdcMint) ||
-            address ===
-              PublicKey.findProgramAddressSync(
-                [
-                  new PublicKey(row.wallet).toBuffer(),
-                  new PublicKey(c.tokenProgram).toBuffer(),
-                  new PublicKey(c.usdcMint).toBuffer(),
-                ],
-                new PublicKey(c.associatedTokenProgram),
-              )[0].toBase58(),
-          "USDC_DESTINATION",
+          post!.every((a) =>
+            pre!.some((b) => b.accountIndex === a.accountIndex),
+          ),
+          "UNEXPECTED_TOKEN_CREATION",
         );
         if (name === "deposit_usdc")
+          check(mintChanges.get(c.usdcMint) === 0n, "DEPOSIT_EFFECT_REQUIRED");
+        if (name === "issue_initial_shares")
           check(
-            delta === (b.owner === row.wallet ? -1_000_000n : 1_000_000n),
-            "DEPOSIT_AMOUNT",
+            mintChanges.get(row.share_mint) === 1_000_000n,
+            "MINT_EFFECT_REQUIRED",
           );
-        else {
+        if (name === "claim_usdc")
           check(
-            delta !== 0n && (b.owner === row.wallet ? delta > 0n : delta < 0n),
-            "CLAIM_DIRECTION",
+            mintChanges.get(row.share_mint) === -1_000_000n &&
+              mintChanges.get(c.usdcMint) === 0n,
+            "CLAIM_BURN_EFFECT_REQUIRED",
           );
-          if (b.owner === row.wallet) claimCredit += delta;
-        }
-      } else
-        check(
-          b.owner === row.wallet &&
-            delta ===
-              (name === "issue_initial_shares"
-                ? 1_000_000n
-                : name === "claim_usdc"
-                  ? -1_000_000n
-                  : 0n),
-          "SHARE_EFFECT",
+      }
+      check(tx!.meta!.innerInstructions, "INNER_EVIDENCE");
+      check(
+        tx!.meta!.innerInstructions!.every((group) =>
+          ix.includes(compiled[group.index]!),
+        ),
+        "UNBOUND_INNER_GROUP",
+      );
+      const outerIndex = compiled.indexOf(instruction);
+      const inner = tx!
+        .meta!.innerInstructions!.filter((group) => group.index === outerIndex)
+        .flatMap((group) =>
+          group.instructions.map((v) => ({
+            program: keys.get(v.programIdIndex)!.toBase58(),
+            accounts: v.accounts.map((n) => keys.get(n)!.toBase58()),
+            data: Buffer.from(decodeBase58(v.data)),
+          })),
         );
-      mintChanges.set(b.mint, (mintChanges.get(b.mint) ?? 0n) + delta);
+      verifyLifecycleInner(
+        name,
+        inner,
+        named,
+        name === "claim_usdc" ? claimCredit : 1_000_000n,
+      );
     }
-    check(
-      post!.every((a) => pre!.some((b) => b.accountIndex === a.accountIndex)),
-      "UNEXPECTED_TOKEN_CREATION",
-    );
-    if (name === "deposit_usdc")
-      check(mintChanges.get(c.usdcMint) === 0n, "DEPOSIT_EFFECT_REQUIRED");
-    if (name === "issue_initial_shares")
-      check(
-        mintChanges.get(row.share_mint) === 1_000_000n,
-        "MINT_EFFECT_REQUIRED",
-      );
-    if (name === "claim_usdc")
-      check(
-        mintChanges.get(row.share_mint) === -1_000_000n &&
-          mintChanges.get(c.usdcMint) === 0n,
-        "CLAIM_BURN_EFFECT_REQUIRED",
-      );
-    check(tx!.meta!.innerInstructions, "INNER_EVIDENCE");
-    const inner = tx!.meta!.innerInstructions!.flatMap((group) =>
-      group.instructions.map((v) => ({
-        program: keys.get(v.programIdIndex)!.toBase58(),
-        accounts: v.accounts.map((n) => keys.get(n)!.toBase58()),
-        data: Buffer.from(decodeBase58(v.data)),
-      })),
-    );
-    verifyLifecycleInner(
-      name,
-      inner,
-      named,
-      name === "claim_usdc" ? claimCredit : 1_000_000n,
-    );
     evidence.push(
       Buffer.from(
         JSON.stringify({
@@ -497,6 +547,7 @@ export async function verifyLocalLifecycle(
     amount: 1_000_000n,
     chainRevision: revision,
     evidenceHash: h(Buffer.concat(evidence)).toString("hex"),
+    ownerSignatures: [...signatures],
     ...(to === "redemption_requested"
       ? { redemptionPlan: plan.toBase58() }
       : {}),

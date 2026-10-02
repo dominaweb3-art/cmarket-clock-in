@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { connectCandidateWallet } from "./candidate-wallet";
+import { OwnerLifecyclePanel } from "./OwnerLifecyclePanel";
 import {
   candidateLanguages,
   candidateTranslations,
@@ -120,23 +121,20 @@ export default function MainnetCandidateApp() {
             <Text style={s.text}>{t.assets}</Text>
             <Text style={s.notice}>{t.position}</Text>
             <Text style={s.text}>{t.nav}</Text>
-            {[t.buy, t.sell].map((text) => (
-              <Pressable
-                key={text}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: true }}
-                disabled
-                style={s.disabled}
-              >
-                <Text style={s.text}>{text}</Text>
-              </Pressable>
-            ))}
           </View>
         ) : (
           <View style={s.card}>
             <Text style={s.text}>{t.empty}</Text>
           </View>
         )}
+        <View style={s.card}>
+          <OwnerLifecyclePanel
+            key={wallet ?? "disconnected"}
+            wallet={wallet}
+            language={language}
+            activityOnly={tab === "activity"}
+          />
+        </View>
         <Text style={s.notice}>{t.configuration}</Text>
         <Text style={s.text}>{t.risk}</Text>
       </ScrollView>
