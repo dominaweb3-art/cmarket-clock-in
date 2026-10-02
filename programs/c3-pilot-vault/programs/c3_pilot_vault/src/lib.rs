@@ -815,9 +815,21 @@ pub mod c3_pilot_vault {
         r.wsol_before = ctx.accounts.vault_wsol.amount;
         r.usdc_before = ctx.accounts.vault_usdc.amount;
         require_eq!(r.usdc_before, 0, VaultError::Settlement);
-        require_eq!(r.btc_before, 40_000, VaultError::Settlement);
-        require_eq!(r.eth_before, 30_000, VaultError::Settlement);
-        require_eq!(r.wsol_before, 30_000, VaultError::Settlement);
+        let d = &ctx.accounts.deposit;
+        at(d.status, deposit_status::ACTIVE)?;
+        require_eq!(
+            d.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        require_eq!(d.shares_issued, shares, VaultError::InvalidAmount);
+        require!(
+            d.btc_after > 0 && d.eth_after > 0 && d.wsol_after > 0,
+            VaultError::Settlement
+        );
+        require_eq!(r.btc_before, d.btc_after, VaultError::Settlement);
+        require_eq!(r.eth_before, d.eth_after, VaultError::Settlement);
+        require_eq!(r.wsol_before, d.wsol_after, VaultError::Settlement);
         r.fingerprint = hashv(&[
             b"c3-redemption-v1",
             c.key().as_ref(),

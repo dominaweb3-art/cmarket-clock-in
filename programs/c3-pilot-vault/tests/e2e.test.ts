@@ -2112,6 +2112,7 @@ test(
         .accountsStrict({
           owner: owner.publicKey,
           config,
+          deposit: depositIntent,
           intent: redemptionIntent,
           ownerShares,
           vaultBtc,
@@ -2136,6 +2137,7 @@ test(
           .accountsStrict({
             owner: owner.publicKey,
             config,
+            deposit: depositIntent,
             intent: redemptionIntent,
             ownerShares,
             vaultBtc,

@@ -87,7 +87,7 @@ test("production artifact excludes local mock entrypoints and protects stable mo
   );
   assert.match(
     constants,
-    /#\[cfg\(not\(feature = "local-mock"\)\)\][\s\S]*?ROUTER_EXECUTION_ENABLED: bool = false/,
+    /#\[cfg\(not\(any\(feature = "local-mock", feature = "local-jupiter-cycle"\)\)\)\][\s\S]*?ROUTER_EXECUTION_ENABLED: bool = false/,
     "default build must disable all economic execution",
   );
   const source = readFileSync(

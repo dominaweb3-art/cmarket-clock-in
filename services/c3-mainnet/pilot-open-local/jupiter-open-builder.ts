@@ -237,7 +237,7 @@ export class JupiterOpenBuilder implements OpenQuoteBuilder {
         };
     }
     for (const [i, a] of observed.value.entries()) {
-      assert(a, "ACCOUNT_MISSING");
+      assert(a, "ACCOUNT_MISSING:" + metas[i]!.pubkey);
       const meta = metas[i]!;
       if (a!.executable)
         assert(

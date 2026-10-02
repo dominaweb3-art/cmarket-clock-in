@@ -5,6 +5,8 @@ import { isDeepStrictEqual } from "node:util";
 import type { Pool, PoolClient } from "pg";
 import type { Connection } from "@solana/web3.js";
 import { reconcilePersistedOpenLeg } from "./open-reconcile.ts";
+import { verifyLocalLifecycle, type LifecycleStage } from "./open-lifecycle.ts";
+import type { Idl } from "@coral-xyz/anchor";
 import { quoteContextHash } from "../src/quote-seal.ts";
 import { openQuoteContext, type StoredQuoteContext } from "./open-quote.ts";
 
@@ -535,6 +537,45 @@ export class OpenLocalSettlementRepository {
           (to === "redemption_requested" && attestation.chainRevision === 0n)),
       "LOCAL_ATTESTATION_MISMATCH",
     );
+    return this.#checkpoint(scope, from, to, attestation, true);
+  }
+  async reconcileLocalLifecycle(
+    scope: Scope,
+    from: OpenState,
+    to: LifecycleStage,
+    rpc: Connection,
+    idl: Idl,
+    signatures: readonly string[],
+  ): Promise<OpenSnapshot> {
+    const proof = await verifyLocalLifecycle(
+      this.pool,
+      rpc,
+      idl,
+      scope.intentId,
+      to,
+      signatures,
+    );
+    assert(
+      proof.wallet === scope.wallet && proof.vault === scope.vault,
+      "LOCAL_CONTEXT_MISMATCH",
+    );
+    return this.#checkpoint(scope, from, to, proof, false);
+  }
+  async #checkpoint(
+    scope: Scope,
+    from: OpenState,
+    to: LifecycleStage,
+    attestation: Readonly<{
+      plan: string;
+      wallet: string;
+      vault: string;
+      amount: bigint;
+      chainRevision: bigint;
+      evidenceHash: string;
+      redemptionPlan?: string;
+    }>,
+    mock: boolean,
+  ): Promise<OpenSnapshot> {
     const required: Readonly<Record<string, readonly string[]>> = {
       funded: ["draft"],
       active: ["buying"],
@@ -546,6 +587,13 @@ export class OpenLocalSettlementRepository {
     return atomic(this.pool, async (client) => {
       const row = await locked(client, scope);
       assert(row.state === from, "INVALID_PREVIOUS_STATE");
+      if (mock) {
+        const cloned = await client.query(
+          "SELECT 1 FROM c3_open.quote_contexts WHERE intent_id=$1 AND scope='LOCAL_CLONE' LIMIT 1",
+          [scope.intentId],
+        );
+        assert(!cloned.rowCount, "CLONE_REQUIRES_RPC_RECONCILIATION");
+      }
       let redemptionPlan: string | null = null;
       if (to === "redemption_requested") {
         assert(

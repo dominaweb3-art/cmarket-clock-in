@@ -23,10 +23,14 @@ pub const MAX_ROUTE_PROGRAMS: usize = 16;
 
 // The production binary contains the boundary but cannot execute it before a
 // separately reviewed configuration/release. Environment variables cannot flip it.
-#[cfg(not(feature = "local-mock"))]
+#[cfg(not(any(feature = "local-mock", feature = "local-jupiter-cycle")))]
 pub const ROUTER_EXECUTION_ENABLED: bool = false;
-#[cfg(feature = "local-mock")]
+// Separate local-validator artifact only. Never enable this feature in a deployment build.
+#[cfg(any(feature = "local-mock", feature = "local-jupiter-cycle"))]
 pub const ROUTER_EXECUTION_ENABLED: bool = true;
+
+#[cfg(all(feature = "local-mock", feature = "local-jupiter-cycle"))]
+compile_error!("local Jupiter and mock execution are mutually exclusive");
 
 #[cfg(not(feature = "local-mock"))]
 pub const REVIEWED_ROUTER_ID: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";

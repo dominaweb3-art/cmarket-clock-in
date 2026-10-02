@@ -33,3 +33,4 @@ credentials.json
 /programs/c3-pilot-vault/.env*
 /programs/c3-pilot-vault/results/
 /.c3fork-*/
+.c3cycle-*/

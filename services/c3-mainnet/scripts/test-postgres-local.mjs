@@ -26,6 +26,8 @@ const testFile = process.argv.includes("--open-jupiter-recovery")
       ? "pilot-open-local/orchestrator.integration.ts"
       : "tests/postgres-live.integration.ts";
 const withVault = process.argv.includes("--open-local-cpi");
+const withReadServer = process.argv.includes("--open-read-server");
+const withJupiterCycle = process.argv.includes("--open-jupiter-cycle");
 
 function run(binary, args, env = process.env) {
   const result = spawnSync(join(binaryDirectory, binary), args, {
@@ -90,11 +92,22 @@ try {
     process.execPath,
     withVault
       ? ["scripts/run-local.mjs"]
-      : ["--experimental-strip-types", "--test", testFile],
+      : withJupiterCycle
+        ? [
+            "--experimental-strip-types",
+            "tests/jupiter-cycle.ts",
+            ...(process.argv.includes("--app-control")
+              ? ["--app-control"]
+              : []),
+          ]
+        : withReadServer
+          ? ["--experimental-strip-types", "pilot-open-local/read-server-qa.ts"]
+          : ["--experimental-strip-types", "--test", testFile],
     {
-      cwd: withVault
-        ? new URL("../../../programs/c3-pilot-vault/", import.meta.url)
-        : new URL("..", import.meta.url),
+      cwd:
+        withVault || withJupiterCycle
+          ? new URL("../../../programs/c3-pilot-vault/", import.meta.url)
+          : new URL("..", import.meta.url),
       env: {
         ...process.env,
         DATABASE_URL: url.toString(),

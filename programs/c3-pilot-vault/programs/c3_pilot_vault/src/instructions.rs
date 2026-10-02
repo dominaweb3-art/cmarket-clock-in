@@ -188,6 +188,8 @@ pub struct CreateRedemptionIntent<'info> {
     pub owner: Signer<'info>,
     #[account(mut, seeds = [VAULT_SEED], bump)]
     pub config: Account<'info, VaultConfig>,
+    #[account(seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), deposit.nonce.to_le_bytes().as_ref()], bump, constraint = deposit.vault == config.key(), constraint = deposit.wallet == owner.key())]
+    pub deposit: Box<Account<'info, DepositIntent>>,
     #[account(init, payer = owner, seeds = [b"redemption", config.key().as_ref(), owner.key().as_ref(), nonce.to_le_bytes().as_ref()], bump, space = 8 + RedemptionIntent::INIT_SPACE)]
     pub intent: Account<'info, RedemptionIntent>,
     #[account(constraint = owner_shares.owner == owner.key(), constraint = owner_shares.mint == config.share_mint)]

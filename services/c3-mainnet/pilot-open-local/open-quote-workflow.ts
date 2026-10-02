@@ -10,12 +10,14 @@ import type { QuoteAuthoritySigner } from "../src/quote-seal.ts";
 import { captureContext } from "./capture-context.ts";
 import { JupiterOpenBuilder } from "./jupiter-open-builder.ts";
 import { OpenQuoteAuthority } from "./open-quote.ts";
+import type { JupiterV2ReadOnlyClient } from "../src/jupiter-v2.ts";
 export async function prepareOpenUnsignedLeg(
   server: Readonly<{
     pool: Pool;
     rpc: Connection;
     idl: Idl;
     signer: QuoteAuthoritySigner;
+    jupiter?: JupiterV2ReadOnlyClient;
   }>,
   request: Readonly<{
     intentId: string;
@@ -33,7 +35,7 @@ export async function prepareOpenUnsignedLeg(
     request.ordinal,
     request.expectedRevision,
   );
-  const builder = new JupiterOpenBuilder(server.rpc);
+  const builder = new JupiterOpenBuilder(server.rpc, server.jupiter);
   const authority = new OpenQuoteAuthority(server.pool, builder);
   const quoteId = await authority.prepare(
     request.intentId,

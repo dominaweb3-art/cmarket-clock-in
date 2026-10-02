@@ -47,6 +47,8 @@
     "test:jupiter-six-clone": "node --experimental-strip-types pilot-open-local/jupiter-six-clone.ts",
     "test:open-quote-postgres": "node scripts/test-postgres-local.mjs --open-quote",
     "test:open-jupiter-recovery": "node scripts/test-postgres-local.mjs --open-jupiter-recovery",
+    "test:open-jupiter-cycle": "node scripts/test-postgres-local.mjs --open-jupiter-cycle",
+    "c3:open:local-cycle:qa": "node scripts/test-postgres-local.mjs --open-jupiter-cycle --app-control",
     "c3:open:read-server": "node --experimental-strip-types pilot-open-local/read-server-cli.ts"
   },
   "devDependencies": {
