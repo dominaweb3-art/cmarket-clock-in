@@ -1,49 +1,23 @@
 /** Durable owner bridge for the isolated validator. No signing, broadcast,
  * wallet callback or production capability. Requests are built from PG and
  * finalized program state, never accounts or amounts supplied by the client. */
-import { createHash, createPublicKey, randomUUID, verify } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { BorshCoder, type Idl } from "@coral-xyz/anchor";
-import {
-  Connection,
-  PublicKey,
-  TransactionInstruction,
-  TransactionMessage,
-  VersionedTransaction,
-} from "@solana/web3.js";
-import {
-  VAULT_PROGRAM,
-  VAULT_AUTHORITY,
-  vaultAta,
-} from "./jupiter-vault-cpi-inspection.ts";
+import { Connection, PublicKey, VersionedTransaction } from "@solana/web3.js";
+import { VAULT_PROGRAM } from "./jupiter-vault-cpi-inspection.ts";
 import { C3_MAINNET as c } from "../src/constants.ts";
 import { encodeBase58 } from "../src/solana.ts";
 import type { Scope } from "./orchestrator.ts";
-import { ownerStateImage } from "./owner-expiry.ts";
-import {
-  inspectOwnerTransaction,
-  type OwnerInstructionReview,
-} from "../../../apps/c3-pilot/src/owner-transaction-review.ts";
+import { applyReviewedOpenSchema } from "../src/open-owner-schema.ts";
+import { prepareOwnerFromDurableState } from "../src/open-owner-service.ts";
+import type { OpenCompilerPolicy } from "../src/open-owner-compiler.ts";
 export type OwnerOperation =
   "deposit" | "issue_shares" | "request_redemption" | "claim";
 const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest();
 const check = (v: unknown, code: string): void => {
   if (!v) throw Error("C3_OWNER_" + code);
 };
-const token2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-const ata = (owner: PublicKey, mint: PublicKey, token: PublicKey) =>
-  PublicKey.findProgramAddressSync(
-    [owner.toBuffer(), token.toBuffer(), mint.toBuffer()],
-    new PublicKey(c.associatedTokenProgram),
-  )[0];
-function chainIntent(prefix: string, vault: PublicKey, wallet: PublicKey) {
-  const nonce = Buffer.alloc(8);
-  nonce.writeBigUInt64LE(1n);
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from(prefix), vault.toBuffer(), wallet.toBuffer(), nonce],
-    VAULT_PROGRAM,
-  )[0];
-}
 async function isolated(rpc: Connection, idl: Idl) {
   check(
     /^http:\/\/127\.0\.0\.1:\d+\/?$/.test(rpc.rpcEndpoint) &&
@@ -89,249 +63,78 @@ export async function prepareLocalOwnerOperation(
   action: OwnerOperation,
 ) {
   await isolated(rpc, idl);
+  await applyReviewedOpenSchema(pool);
   const row = (
     await pool.query("SELECT * FROM c3_open.intents WHERE intent_id=$1", [
       scope.intentId,
     ])
   ).rows[0];
   check(
-    row && row.wallet === scope.wallet && row.vault === scope.vault,
-    "CONTEXT",
+    row &&
+      row.wallet === scope.wallet &&
+      row.vault === scope.vault &&
+      row.db_revision === scope.expectedDbRevision.toString() &&
+      row.chain_revision === scope.expectedChainRevision.toString(),
+    "CAS_OR_OWNER",
   );
-  const states = {
-    deposit: "draft",
-    issue_shares: "buying",
-    request_redemption: "active",
-    claim: "claimable",
-  };
-  check(row.state === states[action], "STATE");
-  const owner = new PublicKey(row.wallet),
-    config = new PublicKey(row.vault),
-    coder = new BorshCoder(idl);
-  const raw = await rpc.getAccountInfo(config, "finalized");
-  check(raw?.owner.equals(VAULT_PROGRAM), "CONFIG_OWNER");
-  const cfg = coder.accounts.decode("VaultConfig", raw!.data) as Record<
-    string,
-    unknown
-  >;
-  const key = (v: unknown): PublicKey => {
-    check(v instanceof PublicKey, "CONFIG_KEY");
-    return v as PublicKey;
-  };
-  check(
-    (!cfg.paused || action === "claim") &&
-      key(cfg.allowlisted_owner).equals(owner) &&
-      key(cfg.share_mint).toBase58() === row.share_mint &&
-      String(cfg.config_version) === "1",
-    "CONFIGURATION",
-  );
-  for (const [name, mint] of [
-    ["usdc_mint", c.usdcMint],
-    ["btc_mint", c.cbBtcMint],
-    ["eth_mint", c.portalEthMint],
-    ["wsol_mint", c.wrappedSolMint],
-  ])
-    check(key(cfg[name!]).toBase58() === mint, "MINT");
-  check(
-    Number(cfg.btc_bps) === 4000 &&
-      Number(cfg.eth_bps) === 3000 &&
-      Number(cfg.sol_bps) === 3000,
-    "WEIGHTS",
-  );
-  const deposit = chainIntent("deposit", config, owner),
-    redemption = chainIntent("redemption", config, owner);
-  const plan = PublicKey.findProgramAddressSync(
-    [Buffer.from("c3-plan-v1"), deposit.toBuffer()],
-    VAULT_PROGRAM,
-  )[0];
-  check(plan.toBase58() === row.deposit_plan, "DURABLE_PLAN");
-  const share = key(cfg.share_mint),
-    ownerUsdc = ata(
-      owner,
-      new PublicKey(c.usdcMint),
-      new PublicKey(c.tokenProgram),
-    ),
-    ownerShares = ata(owner, share, token2022);
-  const accounts: Record<string, PublicKey> = {
-    owner,
-    config,
-    intent:
-      action === "request_redemption" || action === "claim"
-        ? redemption
-        : deposit,
-    deposit,
-    vault_authority: VAULT_AUTHORITY,
-    owner_usdc: ownerUsdc,
-    owner_shares: ownerShares,
-    share_mint: share,
-    usdc_mint: new PublicKey(c.usdcMint),
-    token_program: new PublicKey(c.tokenProgram),
-    share_token_program: token2022,
-    system_program: new PublicKey(c.systemProgram),
-    vault_usdc: new PublicKey(vaultAta(c.usdcMint)),
-    vault_btc: new PublicKey(vaultAta(c.cbBtcMint)),
-    vault_eth: new PublicKey(vaultAta(c.portalEthMint)),
-    vault_wsol: new PublicKey(vaultAta(c.wrappedSolMint)),
-  };
-  for (const field of ["vault_usdc", "vault_btc", "vault_eth", "vault_wsol"])
-    check(key(cfg[field]).equals(accounts[field]!), "VAULT_ACCOUNT");
-  // Require provisioned ATAs: no unreviewed setup instruction can be appended.
-  for (const [address, token, mint] of [
-    [ownerUsdc, new PublicKey(c.tokenProgram), new PublicKey(c.usdcMint)],
-    [ownerShares, token2022, share],
-  ] as const) {
-    const a = await rpc.getAccountInfo(address, "finalized");
-    check(
-      a &&
-        a.owner.equals(token) &&
-        a.data.length >= 165 &&
-        new PublicKey(a.data.subarray(0, 32)).equals(mint) &&
-        new PublicKey(a.data.subarray(32, 64)).equals(owner) &&
-        a.data[108] === 1,
-      "ATA_UNAVAILABLE",
-    );
-    if (action === "deposit" && address.equals(ownerUsdc))
-      check(a!.data.readBigUInt64LE(64) >= 1_000_000n, "USDC_BALANCE");
-  }
-  const clockRaw = await rpc.getAccountInfo(
-    new PublicKey("SysvarC1ock11111111111111111111111111111111"),
+  const config = await rpc.getAccountInfo(
+    new PublicKey(row.vault),
     "finalized",
   );
-  check(clockRaw && clockRaw.data.length === 40, "CLOCK_EVIDENCE");
-  const chainNow = clockRaw!.data.readBigInt64LE(32);
-  const durableExpiry = BigInt(Math.floor(row.expires_at.getTime() / 1000));
-  const expiry =
-    durableExpiry < chainNow + 1800n ? durableExpiry : chainNow + 1800n;
-  const creation = action === "deposit" || action === "request_redemption";
-  check(!creation || expiry > chainNow + 30n, "EXPIRED");
-  const names =
-    action === "deposit"
-      ? ["create_deposit_intent", "deposit_usdc"]
-      : action === "request_redemption"
-        ? ["create_redemption_intent", "lock_shares_for_redemption"]
-        : [action === "issue_shares" ? "issue_initial_shares" : "claim_usdc"];
-  const instructions = names.map((name) => {
-    const def = idl.instructions.find((i) => i.name === name);
-    check(def, "IDL");
-    const data = Buffer.from(def!.discriminator);
-    const args = Buffer.alloc(32);
-    args.writeBigUInt64LE(1n, 0);
-    args.writeBigUInt64LE(1_000_000n, 8);
-    args.writeBigUInt64LE(1n, 16);
-    args.writeBigInt64LE(expiry, 24);
-    return new TransactionInstruction({
-      programId: VAULT_PROGRAM,
-      data: name.startsWith("create_") ? Buffer.concat([data, args]) : data,
-      keys: def!.accounts.map((a) => {
-        check("name" in a && accounts[a.name], "IDL_ACCOUNT");
-        return {
-          pubkey: accounts[a.name]!,
-          isSigner: "signer" in a && a.signer === true,
-          isWritable: "writable" in a && a.writable === true,
-        };
-      }),
-    });
-  });
-  const block = await rpc.getLatestBlockhash("finalized");
-  const tx = new VersionedTransaction(
-    new TransactionMessage({
-      payerKey: owner,
-      recentBlockhash: block.blockhash,
-      instructions,
-    }).compileToV0Message(),
+  check(config?.owner.equals(VAULT_PROGRAM), "CONFIG_OWNER");
+  const cfg = new BorshCoder(idl).accounts.decode(
+    "VaultConfig",
+    config!.data,
+  ) as Record<string, unknown>;
+  check(
+    cfg.governance instanceof PublicKey && cfg.keeper instanceof PublicKey,
+    "CONFIG_ROLES",
   );
-  const packet = tx.serialize();
-  check(packet.length <= 1232, "SIZE");
-  // Review effective privileges, including cross-instruction privilege unions.
-  const templates: OwnerInstructionReview[] = instructions.map((i) => ({
-    program: i.programId.toBytes(),
-    data: new Uint8Array(i.data),
-    accounts: i.keys.map((a) => {
-      const index = tx.message.staticAccountKeys.findIndex((k) =>
-        k.equals(a.pubkey),
-      );
-      return {
-        key: a.pubkey.toBytes(),
-        signer: tx.message.isAccountSigner(index),
-        writable: tx.message.isAccountWritable(index),
-      };
-    }),
-  }));
-  inspectOwnerTransaction(packet, owner.toBytes(), templates);
-  const requestId = randomUUID(),
-    messageHash = hash(tx.message.serialize());
-  const barrierAccounts = [
-    ...new Set([
-      config.toBase58(),
-      accounts.intent!.toBase58(),
-      ...tx.message.staticAccountKeys
-        .filter((_, i) => tx.message.isAccountWritable(i))
-        .map((k) => k.toBase58()),
-    ]),
-  ];
-  const barrier = await ownerStateImage(rpc, barrierAccounts);
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const current = await locked(client, scope);
-    check(current.state === states[action], "STATE_CHANGED");
-    await pending(client, scope.intentId);
-    const previous = (
-      await client.query(
-        "SELECT request_id,generation FROM c3_open.owner_requests WHERE intent_id=$1 AND action=$2 ORDER BY generation DESC LIMIT 1",
-        [scope.intentId, action],
-      )
-    ).rows[0];
-    if (previous)
-      check(
-        (
-          await client.query(
-            "SELECT 1 FROM c3_open.owner_request_outcomes WHERE request_id=$1",
-            [previous.request_id],
-          )
-        ).rowCount,
-        "PREVIOUS_NOT_CLOSED",
-      );
-    await client.query(
-      "INSERT INTO c3_open.owner_requests(request_id,intent_id,action,expected_db_revision,expected_chain_revision,message_hash,blockhash,last_valid_height,expires_at,generation,predecessor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
-      [
-        requestId,
-        scope.intentId,
-        action,
-        scope.expectedDbRevision.toString(),
-        scope.expectedChainRevision.toString(),
-        messageHash,
-        block.blockhash,
-        block.lastValidBlockHeight,
-        creation
-          ? new Date(Number(expiry) * 1000)
-          : new Date(Date.now() + 60000),
-        previous ? (BigInt(previous.generation) + 1n).toString() : "1",
-        previous?.request_id ?? null,
-      ],
-    );
-    await client.query(
-      "INSERT INTO c3_open.owner_expiry_barriers(request_id,accounts,state_hash) VALUES($1,$2,$3)",
-      [requestId, barrierAccounts, barrier.hash],
-    );
-    await client.query("COMMIT");
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
-  return Object.freeze({
-    requestId,
+  const idlBytes = Buffer.from(JSON.stringify(idl));
+  const policy: OpenCompilerPolicy = {
+    version: "c3-owner-compiler/v1",
+    program: VAULT_PROGRAM.toBase58(),
+    vault: row.vault,
+    wallet: row.wallet,
+    shareMint: row.share_mint,
+    governance: (cfg.governance as PublicKey).toBase58(),
+    keeper: (cfg.keeper as PublicKey).toBase58(),
+    maxSlippageBps: 100,
+    idlHash: hash(idlBytes).toString("hex"),
+    configurationHash: row.configuration_hash,
+    registryRevision: "1",
+    quotePolicyRevision: "1",
+  };
+  // SAME production compiler, manifest and repository; only the read-only RPC
+  // transport is isolated. Ephemeral signatures/submission remain in test caller.
+  const prepared = await prepareOwnerFromDurableState(
+    pool,
+    policy,
+    idlBytes,
+    scope.intentId,
     action,
-    intentId: scope.intentId,
-    wallet: scope.wallet,
-    messageHash: messageHash.toString("hex"),
-    packet,
-    templates,
-    blockhash: block.blockhash,
-    lastValidHeight: block.lastValidBlockHeight,
-  });
+    {
+      read: async (method, params) => {
+        const response = await fetch(rpc.rpcEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+          signal: AbortSignal.timeout(8000),
+          redirect: "error",
+        });
+        const data = (await response.json()) as {
+          result?: unknown;
+          error?: unknown;
+        };
+        check(
+          response.ok && !data.error && Object.hasOwn(data, "result"),
+          "RPC_EVIDENCE",
+        );
+        return data.result;
+      },
+    },
+  );
+  return { ...prepared, packet: Buffer.from(prepared.packet, "base64") };
 }
 /** Persist exact verified owner signature BEFORE any explicit broadcast by the
  * test caller. Result is idempotent even if receipt response is lost. */

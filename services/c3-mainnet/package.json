@@ -11,10 +11,12 @@
   },
   "files": [
     "dist",
-    "migrations"
+    "migrations",
+    "resources",
+    "pilot-open-local/migrations"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.build.json",
+    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.build.json && node scripts/package-owner-resources.mjs",
     "typecheck": "tsc --noEmit",
     "lint:check": "eslint src scripts tests research pilot-open-local",
     "format": "prettier --write .",
@@ -24,6 +26,7 @@
     "test:open-local-postgres": "node scripts/test-postgres-local.mjs --open-local",
     "test:open-owner-postgres": "node scripts/test-postgres-local.mjs --open-owner",
     "test:open-owner-protocol": "node scripts/test-postgres-local.mjs --open-owner-protocol",
+    "test:open-owner-compiler": "node scripts/test-postgres-local.mjs --open-owner-compiler",
     "test:open-local-cpi-postgres": "node scripts/test-postgres-local.mjs --open-local-cpi",
     "test:open-v0-measure": "node --experimental-strip-types --test pilot-open-local/jupiter-v0-measure.test.ts",
     "test:accounting": "node --experimental-strip-types --test tests/accounting.test.ts",

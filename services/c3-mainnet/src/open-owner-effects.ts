@@ -16,6 +16,18 @@ import { C3_MAINNET } from "./constants.ts";
 import { collectFinalizedOpenEconomicEvidence } from "./open-economic-quorum.ts";
 import { readIndependentOpenEvidence } from "./open-rpc-quorum.ts";
 import { requireOpenProductionPolicy } from "./open-production-policy.ts";
+import { assertProductionEnrollment } from "./open-owner-trust.ts";
+import {
+  accountBytes,
+  openAddresses,
+  verifyOpenConfig,
+  verifyOpenShareMint,
+  verifyOpenToken,
+  verifyOpenPlan,
+  verifyOpenIntent,
+  type OpenSemanticScope,
+  type OpenAccount,
+} from "./open-state-semantics.ts";
 const digest = (v: string | Uint8Array) =>
   createHash("sha256").update(v).digest("hex");
 const check = (v: unknown, code: string): void => {
@@ -32,7 +44,10 @@ const uint = (v: unknown) => {
   return n;
 };
 export type OwnerEffectManifest = Readonly<{
-  version: "c3-owner-effects/v1";
+  version: "c3-owner-effects/v1" | "c3-owner-effects/v2";
+  semanticScope?: OpenSemanticScope;
+  baseline?: Readonly<Record<string, OpenAccount | null>>;
+  initialization?: Readonly<{ account: string; space: number; rent: string }>;
   wallet: string;
   messageHash: string;
   action: "deposit" | "issue_shares" | "request_redemption" | "claim";
@@ -172,6 +187,222 @@ function verifyOwnerProgramState(m: OwnerEffectManifest, values: unknown[]) {
     );
   }
 }
+/** V2 proves plan progress, acquired inventory, reserves and mint policy rather
+ * than accepting a predicted post-state hash as economic certification. */
+export function verifyOwnerSemanticState(
+  m: OwnerEffectManifest,
+  values: unknown[],
+) {
+  check(
+    m.version === "c3-owner-effects/v2" && m.semanticScope && m.baseline,
+    "SEMANTIC_CONTEXT",
+  );
+  const scope = m.semanticScope!;
+  check(
+    scope.program === m.program &&
+      scope.vault === m.vault &&
+      scope.wallet === m.wallet &&
+      scope.shareMint === m.shareMint,
+    "SEMANTIC_SCOPE",
+  );
+  const post = new Map(
+      m.snapshots.map((s, i) => [s.address, values[i] as OpenAccount]),
+    ),
+    a = openAddresses(scope);
+  const cfg = verifyOpenConfig(scope, post.get(m.vault)!),
+    mint = verifyOpenShareMint(scope, post.get(m.shareMint)!);
+  const reserves = a.vaultTokens.map((addr, i) =>
+    verifyOpenToken(
+      post.get(addr)!,
+      a.authority,
+      [
+        C3_MAINNET.usdcMint,
+        C3_MAINNET.cbBtcMint,
+        C3_MAINNET.portalEthMint,
+        C3_MAINNET.wrappedSolMint,
+      ][i]!,
+    ),
+  );
+  check(
+    mint.supply === cfg.sharesIssued ||
+      (m.action === "claim" &&
+        mint.supply === 0n &&
+        cfg.sharesIssued === 1000000n),
+    "MINT_SUPPLY",
+  );
+  const cfgBefore = accountBytes(
+      m.baseline![m.vault],
+      m.program,
+      546,
+      "VaultConfig",
+    ),
+    cfgAfter = cfg.bytes;
+  // Only lifecycle/counters/issued supply may change for these exact owner actions.
+  const allowed =
+    m.action === "deposit"
+      ? [
+          [456, 464],
+          [480, 481],
+        ]
+      : m.action === "issue_shares"
+        ? [[472, 481]]
+        : m.action === "request_redemption"
+          ? [
+              [464, 472],
+              [480, 481],
+            ]
+          : [[480, 481]];
+  for (let i = 0; i < cfgBefore.length; i++)
+    check(
+      allowed.some(([start, end]) => i >= start! && i < end!) ||
+        cfgBefore[i] === cfgAfter[i],
+      "CONFIG_MUTATION",
+    );
+  const intent = verifyOpenIntent(
+    scope,
+    post.get(m.onchainIntent)!,
+    m.action === "claim" || m.action === "request_redemption",
+    [
+      { deposit: 2, issue_shares: 5, request_redemption: 2, claim: 6 }[
+        m.action
+      ],
+    ],
+  );
+  if (m.action === "issue_shares" || m.action === "claim") {
+    const prior = verifyOpenIntent(
+      scope,
+      m.baseline![m.onchainIntent]!,
+      m.action === "claim",
+      [m.action === "claim" ? 4 : 3],
+    );
+    const changes =
+      m.action === "claim"
+        ? [
+            [113, 114],
+            [162, 170],
+          ]
+        : [
+            [113, 114],
+            [186, 194],
+          ];
+    for (let i = 0; i < intent.length; i++)
+      check(
+        changes.some(([s, e]) => i >= s! && i < e!) || intent[i] === prior[i],
+        "INTENT_MUTATION",
+      );
+  }
+  if (m.action === "request_redemption") {
+    const deposit = verifyOpenIntent(scope, post.get(a.deposit)!, false, [5]),
+      before = accountBytes(
+        m.baseline![a.deposit],
+        m.program,
+        288,
+        "DepositIntent",
+      );
+    check(
+      deposit.equals(before) &&
+        [122, 130, 138].every(
+          (o, i) =>
+            intent.readBigUInt64LE(o) ===
+              deposit.readBigUInt64LE(162 + i * 8) &&
+            reserves[i + 1]! >= intent.readBigUInt64LE(o),
+        ) &&
+        intent.readBigUInt64LE(146) ===
+          verifyOpenToken(
+            m.baseline![a.vaultTokens[0]!]!,
+            a.authority,
+            C3_MAINNET.usdcMint,
+          ),
+      "REDEMPTION_INVENTORY",
+    );
+  }
+  if (m.action === "issue_shares" || m.action === "claim") {
+    const plan = verifyOpenPlan(
+        scope,
+        m.plan,
+        post.get(m.plan)!,
+        m.planRevision,
+      ),
+      before = accountBytes(
+        m.baseline![m.plan],
+        m.program,
+        901,
+        "SettlementPlan",
+      );
+    check(
+      before.equals(plan.bytes) &&
+        plan.bitmap === 7 &&
+        plan.activeAuthorization.every((v) => v === 0) &&
+        intent
+          .subarray(
+            m.action === "claim" ? 170 : 224,
+            m.action === "claim" ? 202 : 256,
+          )
+          .equals(plan.bytes.subarray(724, 756)),
+      "PLAN_MUTATION_OR_INCOMPLETE",
+    );
+    if (m.action === "issue_shares") {
+      const intent = accountBytes(
+        post.get(m.onchainIntent),
+        m.program,
+        288,
+        "DepositIntent",
+      );
+      check(
+        plan.direction === 1 &&
+          mint.supply === 1000000n &&
+          plan.outputs.every(
+            (v, i) =>
+              v === intent.readBigUInt64LE(162 + i * 8) &&
+              reserves[i + 1]! >= v,
+          ),
+        "BACKED_BUY_INVENTORY",
+      );
+    } else {
+      const intent = accountBytes(
+          post.get(m.onchainIntent),
+          m.program,
+          234,
+          "RedemptionIntent",
+        ),
+        prior = accountBytes(
+          m.baseline![m.onchainIntent],
+          m.program,
+          234,
+          "RedemptionIntent",
+        );
+      const returned = plan.outputs.reduce((sum, v) => sum + v, 0n);
+      check(
+        returned < 1n << 64n &&
+          plan.direction === 2 &&
+          plan.budgets.every(
+            (v, i) => v === intent.readBigUInt64LE(122 + i * 8),
+          ) &&
+          returned === intent.readBigUInt64LE(154) &&
+          returned === intent.readBigUInt64LE(162) &&
+          prior.readBigUInt64LE(162) === 0n &&
+          mint.supply === 0n &&
+          verifyOpenToken(
+            post.get(a.ownerShares)!,
+            scope.wallet,
+            scope.shareMint,
+            "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+          ) === 0n,
+        "BACKED_REDEMPTION",
+      );
+      const baselineReserve = verifyOpenToken(
+        m.baseline![a.vaultTokens[0]!]!,
+        a.authority,
+        C3_MAINNET.usdcMint,
+      );
+      check(
+        baselineReserve >= returned &&
+          reserves[0] === baselineReserve - returned,
+        "RESERVES",
+      );
+    }
+  }
+}
 /** Matching every token/lamport delta and EVERY ordered inner instruction
  * rejects extra mints, drains, delegates, CPI/authority changes and closures. */
 export function verifyOwnerEconomicEffects(
@@ -182,7 +413,7 @@ export function verifyOwnerEconomicEffects(
   snapshotResponse: unknown,
 ) {
   check(
-    manifest.version === "c3-owner-effects/v1" &&
+    ["c3-owner-effects/v1", "c3-owner-effects/v2"].includes(manifest.version) &&
       /^[a-f0-9]{64}$/.test(manifest.messageHash),
     "MANIFEST",
   );
@@ -388,9 +619,89 @@ export function verifyOwnerEconomicEffects(
         }),
       };
     });
+  let expectedInner = manifest.inner,
+    expectedLamports = manifest.lamports;
+  if (manifest.initialization) {
+    const init = manifest.initialization;
+    check(
+      manifest.version === "c3-owner-effects/v2" &&
+        ["deposit", "request_redemption"].includes(manifest.action) &&
+        init.account === manifest.onchainIntent &&
+        init.space === (manifest.action === "deposit" ? 288 : 234),
+      "INITIALIZATION_SCOPE",
+    );
+    const before = manifest.baseline?.[init.account];
+    check(
+      !before ||
+        (before.owner === C3_MAINNET.systemProgram &&
+          !before.executable &&
+          before.data[0] === "" &&
+          before.data[1] === "base64"),
+      "INITIALIZATION_BASELINE",
+    );
+    const index = addresses.indexOf(init.account);
+    const preBalances = meta.preBalances as unknown[];
+    check(
+      index >= 0 &&
+        Array.isArray(preBalances) &&
+        preBalances.length === addresses.length &&
+        Number.isSafeInteger(preBalances[index]) &&
+        Number(preBalances[index]) >= 0 &&
+        Number.isSafeInteger(meta.fee) &&
+        Number(meta.fee) > 0 &&
+        Number(meta.fee) <= 100000,
+      "INITIALIZATION_BALANCE",
+    );
+    const prefund = BigInt(Number(preBalances[index])),
+      rent = uint(init.rent),
+      funding = rent > prefund ? rent - prefund : 0n;
+    const ix = (accounts: string[], data: Buffer) => ({
+      program: C3_MAINNET.systemProgram,
+      accounts,
+      dataHash: digest(data),
+    });
+    const setup: ReturnType<typeof ix>[] = [];
+    if (prefund === 0n) {
+      const b = Buffer.alloc(52);
+      b.writeBigUInt64LE(rent, 4);
+      b.writeBigUInt64LE(BigInt(init.space), 12);
+      Buffer.from(publicKeyBytes(manifest.program)).copy(b, 20);
+      setup.push(ix([manifest.wallet, init.account], b));
+    } else {
+      if (funding > 0n) {
+        const b = Buffer.alloc(12);
+        b.writeUInt32LE(2);
+        b.writeBigUInt64LE(funding, 4);
+        setup.push(ix([manifest.wallet, init.account], b));
+      }
+      const b = Buffer.alloc(12);
+      b.writeUInt32LE(8);
+      b.writeBigUInt64LE(BigInt(init.space), 4);
+      setup.push(ix([init.account], b));
+      const assign = Buffer.alloc(36);
+      assign.writeUInt32LE(1);
+      Buffer.from(publicKeyBytes(manifest.program)).copy(assign, 4);
+      setup.push(ix([init.account], assign));
+    }
+    expectedInner = manifest.inner.map((g) =>
+      g.index === 0 ? { index: 0, instructions: setup } : g,
+    );
+    expectedLamports = [
+      {
+        account: manifest.wallet,
+        minimum: (-funding - BigInt(Number(meta.fee))).toString(),
+        maximum: (-funding - BigInt(Number(meta.fee))).toString(),
+      },
+      {
+        account: init.account,
+        minimum: funding.toString(),
+        maximum: funding.toString(),
+      },
+    ];
+  }
   check(
     new Set(inner.map((v) => v.index)).size === inner.length &&
-      canonicalize(inner) === canonicalize(manifest.inner),
+      canonicalize(inner) === canonicalize(expectedInner),
     "HOSTILE_INNER",
   );
   const balances = (value: unknown) => {
@@ -468,8 +779,8 @@ export function verifyOwnerEconomicEffects(
       Array.isArray(meta.postBalances) &&
       meta.preBalances.length === addresses.length &&
       meta.postBalances.length === addresses.length &&
-      new Set(manifest.lamports.map((v) => v.account)).size ===
-        manifest.lamports.length,
+      new Set(expectedLamports.map((v) => v.account)).size ===
+        expectedLamports.length,
     "LAMPORT_EVIDENCE",
   );
   for (const [i, address] of addresses.entries()) {
@@ -483,7 +794,7 @@ export function verifyOwnerEconomicEffects(
       "LAMPORT_INTEGER",
     );
     const delta = BigInt(Number(b)) - BigInt(Number(a)),
-      expected = manifest.lamports.find((v) => v.account === address);
+      expected = expectedLamports.find((v) => v.account === address);
     if (expected) {
       check(
         /^-?(0|[1-9][0-9]{0,19})$/.test(expected.minimum) &&
@@ -496,7 +807,7 @@ export function verifyOwnerEconomicEffects(
     } else check(delta === 0n, "UNRELATED_SOL_DELTA");
   }
   check(
-    manifest.lamports.every((v) => addresses.includes(v.account)),
+    expectedLamports.every((v) => addresses.includes(v.account)),
     "UNUSED_LAMPORT_EXPECTATION",
   );
   const snapshot = object(snapshotResponse),
@@ -525,7 +836,8 @@ export function verifyOwnerEconomicEffects(
         bytes.length === expected.bytes &&
         expected.checks.length > 0 &&
         /^[a-f0-9]{64}$/.test(expected.dataHash) &&
-        digest(bytes) === expected.dataHash,
+        (manifest.version === "c3-owner-effects/v2" ||
+          digest(bytes) === expected.dataHash),
       "SNAPSHOT_BYTES",
     );
     for (const f of expected.checks) {
@@ -542,6 +854,8 @@ export function verifyOwnerEconomicEffects(
     }
   }
   verifyOwnerProgramState(manifest, snapshot.value as unknown[]);
+  if (manifest.version === "c3-owner-effects/v2")
+    verifyOwnerSemanticState(manifest, snapshot.value as unknown[]);
   return {
     slot: Number(tx.slot),
     evidenceHash: digest(
@@ -563,9 +877,10 @@ export async function reconcileProductionOwnerEconomics(
   fetcher: typeof fetch = fetch,
 ) {
   const policy = requireOpenProductionPolicy();
+  await assertProductionEnrollment(pool, policy, requestId, "request");
   const r = (
     await pool.query(
-      `SELECT r.*,s.signature,m.manifest,m.manifest_hash,i.wallet,i.vault,i.share_mint,i.configuration_hash,i.state,i.deposit_plan,i.redemption_plan FROM c3_open.owner_requests r JOIN c3_open.owner_submissions s USING(request_id) JOIN c3_open.owner_economic_manifests m USING(request_id) JOIN c3_open.intents i USING(intent_id) WHERE r.request_id=$1`,
+      `SELECT r.*,s.signature,m.manifest,m.manifest_hash,a.manifest AS authorization_manifest,a.manifest_hash AS authorization_hash,a.pre_accounts,i.wallet,i.vault,i.share_mint,i.configuration_hash,i.state,i.deposit_plan,i.redemption_plan FROM c3_open.owner_requests r JOIN c3_open.owner_submissions s USING(request_id) JOIN c3_open.owner_economic_manifests m USING(request_id) JOIN c3_open.owner_authorization_manifests a USING(request_id) JOIN c3_open.intents i USING(intent_id) WHERE r.request_id=$1`,
       [requestId],
     )
   ).rows[0];
@@ -577,6 +892,22 @@ export async function reconcileProductionOwnerEconomics(
     "POLICY_BINDING",
   );
   const manifest = r.manifest as OwnerEffectManifest;
+  check(
+    digest(canonicalize(r.authorization_manifest)) ===
+      r.authorization_hash.toString("hex") &&
+      r.authorization_manifest.messageHash === r.message_hash.toString("hex") &&
+      r.authorization_manifest.intentId === r.intent_id &&
+      r.authorization_manifest.action === r.action &&
+      canonicalize(r.pre_accounts) === canonicalize(manifest.baseline),
+    "AUTHORIZATION_BINDING",
+  );
+  check(
+    manifest.version === "c3-owner-effects/v2" &&
+      manifest.semanticScope?.governance === policy.governance &&
+      manifest.semanticScope?.keeper === policy.keeper &&
+      manifest.semanticScope?.maxSlippageBps === policy.maxSlippageBps,
+    "PRODUCTION_SEMANTICS_REQUIRED",
+  );
   check(
     digest(canonicalize(manifest)) === r.manifest_hash.toString("hex") &&
       manifest.messageHash === r.message_hash.toString("hex") &&
@@ -616,6 +947,17 @@ export async function reconcileProductionOwnerEconomics(
       (r.action === "request_redemption" ? "0" : r.expected_chain_revision),
     "CHAIN_REVISION",
   );
+  const prior = (
+    await pool.query(
+      "SELECT evidence_hash FROM c3_open.owner_effect_receipts WHERE request_id=$1",
+      [requestId],
+    )
+  ).rows[0];
+  if (prior)
+    return {
+      status: "already_reconciled" as const,
+      evidenceHash: prior.evidence_hash.toString("hex"),
+    };
   const collected = await collectFinalizedOpenEconomicEvidence(
     policy.providers,
     r.signature,

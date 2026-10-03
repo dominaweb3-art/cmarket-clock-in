@@ -2,7 +2,7 @@
  * same server that supplies a transaction. The release has no approved policy. */
 import type { OwnerInstructionReview } from "./owner-transaction-review.ts";
 export type MoneyAction =
-  "deposit" | "issue_shares" | "request_redemption" | "claim";
+  "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
 export type OwnerPolicy = Readonly<{
   wallet: Uint8Array;
   program: Uint8Array;
@@ -10,6 +10,10 @@ export type OwnerPolicy = Readonly<{
 }>;
 // Exact current reviewed IDL ordering/privileges. '*' is writable, '+' signer.
 const methods = {
+  renew_settlement_plan: {
+    d: [184, 149, 8, 59, 254, 68, 86, 19],
+    a: ["owner+", "config", "plan*"],
+  },
   create_deposit_intent: {
     d: [172, 123, 241, 167, 192, 199, 8, 138],
     a: ["owner*+", "config*", "intent*", "system_program"],
@@ -93,6 +97,7 @@ export function ownerTemplates(
   action: MoneyAction,
   expiry: number,
   now: number,
+  renewal?: Readonly<{ chainRevision: string; planDirection: "buy" | "sell" }>,
 ): OwnerInstructionReview[] {
   if (
     !Number.isSafeInteger(expiry) ||
@@ -108,7 +113,13 @@ export function ownerTemplates(
       ? ["create_deposit_intent", "deposit_usdc"]
       : action === "request_redemption"
         ? ["create_redemption_intent", "lock_shares_for_redemption"]
-        : [action === "issue_shares" ? "issue_initial_shares" : "claim_usdc"];
+        : [
+            action === "issue_shares"
+              ? "issue_initial_shares"
+              : action === "renew_plan"
+                ? "renew_settlement_plan"
+                : "claim_usdc",
+          ];
   const prefix =
     action === "request_redemption" || action === "claim"
       ? "redemption"
@@ -123,18 +134,46 @@ export function ownerTemplates(
     view.setBigUint64(8, 1_000_000n, true);
     view.setBigUint64(16, 1n, true);
     view.setBigInt64(24, BigInt(expiry), true);
+    const renewArgs = new Uint8Array(16);
+    if (action === "renew_plan") {
+      if (
+        !renewal ||
+        !/^(0|[1-9][0-9]{0,19})$/.test(renewal.chainRevision) ||
+        BigInt(renewal.chainRevision) >= (1n << 64n) - 1n ||
+        !["buy", "sell"].includes(renewal.planDirection)
+      )
+        throw Error("C3_OWNER_RENEWAL_REVIEW_REQUIRED");
+      new DataView(renewArgs.buffer).setBigUint64(
+        0,
+        BigInt(renewal.chainRevision),
+        true,
+      );
+      new DataView(renewArgs.buffer).setBigInt64(8, BigInt(expiry), true);
+    }
     return {
       program: new Uint8Array(policy.program),
       data: new Uint8Array([
         ...def.d,
-        ...(name.startsWith("create_") ? args : []),
+        ...(name.startsWith("create_")
+          ? args
+          : name === "renew_settlement_plan"
+            ? renewArgs
+            : []),
       ]),
       accounts: def.a.map((field) => {
         const name = field.replace(/[+*]/g, "");
         const key =
           name === "owner"
             ? policy.wallet
-            : policy.accounts[name === "intent" ? prefix + "_intent" : name];
+            : policy.accounts[
+                name === "intent"
+                  ? prefix + "_intent"
+                  : name === "plan"
+                    ? renewal?.planDirection === "sell"
+                      ? "redemption_plan"
+                      : "deposit_plan"
+                    : name
+              ];
         if (!key || key.length !== 32)
           throw Error("C3_OWNER_POLICY_ACCOUNT_MISSING");
         return {
@@ -148,9 +187,11 @@ export function ownerTemplates(
   // Solana v0 privileges are unioned over all outer instructions.
   for (const ix of instructions)
     for (const a of ix.accounts) {
-      a.writable = instructions.some((i) =>
-        i.accounts.some((b) => equal(a.key, b.key) && b.writable),
-      );
+      a.writable =
+        equal(a.key, policy.wallet) ||
+        instructions.some((i) =>
+          i.accounts.some((b) => equal(a.key, b.key) && b.writable),
+        );
       a.signer = equal(a.key, policy.wallet);
     }
   return instructions;

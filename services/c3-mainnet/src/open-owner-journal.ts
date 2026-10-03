@@ -16,6 +16,7 @@ import {
 } from "./solana.ts";
 import { requireOpenProductionPolicy } from "./open-production-policy.ts";
 import { readIndependentOpenEvidence } from "./open-rpc-quorum.ts";
+import { assertProductionEnrollment } from "./open-owner-trust.ts";
 const hash = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest();
 const check = (v: unknown, code: string): void => {
@@ -160,6 +161,17 @@ export class OpenOwnerJournal {
     check(r && r.session_expiry > r.now, "SESSION_REJECTED");
     return r;
   }
+  async authorizeIntent(token: string, intentId: string) {
+    check(/^[a-f0-9]{64}$/.test(token) && uuid.test(intentId), "SESSION_SHAPE");
+    const row = (
+      await this.pool.query(
+        `SELECT i.wallet FROM c3_open.intents i JOIN c3_open.owner_sessions s USING(intent_id) JOIN c3_open.owner_challenges a USING(challenge_id) WHERE i.intent_id=$1 AND s.session_hash=$2 AND s.wallet=i.wallet AND a.audience=$3 AND s.expires_at>clock_timestamp()`,
+        [intentId, hash(token), this.origin],
+      )
+    ).rows[0];
+    check(row, "SESSION_REJECTED");
+    return { intentId, wallet: row.wallet as string };
+  }
   async bindRequest(token: string, requestId: string) {
     return atomic(this.pool, async (c) => {
       const r = await this.session(c, token, requestId);
@@ -285,6 +297,11 @@ export class OpenOwnerJournal {
         s.signature === signature && s.message_hash.equals(r.message_hash),
         "SIGNATURE_CONFLICT",
       );
+      if (r.action === "renew_plan")
+        await c.query(
+          "INSERT INTO c3_open.renewal_submissions(request_id,signature,message_hash) VALUES($1,$2,$3)",
+          [requestId, signature, r.message_hash],
+        );
       await c.query(
         "INSERT INTO c3_open.owner_send_attempts(request_id,signature,message_hash) VALUES($1,$2,$3)",
         [requestId, signature, r.message_hash],
@@ -316,6 +333,7 @@ export async function submitProductionOwnerPacket(
   fetcher: typeof fetch = fetch,
 ) {
   const policy = requireOpenProductionPolicy();
+  await assertProductionEnrollment(pool, policy, requestId, "request");
   const r = (
     await pool.query(
       "SELECT r.blockhash,r.last_valid_height,i.wallet,i.vault,i.configuration_hash FROM c3_open.owner_requests r JOIN c3_open.intents i USING(intent_id) WHERE r.request_id=$1",

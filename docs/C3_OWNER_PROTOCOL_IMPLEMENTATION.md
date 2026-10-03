@@ -1,5 +1,12 @@
 # C3 owner protocol — implementation evidence, not release approval
 
+Historical checkpoint: the implementation, APK and blocker list below describe
+the work preceding `cbc11149`. For the subsequent trusted compiler, semantic
+verification, HTTPS owner service, mobile renewal and remaining **productive
+six-leg** integration blocker, see [C3_TRUSTED_OWNER_INTEGRATION.md](C3_TRUSTED_OWNER_INTEGRATION.md).
+Preserve this earlier cycle and artifact as provenance, not evidence that the
+current affected cycle or production flow is complete.
+
 Classification: SHARED. Started from `e680f2bfd060bf50743ecd6571463b7f42448a74`
 on `feature/c3-open-pilot-vault`. Mainnet execution and mobile monetary capability
 remain immutable `false`; reviewed production configuration remains `null`.

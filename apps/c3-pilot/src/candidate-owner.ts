@@ -26,6 +26,7 @@ export type CandidateOwnerConfiguration = Readonly<{
   intentId: string;
   policy: OwnerPolicy;
 }>;
+const ownerSessions = new Map<string, ReturnType<typeof createOwnerSession>>();
 export function reviewedCandidateOwnerConfiguration(): CandidateOwnerConfiguration | null {
   return null;
 }
@@ -60,6 +61,7 @@ export function candidateOwnerController(wallet: string): OwnerController {
     session.fetch,
     true,
   );
+  ownerSessions.set(wallet, session);
   return new OwnerController({
     gate: requireCandidateMoneyGate,
     wallet,
@@ -121,11 +123,18 @@ export async function readCandidateOwnerPosition(
   const mint = c.policy.accounts.share_mint;
   if (!mint || mint.length !== 32)
     throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
-  const r = await fetch(c.backend + "/v1/c3/owner/position", {
-    method: "GET",
-    redirect: "error",
-    signal: AbortSignal.timeout(8000),
-  });
+  const session = ownerSessions.get(wallet);
+  if (!session) throw Error("C3_OWNER_REAUTH_REQUIRED");
+  const r = await session.fetch(
+    c.backend +
+      "/v1/c3/owner/position?intentId=" +
+      encodeURIComponent(c.intentId),
+    {
+      method: "GET",
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    },
+  );
   const text = await r.text();
   if (!r.ok || text.length > 2048) throw Error("C3_OWNER_POSITION_UNVERIFIED");
   return parseOwnerPosition(

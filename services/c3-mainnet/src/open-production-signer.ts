@@ -21,6 +21,33 @@ const digest = (b: Uint8Array) => createHash("sha256").update(b).digest();
 const check = (c: unknown) => {
   if (!c) throw new Error("C3_OPEN_PRODUCTION_SIGNER_REJECTED");
 };
+/** Deadline must come from the quote's immutable, owner-finalized generation,
+ * never max(expiry), a caller extension, or a replacement intent. */
+export function verifiedGenerationDeadline(r: {
+  generation: string;
+  latest_generation: string;
+  generation_expiry: Date | null;
+  intent_expiry: Date;
+  plan_expiry: string;
+  db_now: Date;
+  expires_at: Date;
+}) {
+  check(
+    /^(0|[1-9][0-9]{0,18})$/.test(r.generation) &&
+      r.generation === r.latest_generation &&
+      /^[1-9][0-9]{0,18}$/.test(r.plan_expiry),
+  );
+  const deadline = r.generation === "0" ? r.intent_expiry : r.generation_expiry;
+  check(
+    deadline instanceof Date &&
+      Number.isSafeInteger(deadline.getTime()) &&
+      deadline > r.db_now &&
+      r.expires_at > r.db_now &&
+      r.expires_at <= deadline! &&
+      BigInt(r.expires_at.getTime()) <= BigInt(r.plan_expiry) * 1000n,
+  );
+  return deadline!;
+}
 
 /** Only public record ID/hash crosses this boundary; bytes come from PostgreSQL. */
 export type IsolatedEd25519Provider = DurableQuoteSigningProvider;
@@ -48,10 +75,14 @@ export class OpenProductionRecordSigner {
         i.wallet,i.vault,i.configuration_hash,i.db_revision,i.chain_revision,
         i.state AS intent_state,i.expires_at AS intent_expiry,l.state AS leg_state,
         l.submitted_signature,clock_timestamp() AS db_now
+        ,g.generation::text,g.plan_revision AS generation_plan_revision,pg.expires_at AS generation_expiry,
+        COALESCE((SELECT p.generation::text FROM c3_open.plan_generations p WHERE p.intent_id=i.intent_id AND p.plan=g.plan ORDER BY p.generation DESC LIMIT 1),'0') AS latest_generation
         FROM c3_open.quote_authorizations q
         JOIN c3_open.quote_contexts c USING(intent_id,ordinal,intent_revision)
         JOIN c3_open.intents i USING(intent_id)
         JOIN c3_open.legs l USING(intent_id,ordinal)
+        JOIN c3_open.quote_generations g ON g.quote_id=q.quote_id
+        LEFT JOIN c3_open.plan_generations pg ON pg.intent_id=g.intent_id AND pg.plan=g.plan AND pg.generation=g.generation
         WHERE q.quote_id=$1`,
         [Buffer.from(quoteId, "hex")],
       );
@@ -66,8 +97,6 @@ export class OpenProductionRecordSigner {
             r.intent_state,
           ) &&
           r.expires_at > r.db_now &&
-          r.intent_expiry > r.db_now &&
-          r.expires_at <= r.intent_expiry &&
           Buffer.from(r.authority).equals(approvedKey) &&
           r.intent_revision === r.db_revision &&
           r.wallet === policy.wallet &&
@@ -75,6 +104,11 @@ export class OpenProductionRecordSigner {
           r.configuration_hash === policy.configurationHash,
       );
       const ctx = r.context as Record<string, string | number>;
+      verifiedGenerationDeadline({
+        ...r,
+        plan_expiry: String(ctx.planExpiresAt),
+      });
+      check(r.generation_plan_revision === String(ctx.planRevision));
       check(
         ctx.wallet === policy.wallet &&
           ctx.vault === policy.vault &&
@@ -168,9 +202,13 @@ export class OpenProductionRecordSigner {
       await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
       const current = await client.query(
         `SELECT i.db_revision,i.state AS intent_state,i.expires_at AS intent_expiry,
-        l.state AS leg_state,l.submitted_signature,clock_timestamp() AS db_now,q.*
+        l.state AS leg_state,l.submitted_signature,clock_timestamp() AS db_now,q.*,
+        g.generation::text,pg.expires_at AS generation_expiry,
+        COALESCE((SELECT p.generation::text FROM c3_open.plan_generations p WHERE p.intent_id=i.intent_id AND p.plan=g.plan ORDER BY p.generation DESC LIMIT 1),'0') AS latest_generation
         FROM c3_open.intents i JOIN c3_open.quote_authorizations q USING(intent_id)
         JOIN c3_open.legs l USING(intent_id,ordinal)
+        JOIN c3_open.quote_generations g ON g.quote_id=q.quote_id
+        LEFT JOIN c3_open.plan_generations pg ON pg.intent_id=g.intent_id AND pg.plan=g.plan AND pg.generation=g.generation
         WHERE q.quote_id=$1 FOR UPDATE OF i,q,l`,
         [r.quote_id],
       );
@@ -178,9 +216,7 @@ export class OpenProductionRecordSigner {
       check(
         now &&
           now.db_revision === r.intent_revision &&
-          now.intent_expiry > now.db_now &&
           now.expires_at > now.db_now &&
-          now.expires_at <= now.intent_expiry &&
           ["funded", "buying", "redemption_requested", "selling"].includes(
             now.intent_state,
           ) &&
@@ -190,6 +226,11 @@ export class OpenProductionRecordSigner {
           Buffer.from(now.canonical_payload).equals(bytes) &&
           ["prepared", "signed"].includes(now.state),
       );
+      verifiedGenerationDeadline({
+        ...now,
+        plan_expiry: String(ctx.planExpiresAt),
+      });
+      check(now.generation === r.generation);
       if (now.state === "signed")
         check(Buffer.from(now.signature).equals(signature));
       else

@@ -55,6 +55,14 @@ export function ownerBackend(
         if (bound.requestId !== r.requestId)
           throw Error("C3_OWNER_RESPONSE_INVALID");
       }
+      if (
+        action === "renew_plan" &&
+        (typeof r.chainRevision !== "string" ||
+          !/^(0|[1-9][0-9]{0,19})$/.test(r.chainRevision) ||
+          BigInt(r.chainRevision) >= (1n << 64n) - 1n ||
+          !["buy", "sell"].includes(String(r.planDirection)))
+      )
+        throw Error("C3_OWNER_RESPONSE_INVALID");
       return { ...r, packet: decode(r.packet) } as PreparedOwnerOperation;
     },
     recordSignature: async (requestId, signed) => {
@@ -70,6 +78,15 @@ export function ownerBackend(
       return { signature: r.signature };
     },
     status: async (requestId) => {
+      // Explicit user refresh only. Reconciliation never signs or broadcasts.
+      // A not-yet-finalized response is NOT success; keep the durable signature.
+      if (productionProtocol) {
+        try {
+          await read("/v1/c3/owner/reconcile", { requestId });
+        } catch {
+          /* status remains uncertain */
+        }
+      }
       const r = await read(
         "/v1/c3/owner/status?requestId=" + encodeURIComponent(requestId),
       );

@@ -37,6 +37,8 @@ export type PreparedOwnerOperation = Readonly<{
   action: MoneyAction;
   expiry: number;
   packet: Uint8Array;
+  chainRevision?: string;
+  planDirection?: "buy" | "sell";
 }>;
 export type OwnerBackend = Readonly<{
   reauthenticate?: (requestId?: string) => Promise<void>;
@@ -79,9 +81,13 @@ export function validateOwnerReceipt(
     !uuid.test(r.intentId) ||
     !uuid.test(r.requestId) ||
     !/^[a-f0-9]{64}$/.test(r.messageHash) ||
-    !["deposit", "issue_shares", "request_redemption", "claim"].includes(
-      r.action,
-    ) ||
+    ![
+      "deposit",
+      "issue_shares",
+      "request_redemption",
+      "claim",
+      "renew_plan",
+    ].includes(r.action) ||
     ![
       "review",
       "authorizing",
@@ -182,6 +188,9 @@ export class OwnerController {
         action,
         p.expiry,
         this.deps.now(),
+        p.chainRevision !== undefined && p.planDirection !== undefined
+          ? { chainRevision: p.chainRevision, planDirection: p.planDirection }
+          : undefined,
       );
       const frozen = freezeOwnerReview(
         p.packet,
@@ -223,6 +232,9 @@ export class OwnerController {
           p.action,
           p.expiry,
           this.deps.now(),
+          p.chainRevision !== undefined && p.planDirection !== undefined
+            ? { chainRevision: p.chainRevision, planDirection: p.planDirection }
+            : undefined,
         );
       const frozen = freezeOwnerReview(
         p.packet,

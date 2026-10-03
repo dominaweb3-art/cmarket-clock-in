@@ -49,6 +49,7 @@ const en = {
   cancelRequest: "Request safe expiry / cancellation",
   ownerSignIn: "Authenticate owner for recovery",
   renewRequest: "Prepare a new generation after reconciliation",
+  renewPlan: "Review expired plan renewal (no swap)",
 } as const;
 type Dictionary = Record<keyof typeof en, string>;
 export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
@@ -104,6 +105,7 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     cancelRequest: "Solicitar vencimiento / cancelación segura",
     ownerSignIn: "Autenticar propietario para recuperar",
     renewRequest: "Preparar nueva generación tras conciliación",
+    renewPlan: "Revisar renovación del plan vencido (sin swap)",
   },
   "zh-CN": {
     title: "C Market · C3 候选版",
@@ -150,6 +152,7 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     cancelRequest: "请求安全过期或取消",
     ownerSignIn: "验证所有者以恢复操作",
     renewRequest: "核对后准备新一代请求",
+    renewPlan: "检查过期计划续期（不进行兑换）",
   },
   "pt-BR": {
     title: "C Market · C3 Candidato",
@@ -200,5 +203,6 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     cancelRequest: "Solicitar expiração / cancelamento seguro",
     ownerSignIn: "Autenticar proprietário para recuperação",
     renewRequest: "Preparar nova geração após reconciliação",
+    renewPlan: "Revisar renovação do plano expirado (sem swap)",
   },
 };

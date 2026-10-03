@@ -28,6 +28,7 @@ export function OwnerLifecyclePanel({
   const t = candidateTranslations[language],
     lock = useRef(false),
     controller = useRef<OwnerController | null>(null);
+  const controllerWallet = useRef<string | null>(null);
   const [receipt, setReceipt] = useState<OwnerReceipt | null>(null),
     [busy, setBusy] = useState(false);
   const [position, setPosition] = useState<OwnerPosition | null>(null);
@@ -56,8 +57,9 @@ export function OwnerLifecyclePanel({
       const config = reviewedCandidateOwnerConfiguration();
       if (!config || config.wallet !== wallet)
         throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
-      if (!controller.current) {
+      if (!controller.current || controllerWallet.current !== wallet) {
         controller.current = candidateOwnerController(wallet);
+        controllerWallet.current = wallet;
         await restoreCandidateOwner(controller.current, wallet);
       }
       if (action === "approve") await controller.current.approve();
@@ -81,6 +83,7 @@ export function OwnerLifecyclePanel({
     issue_shares: t.issue,
     request_redemption: t.sell,
     claim: t.claim,
+    renew_plan: t.renewPlan,
   };
   const disabled = !MAINNET_MONETARY_CAPABILITY || !wallet || busy;
   return (
@@ -113,7 +116,13 @@ export function OwnerLifecyclePanel({
         </Text>
       ) : null}
       {(
-        ["deposit", "issue_shares", "request_redemption", "claim"] as const
+        [
+          "deposit",
+          "issue_shares",
+          "request_redemption",
+          "claim",
+          "renew_plan",
+        ] as const
       ).map((a) => (
         <Pressable
           key={a}

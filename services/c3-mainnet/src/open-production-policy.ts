@@ -14,6 +14,7 @@ export type OpenProductionPolicy = Readonly<{
   idlHash: string;
   configurationHash: string;
   vault: string;
+  shareMint: string;
   wallet: string;
   governance: string;
   keeper: string;
@@ -59,6 +60,7 @@ export function validateOpenProductionPolicy(p: OpenProductionPolicy): void {
   for (const k of [
     p.programId,
     p.vault,
+    p.shareMint,
     p.wallet,
     p.governance,
     p.keeper,

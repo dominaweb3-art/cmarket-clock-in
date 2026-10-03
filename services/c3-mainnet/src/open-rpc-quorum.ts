@@ -14,6 +14,8 @@ const METHODS = new Set([
   "getSignatureStatuses",
   "getBlockHeight",
   "isBlockhashValid",
+  "getLatestBlockhash",
+  "getMinimumBalanceForRentExemption",
 ]);
 async function read(
   provider: ReviewedRpcProvider,
