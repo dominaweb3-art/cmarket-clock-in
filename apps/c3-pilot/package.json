@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "main": "index.js",
+  "overrides": {
+    "xcode@3.0.1": {
+      "uuid": "11.1.1"
+    }
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint:check": "eslint .",
@@ -18,7 +23,7 @@
     "@noble/hashes": "2.4.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@solana-mobile/mobile-wallet-adapter-protocol": "2.3.0",
-    "expo": "57.0.25",
+    "expo": "57.0.26",
     "react": "19.2.3",
     "react-native": "0.86.3"
   },

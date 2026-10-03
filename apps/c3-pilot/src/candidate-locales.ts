@@ -45,6 +45,10 @@ const en = {
   signed: "Signature recorded; effects not yet verified",
   uncertain: "Uncertain result: reconciliation required",
   finalized: "Economic effects reconciled",
+  closed_unexecuted: "Expired request independently closed without execution",
+  cancelRequest: "Request safe expiry / cancellation",
+  ownerSignIn: "Authenticate owner for recovery",
+  renewRequest: "Prepare a new generation after reconciliation",
 } as const;
 type Dictionary = Record<keyof typeof en, string>;
 export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
@@ -95,6 +99,11 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     signed: "Firma registrada; efectos aún no verificados",
     uncertain: "Resultado incierto: requiere conciliación",
     finalized: "Efectos económicos conciliados",
+    closed_unexecuted:
+      "Solicitud vencida cerrada sin ejecución tras conciliación",
+    cancelRequest: "Solicitar vencimiento / cancelación segura",
+    ownerSignIn: "Autenticar propietario para recuperar",
+    renewRequest: "Preparar nueva generación tras conciliación",
   },
   "zh-CN": {
     title: "C Market · C3 候选版",
@@ -137,6 +146,10 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     signed: "已记录签名；经济效果尚未验证",
     uncertain: "结果不明：须核对",
     finalized: "经济效果已核对",
+    closed_unexecuted: "过期请求已核对关闭，未执行",
+    cancelRequest: "请求安全过期或取消",
+    ownerSignIn: "验证所有者以恢复操作",
+    renewRequest: "核对后准备新一代请求",
   },
   "pt-BR": {
     title: "C Market · C3 Candidato",
@@ -182,5 +195,10 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     signed: "Assinatura registrada; efeitos ainda não verificados",
     uncertain: "Resultado incerto: requer reconciliação",
     finalized: "Efeitos econômicos reconciliados",
+    closed_unexecuted:
+      "Solicitação expirada encerrada sem execução após reconciliação",
+    cancelRequest: "Solicitar expiração / cancelamento seguro",
+    ownerSignIn: "Autenticar proprietário para recuperação",
+    renewRequest: "Preparar nova geração após reconciliação",
   },
 };

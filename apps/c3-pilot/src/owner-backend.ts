@@ -9,6 +9,7 @@ export function ownerBackend(
   encode: (v: Uint8Array) => string,
   decode: (v: string) => Uint8Array,
   fetcher: typeof fetch = fetch,
+  productionProtocol = false,
 ): OwnerBackend {
   const read = async (path: string, body?: unknown) => {
     const r = await fetcher(origin + path, {
@@ -27,6 +28,15 @@ export function ownerBackend(
     return value;
   };
   return {
+    closeExpired: async (requestId, cancelled) => {
+      const r = await read("/v1/c3/owner/close-expired", {
+        requestId,
+        cancelled,
+      });
+      if (r.requestId !== requestId || r.state !== "closed_unexecuted")
+        throw Error("C3_OWNER_RESPONSE_INVALID");
+      return { requestId, state: "closed_unexecuted" };
+    },
     prepare: async (intentId, action) => {
       const r = await read("/v1/c3/owner/prepare", { intentId, action });
       if (
@@ -38,13 +48,23 @@ export function ownerBackend(
         typeof r.wallet !== "string"
       )
         throw Error("C3_OWNER_RESPONSE_INVALID");
+      if (productionProtocol) {
+        const bound = await read("/v1/c3/owner/bind", {
+          requestId: r.requestId,
+        });
+        if (bound.requestId !== r.requestId)
+          throw Error("C3_OWNER_RESPONSE_INVALID");
+      }
       return { ...r, packet: decode(r.packet) } as PreparedOwnerOperation;
     },
     recordSignature: async (requestId, signed) => {
-      const r = await read("/v1/c3/owner/receipt", {
-        requestId,
-        packet: encode(signed),
-      });
+      const r = await read(
+        productionProtocol ? "/v1/c3/owner/submit" : "/v1/c3/owner/receipt",
+        {
+          requestId,
+          packet: encode(signed),
+        },
+      );
       if (typeof r.signature !== "string")
         throw Error("C3_OWNER_RESPONSE_INVALID");
       return { signature: r.signature };
@@ -58,9 +78,11 @@ export function ownerBackend(
         typeof r.messageHash !== "string" ||
         !(r.signature === null || typeof r.signature === "string") ||
         typeof r.state !== "string" ||
-        !["signed", "uncertain", "finalized"].includes(r.state) ||
+        !["signed", "uncertain", "finalized", "closed_unexecuted"].includes(
+          r.state,
+        ) ||
         (["signed", "finalized"].includes(r.state) && r.signature === null) ||
-        (r.state === "finalized" &&
+        ((r.state === "finalized" || r.state === "closed_unexecuted") &&
           (typeof r.economicEvidenceHash !== "string" ||
             !/^[a-f0-9]{64}$/.test(r.economicEvidenceHash) ||
             typeof r.evidenceScope !== "string" ||
@@ -73,8 +95,9 @@ export function ownerBackend(
         requestId: r.requestId,
         messageHash: r.messageHash,
         signature: r.signature,
-        state: r.state as "signed" | "uncertain" | "finalized",
-        ...(r.state === "finalized"
+        state: r.state as
+          "signed" | "uncertain" | "finalized" | "closed_unexecuted",
+        ...(r.state === "finalized" || r.state === "closed_unexecuted"
           ? {
               economicEvidenceHash: r.economicEvidenceHash as string,
               evidenceScope: r.evidenceScope as

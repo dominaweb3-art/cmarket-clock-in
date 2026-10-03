@@ -21,7 +21,13 @@ export type OwnerReceipt = Readonly<{
   messageHash: string;
   action: MoneyAction;
   signature: string | null;
-  state: "review" | "authorizing" | "signed" | "uncertain" | "finalized";
+  state:
+    | "review"
+    | "authorizing"
+    | "signed"
+    | "uncertain"
+    | "finalized"
+    | "closed_unexecuted";
 }>;
 export type PreparedOwnerOperation = Readonly<{
   intentId: string;
@@ -33,6 +39,7 @@ export type PreparedOwnerOperation = Readonly<{
   packet: Uint8Array;
 }>;
 export type OwnerBackend = Readonly<{
+  reauthenticate?: (requestId?: string) => Promise<void>;
   prepare: (
     intentId: string,
     action: MoneyAction,
@@ -45,10 +52,14 @@ export type OwnerBackend = Readonly<{
     requestId: string;
     messageHash: string;
     signature: string | null;
-    state: "uncertain" | "finalized" | "signed";
+    state: "uncertain" | "finalized" | "signed" | "closed_unexecuted";
     economicEvidenceHash?: string;
     evidenceScope?: "LOCAL_CLONE" | "MAINNET_INDEPENDENT_RPC";
   }>;
+  closeExpired?: (
+    requestId: string,
+    cancelled: boolean,
+  ) => Promise<{ requestId: string; state: "closed_unexecuted" }>;
 }>;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const sig = /^[1-9A-HJ-NP-Za-km-z]{64,96}$/;
@@ -71,9 +82,14 @@ export function validateOwnerReceipt(
     !["deposit", "issue_shares", "request_redemption", "claim"].includes(
       r.action,
     ) ||
-    !["review", "authorizing", "signed", "uncertain", "finalized"].includes(
-      r.state,
-    ) ||
+    ![
+      "review",
+      "authorizing",
+      "signed",
+      "uncertain",
+      "finalized",
+      "closed_unexecuted",
+    ].includes(r.state) ||
     !(
       r.signature === null ||
       (typeof r.signature === "string" && sig.test(r.signature))
@@ -87,7 +103,7 @@ export function parseOwnerReceipt(value: string, wallet: string): OwnerReceipt {
   const r = validateOwnerReceipt(value, wallet);
   return Object.freeze({
     ...r,
-    state: ["authorizing", "finalized"].includes(r.state)
+    state: ["authorizing", "finalized", "closed_unexecuted"].includes(r.state)
       ? "uncertain"
       : r.state,
   });
@@ -116,6 +132,18 @@ export class OwnerController {
   get snapshot() {
     return this.receipt;
   }
+  /** User-selected sign-in; never called by restart, status or timeout recovery. */
+  async reauthenticate() {
+    this.deps.gate();
+    if (this.busy || !this.deps.backend.reauthenticate)
+      throw Error("C3_OWNER_REAUTH_REQUIRED");
+    this.busy = true;
+    try {
+      await this.deps.backend.reauthenticate(this.receipt?.requestId);
+    } finally {
+      this.busy = false;
+    }
+  }
   async restore(value: string) {
     if (this.busy) throw Error("C3_OPERATION_ALREADY_PENDING");
     this.receipt = parseOwnerReceipt(value, this.deps.wallet);
@@ -128,11 +156,21 @@ export class OwnerController {
   }
   async prepare(intentId: string, action: MoneyAction) {
     this.deps.gate();
-    if (this.busy || (this.receipt && this.receipt.state !== "finalized"))
+    if (
+      this.busy ||
+      (this.receipt &&
+        !["finalized", "closed_unexecuted"].includes(this.receipt.state))
+    )
       throw Error("C3_OPERATION_RECONCILE_REQUIRED");
     this.busy = true;
     try {
       const p = await this.deps.backend.prepare(intentId, action);
+      // Reject replay BEFORE persisting anything: old signature/evidence survives.
+      if (
+        this.receipt?.state === "closed_unexecuted" &&
+        p.requestId === this.receipt.requestId
+      )
+        throw Error("C3_OWNER_GENERATION_REPLAY");
       if (
         p.intentId !== intentId ||
         p.action !== action ||
@@ -240,16 +278,19 @@ export class OwnerController {
       if (
         r.requestId !== this.receipt.requestId ||
         r.messageHash !== this.receipt.messageHash ||
-        !["signed", "uncertain", "finalized"].includes(r.state) ||
+        !["signed", "uncertain", "finalized", "closed_unexecuted"].includes(
+          r.state,
+        ) ||
         !(
           r.signature === null ||
           (typeof r.signature === "string" && sig.test(r.signature))
         ) ||
         (["signed", "finalized"].includes(r.state) && r.signature === null) ||
         (this.receipt.signature !== null &&
-          r.signature !== this.receipt.signature) ||
-        (r.state === "finalized" &&
-          (r.signature === null ||
+          r.signature !== this.receipt.signature &&
+          !(r.state === "closed_unexecuted" && r.signature === null)) ||
+        ((r.state === "finalized" || r.state === "closed_unexecuted") &&
+          ((r.state === "finalized" && r.signature === null) ||
             !/^[a-f0-9]{64}$/.test(r.economicEvidenceHash ?? "") ||
             r.evidenceScope !==
               (this.deps.evidenceScope ?? "MAINNET_INDEPENDENT_RPC")))
@@ -257,11 +298,49 @@ export class OwnerController {
         throw Error("C3_OWNER_RECOVERY_BINDING");
       await this.store({
         ...this.receipt,
-        signature: r.signature,
+        signature: r.signature ?? this.receipt.signature,
         state: r.state,
       });
     } finally {
       this.busy = false;
     }
+  }
+  /** Explicit cancellation request does NOT erase a signature or make a request
+   * retryable. Only the server's dead-blockhash/economic barrier can close it. */
+  async closeExpired(cancelled = true) {
+    this.deps.gate();
+    if (
+      this.busy ||
+      !this.receipt ||
+      this.receipt.state === "finalized" ||
+      !this.deps.backend.closeExpired
+    )
+      throw Error("C3_OWNER_RECOVERY_REQUIRED");
+    this.busy = true;
+    try {
+      const result = await this.deps.backend.closeExpired(
+        this.receipt.requestId,
+        cancelled,
+      );
+      if (
+        result.requestId !== this.receipt.requestId ||
+        result.state !== "closed_unexecuted"
+      )
+        throw Error("C3_OWNER_RECOVERY_BINDING");
+      // Destroy only volatile packet, preserve the durable public receipt and
+      // signature. Independent status refresh is mandatory before replacement.
+      this.prepared = null;
+      await this.store({ ...this.receipt, state: "uncertain" });
+    } finally {
+      this.busy = false;
+    }
+  }
+  async renewExpiredRequest() {
+    this.deps.gate();
+    await this.recover();
+    const old = this.receipt;
+    if (old?.state !== "closed_unexecuted")
+      throw Error("C3_OWNER_RECOVERY_REQUIRED");
+    await this.prepare(old.intentId, old.action);
   }
 }

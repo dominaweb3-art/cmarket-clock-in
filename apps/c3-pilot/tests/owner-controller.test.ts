@@ -146,6 +146,76 @@ function setup(change?: Partial<OwnerBackend>) {
     },
   };
 }
+test("closure and request renewal preserve uncertainty, require new generation and survive restart", async () => {
+  const hash = ownerMessageHash(fixturePacket().slice(65));
+  const s = setup({
+    closeExpired: async (id) => ({ requestId: id, state: "closed_unexecuted" }),
+    status: async () => ({
+      requestId,
+      messageHash: hash,
+      signature: null,
+      state: "closed_unexecuted",
+      economicEvidenceHash: "a".repeat(64),
+      evidenceScope: "MAINNET_INDEPENDENT_RPC",
+    }),
+  });
+  await s.controller.prepare(id, "deposit");
+  await s.controller.closeExpired();
+  assert.equal(s.controller.snapshot?.state, "uncertain");
+  assert.equal(s.calls().signCalls, 0);
+  await s.controller.restore(s.saved());
+  assert.equal(s.controller.snapshot?.state, "uncertain");
+  await assert.rejects(
+    () => s.controller.renewExpiredRequest(),
+    /GENERATION_REPLAY/,
+  );
+  assert.equal(s.controller.snapshot?.state, "closed_unexecuted");
+  assert.equal(s.calls().signCalls, 0);
+  const denied = setup({
+    closeExpired: async () => {
+      throw Error("blockhash still valid");
+    },
+  });
+  await denied.controller.prepare(id, "deposit");
+  const before = denied.saved();
+  await assert.rejects(() => denied.controller.closeExpired());
+  assert.equal(denied.saved(), before);
+});
+test("explicit reauthentication recovers closed unrecorded signature without forgetting it", async () => {
+  let authentications = 0;
+  const s = setup({
+    reauthenticate: async () => {
+      authentications++;
+    },
+    status: async () => ({
+      requestId,
+      messageHash: ownerMessageHash(fixturePacket().slice(65)),
+      signature: null,
+      state: "closed_unexecuted",
+      economicEvidenceHash: "a".repeat(64),
+      evidenceScope: "MAINNET_INDEPENDENT_RPC",
+    }),
+  });
+  await s.controller.prepare(id, "deposit");
+  await s.controller.approve();
+  await s.controller.restore(s.saved());
+  assert.equal(authentications, 0);
+  await s.controller.reauthenticate();
+  assert.equal(authentications, 1);
+  await s.controller.recover();
+  assert.equal(s.controller.snapshot?.state, "closed_unexecuted");
+  assert.equal(s.controller.snapshot?.signature, signature);
+  assert.equal(s.calls().signCalls, 1);
+  await assert.rejects(
+    () => s.controller.renewExpiredRequest(),
+    /GENERATION_REPLAY/,
+  );
+  assert.equal(s.controller.snapshot?.signature, signature);
+  assert.equal(JSON.parse(s.saved()).signature, signature);
+  assert.equal(JSON.parse(s.saved()).state, "closed_unexecuted");
+  assert.equal(s.calls().signCalls, 1);
+  assert.equal(authentications, 1);
+});
 test("malformed signed/null recovery preserves prior receipt with zero writes or wallet calls", async () => {
   for (const bad of [
     { state: "signed", signature: null },

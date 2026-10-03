@@ -45,19 +45,28 @@ export function OwnerLifecyclePanel({
       setBusy(false);
     }
   };
-  const run = async (action: MoneyAction | "approve" | "recover") => {
+  const run = async (
+    action:
+      MoneyAction | "approve" | "recover" | "close" | "renew" | "authenticate",
+  ) => {
     if (lock.current || !wallet) return;
     lock.current = true;
     setBusy(true);
     try {
       const config = reviewedCandidateOwnerConfiguration();
-      if (!config) throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
+      if (!config || config.wallet !== wallet)
+        throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
       if (!controller.current) {
         controller.current = candidateOwnerController(wallet);
         await restoreCandidateOwner(controller.current, wallet);
       }
       if (action === "approve") await controller.current.approve();
+      else if (action === "authenticate")
+        await controller.current.reauthenticate();
       else if (action === "recover") await controller.current.recover();
+      else if (action === "close") await controller.current.closeExpired();
+      else if (action === "renew")
+        await controller.current.renewExpiredRequest();
       else await controller.current.prepare(config.intentId, action);
     } catch {
       Alert.alert(t.activity, t.operationError);
@@ -141,6 +150,16 @@ export function OwnerLifecyclePanel({
         </>
       ) : null}
       <Pressable
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        onPress={() => {
+          void run("authenticate");
+        }}
+      >
+        <Text style={{ color: "#e2ffee" }}>{t.ownerSignIn}</Text>
+      </Pressable>
+      <Pressable
         disabled={disabled || !receipt}
         accessibilityRole="button"
         accessibilityState={{ disabled: disabled || !receipt }}
@@ -150,6 +169,24 @@ export function OwnerLifecyclePanel({
       >
         <Text style={{ color: "#e2ffee" }}>{t.recover}</Text>
       </Pressable>
+      {(["close", "renew"] as const).map((action) => (
+        <Pressable
+          key={action}
+          disabled={disabled || !receipt || activityOnly}
+          accessibilityRole="button"
+          accessibilityState={{
+            disabled: disabled || !receipt || activityOnly,
+          }}
+          style={{ display: activityOnly ? "none" : "flex" }}
+          onPress={() => {
+            void run(action);
+          }}
+        >
+          <Text style={{ color: "#e2ffee" }}>
+            {action === "close" ? t.cancelRequest : t.renewRequest}
+          </Text>
+        </Pressable>
+      ))}
     </View>
   );
 }

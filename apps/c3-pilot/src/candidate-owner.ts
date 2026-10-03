@@ -9,7 +9,11 @@ import {
   candidateHttpsEndpoint,
   requireCandidateMoneyGate,
 } from "./candidate-config";
-import { requestCandidateMonetarySignature } from "./candidate-wallet";
+import {
+  requestCandidateMonetarySignature,
+  authenticateCandidateOwner,
+} from "./candidate-wallet";
+import { createOwnerSession } from "./owner-session";
 import { OwnerController } from "./owner-controller";
 import { ownerBackend } from "./owner-backend";
 import type { OwnerPolicy } from "./owner-policy";
@@ -42,15 +46,53 @@ function requiredOwnerConfiguration(
 export function candidateOwnerController(wallet: string): OwnerController {
   requireCandidateMoneyGate();
   const configuration = requiredOwnerConfiguration(wallet);
+  const session = createOwnerSession(
+    configuration.backend,
+    wallet,
+    configuration.intentId,
+    (message) => authenticateCandidateOwner(wallet, message),
+    base64FromUint8Array,
+  );
+  const backend = ownerBackend(
+    configuration.backend,
+    base64FromUint8Array,
+    base64ToUint8Array,
+    session.fetch,
+    true,
+  );
   return new OwnerController({
     gate: requireCandidateMoneyGate,
     wallet,
     policy: configuration.policy,
-    backend: ownerBackend(
-      configuration.backend,
-      base64FromUint8Array,
-      base64ToUint8Array,
-    ),
+    backend: {
+      ...backend,
+      reauthenticate: async (requestId) => {
+        await session.authenticate();
+        if (requestId) {
+          const response = await session.fetch(
+            configuration.backend + "/v1/c3/owner/recovery-bind",
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ requestId }),
+              signal: AbortSignal.timeout(8000),
+            },
+          );
+          const text = await response.text();
+          if (
+            !response.ok ||
+            text.length > 1000 ||
+            JSON.parse(text).requestId !== requestId
+          )
+            throw Error("C3_OWNER_RECOVERY_BINDING");
+        }
+      },
+      prepare: async (intentId, action) => {
+        // Only explicit prepare opens sign-in; restart/recover never asks a wallet.
+        await session.authenticate();
+        return backend.prepare(intentId, action);
+      },
+    },
     now: () => Math.floor(Date.now() / 1000),
     save: async (r) =>
       AsyncStorage.setItem("c3-owner/v1:" + wallet, JSON.stringify(r)),
