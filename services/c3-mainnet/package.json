@@ -23,6 +23,7 @@
     "test:postgres": "node scripts/test-postgres-local.mjs",
     "test:open-local-postgres": "node scripts/test-postgres-local.mjs --open-local",
     "test:open-owner-postgres": "node scripts/test-postgres-local.mjs --open-owner",
+    "test:open-owner-protocol": "node scripts/test-postgres-local.mjs --open-owner-protocol",
     "test:open-local-cpi-postgres": "node scripts/test-postgres-local.mjs --open-local-cpi",
     "test:open-v0-measure": "node --experimental-strip-types --test pilot-open-local/jupiter-v0-measure.test.ts",
     "test:accounting": "node --experimental-strip-types --test tests/accounting.test.ts",

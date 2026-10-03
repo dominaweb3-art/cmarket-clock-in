@@ -17,6 +17,7 @@ import {
   recordLocalOwnerSignature,
   type OwnerOperation,
 } from "./owner-operations.ts";
+import { closeExpiredLocalOwnerRequest } from "./owner-expiry.ts";
 export function createIsolatedOwnerServer(
   pool: Pool,
   rpc: Connection,
@@ -72,6 +73,27 @@ export function createIsolatedOwnerServer(
           .digest("hex"),
       };
       if (
+        req.method === "POST" &&
+        u.pathname === "/v1/c3/owner/close-expired" &&
+        Object.keys(body).sort().join(",") === "cancelled,requestId" &&
+        typeof body.requestId === "string" &&
+        typeof body.cancelled === "boolean"
+      ) {
+        await closeExpiredLocalOwnerRequest(
+          pool,
+          rpc,
+          intentId,
+          row.wallet,
+          body.requestId,
+          body.cancelled,
+        );
+        res.end(
+          JSON.stringify({
+            requestId: body.requestId,
+            state: "closed_unexecuted",
+          }),
+        );
+      } else if (
         req.method === "POST" &&
         u.pathname === "/v1/c3/owner/prepare" &&
         Object.keys(body).sort().join(",") === "action,intentId" &&
@@ -203,7 +225,7 @@ export function createIsolatedOwnerServer(
       ) {
         const r = (
           await pool.query(
-            "SELECT r.request_id,r.message_hash,s.signature,e.evidence_hash FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_submissions s USING(request_id) LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) WHERE r.request_id=$1 AND r.intent_id=$2",
+            "SELECT r.request_id,r.message_hash,s.signature,e.evidence_hash,o.evidence_hash AS closure_hash FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_submissions s USING(request_id) LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) WHERE r.request_id=$1 AND r.intent_id=$2",
             [u.searchParams.get("requestId"), intentId],
           )
         ).rows[0];
@@ -214,14 +236,18 @@ export function createIsolatedOwnerServer(
             requestId: r.request_id,
             messageHash: r.message_hash.toString("hex"),
             signature: r.signature ?? null,
-            state: r.evidence_hash
-              ? "finalized"
-              : r.signature
-                ? "signed"
-                : "uncertain",
-            ...(r.evidence_hash
+            state: r.closure_hash
+              ? "closed_unexecuted"
+              : r.evidence_hash
+                ? "finalized"
+                : r.signature
+                  ? "signed"
+                  : "uncertain",
+            ...(r.evidence_hash || r.closure_hash
               ? {
-                  economicEvidenceHash: r.evidence_hash.toString("hex"),
+                  economicEvidenceHash: (
+                    r.evidence_hash ?? r.closure_hash
+                  ).toString("hex"),
                   evidenceScope: "LOCAL_CLONE",
                 }
               : {}),

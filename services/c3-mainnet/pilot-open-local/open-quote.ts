@@ -172,7 +172,8 @@ async function load(
     WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL
     UNION ALL SELECT 1 FROM c3_open.owner_requests r
     LEFT JOIN c3_open.owner_message_receipts m USING(request_id)
-    WHERE r.intent_id=$1 AND m.request_id IS NULL LIMIT 1`,
+    LEFT JOIN c3_open.owner_request_outcomes o USING(request_id)
+    WHERE r.intent_id=$1 AND m.request_id IS NULL AND o.request_id IS NULL LIMIT 1`,
     [intentId],
   );
   assert(!renewing.rowCount, "RENEWAL_RECONCILIATION_REQUIRED");

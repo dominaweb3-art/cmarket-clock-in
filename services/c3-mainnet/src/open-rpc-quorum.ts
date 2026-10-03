@@ -12,6 +12,8 @@ const METHODS = new Set([
   "getAccountInfo",
   "getMultipleAccounts",
   "getSignatureStatuses",
+  "getBlockHeight",
+  "isBlockhashValid",
 ]);
 async function read(
   provider: ReviewedRpcProvider,

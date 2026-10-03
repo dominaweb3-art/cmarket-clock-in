@@ -19,6 +19,7 @@ import {
 import { C3_MAINNET as c } from "../src/constants.ts";
 import { encodeBase58 } from "../src/solana.ts";
 import type { Scope } from "./orchestrator.ts";
+import { ownerStateImage } from "./owner-expiry.ts";
 import {
   inspectOwnerTransaction,
   type OwnerInstructionReview,
@@ -73,7 +74,7 @@ async function pending(client: PoolClient, id: string, own?: string) {
     `SELECT 1 FROM c3_open.legs WHERE intent_id=$1 AND state IN ('signed','submitted','uncertain','manual_review','reconciliation_required')
     UNION ALL SELECT 1 FROM c3_open.signing_requests s JOIN c3_open.quote_authorizations q USING(quote_id) WHERE q.intent_id=$1 AND s.state<>'result'
     UNION ALL SELECT 1 FROM c3_open.renewal_submissions s JOIN c3_open.renewal_requests r USING(request_id) LEFT JOIN c3_open.plan_generations g USING(request_id) LEFT JOIN c3_open.renewal_outcomes o USING(request_id) WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL
-    UNION ALL SELECT 1 FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_message_receipts m USING(request_id) WHERE r.intent_id=$1 AND m.request_id IS NULL AND ($2::uuid IS NULL OR r.request_id<>$2) LIMIT 1`,
+    UNION ALL SELECT 1 FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_message_receipts m USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) WHERE r.intent_id=$1 AND m.request_id IS NULL AND o.request_id IS NULL AND ($2::uuid IS NULL OR r.request_id<>$2) LIMIT 1`,
     [id, own ?? null],
   );
   check(!r.rowCount, "RECONCILE_PENDING_FIRST");
@@ -257,16 +258,42 @@ export async function prepareLocalOwnerOperation(
     }),
   }));
   inspectOwnerTransaction(packet, owner.toBytes(), templates);
-  const client = await pool.connect();
   const requestId = randomUUID(),
     messageHash = hash(tx.message.serialize());
+  const barrierAccounts = [
+    ...new Set([
+      config.toBase58(),
+      accounts.intent!.toBase58(),
+      ...tx.message.staticAccountKeys
+        .filter((_, i) => tx.message.isAccountWritable(i))
+        .map((k) => k.toBase58()),
+    ]),
+  ];
+  const barrier = await ownerStateImage(rpc, barrierAccounts);
+  const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const current = await locked(client, scope);
     check(current.state === states[action], "STATE_CHANGED");
     await pending(client, scope.intentId);
+    const previous = (
+      await client.query(
+        "SELECT request_id,generation FROM c3_open.owner_requests WHERE intent_id=$1 AND action=$2 ORDER BY generation DESC LIMIT 1",
+        [scope.intentId, action],
+      )
+    ).rows[0];
+    if (previous)
+      check(
+        (
+          await client.query(
+            "SELECT 1 FROM c3_open.owner_request_outcomes WHERE request_id=$1",
+            [previous.request_id],
+          )
+        ).rowCount,
+        "PREVIOUS_NOT_CLOSED",
+      );
     await client.query(
-      "INSERT INTO c3_open.owner_requests(request_id,intent_id,action,expected_db_revision,expected_chain_revision,message_hash,blockhash,last_valid_height,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      "INSERT INTO c3_open.owner_requests(request_id,intent_id,action,expected_db_revision,expected_chain_revision,message_hash,blockhash,last_valid_height,expires_at,generation,predecessor) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
       [
         requestId,
         scope.intentId,
@@ -279,7 +306,13 @@ export async function prepareLocalOwnerOperation(
         creation
           ? new Date(Number(expiry) * 1000)
           : new Date(Date.now() + 60000),
+        previous ? (BigInt(previous.generation) + 1n).toString() : "1",
+        previous?.request_id ?? null,
       ],
+    );
+    await client.query(
+      "INSERT INTO c3_open.owner_expiry_barriers(request_id,accounts,state_hash) VALUES($1,$2,$3)",
+      [requestId, barrierAccounts, barrier.hash],
     );
     await client.query("COMMIT");
   } catch (e) {
@@ -363,6 +396,15 @@ export async function recordLocalOwnerSignature(
         "IMMUTABLE_RESULT",
       );
     else {
+      check(
+        !(
+          await client.query(
+            "SELECT 1 FROM c3_open.owner_request_outcomes WHERE request_id=$1",
+            [requestId],
+          )
+        ).rowCount,
+        "TERMINAL_REQUEST",
+      );
       check(
         BigInt(request.expected_db_revision) === BigInt(current.db_revision) &&
           BigInt(request.expected_chain_revision) ===

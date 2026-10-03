@@ -54,6 +54,11 @@ const OWNER_MIGRATION_URL = new URL(
   "./migrations/0008_owner_operations.sql",
   import.meta.url,
 );
+const OWNER_PROTOCOL_MIGRATION = "0009_owner_protocol";
+const OWNER_PROTOCOL_MIGRATION_URL = new URL(
+  "./migrations/0009_owner_protocol.sql",
+  import.meta.url,
+);
 const fail = (code: string): never => {
   throw new Error(`C3_OPEN_${code}`);
 };
@@ -366,6 +371,24 @@ export async function applyOpenLocalMigration(
         ownerExisting.rows[0].checksum_sha256 === ownerHash,
         "MIGRATION_CHECKSUM_MISMATCH",
       );
+    const protocolSql = await readFile(OWNER_PROTOCOL_MIGRATION_URL, "utf8");
+    const protocolHash = createHash("sha256").update(protocolSql).digest("hex");
+    const protocolExisting = await client.query(
+      "SELECT checksum_sha256 FROM c3_open.schema_migrations WHERE migration_id=$1",
+      [OWNER_PROTOCOL_MIGRATION],
+    );
+    if (!protocolExisting.rowCount) {
+      await client.query(protocolSql);
+      await client.query(
+        "INSERT INTO c3_open.schema_migrations(migration_id,checksum_sha256) VALUES($1,$2)",
+        [OWNER_PROTOCOL_MIGRATION, protocolHash],
+      );
+      changed = true;
+    } else
+      assert(
+        protocolExisting.rows[0].checksum_sha256 === protocolHash,
+        "MIGRATION_CHECKSUM_MISMATCH",
+      );
     await client.query("COMMIT");
     return changed ? "applied" : "already_applied";
   } catch (error) {
@@ -384,6 +407,7 @@ export async function assertOpenLocalSchema(pool: Pool): Promise<void> {
     [SIGNING_CLOCK_MIGRATION, SIGNING_CLOCK_MIGRATION_URL],
     [GENERATION_MIGRATION, GENERATION_MIGRATION_URL],
     [OWNER_MIGRATION, OWNER_MIGRATION_URL],
+    [OWNER_PROTOCOL_MIGRATION, OWNER_PROTOCOL_MIGRATION_URL],
   ] as const) {
     const checksum = createHash("sha256")
       .update(await readFile(url))
@@ -744,7 +768,8 @@ export class OpenLocalSettlementRepository {
           `SELECT r.request_id,s.signature,m.request_id AS message_receipt FROM c3_open.owner_requests r
           LEFT JOIN c3_open.owner_submissions s USING(request_id)
           LEFT JOIN c3_open.owner_message_receipts m USING(request_id)
-          WHERE r.intent_id=$1 AND r.action=$2`,
+          LEFT JOIN c3_open.owner_request_outcomes o USING(request_id)
+          WHERE r.intent_id=$1 AND r.action=$2 AND o.request_id IS NULL`,
           [scope.intentId, action],
         );
         for (const request of requests.rows) {
