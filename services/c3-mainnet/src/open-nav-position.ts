@@ -32,6 +32,10 @@ import {
 } from "./open-state-semantics.ts";
 import { calculateOpenNavMath, type OpenNavMathInput } from "./open-nav.ts";
 import {
+  evaluateIsolatedCompositePoint,
+  type IsolatedCompositePoint,
+} from "./open-nav-composite.ts";
+import {
   collectVerifiedOpenNavPoint,
   evaluateVerifiedOpenNav,
   evaluateIsolatedOpenNavPoint,
@@ -489,14 +493,20 @@ async function read(
   rpc: OwnerReadonlyRpc,
   genesis: string,
   id: string,
-  point: IsolatedOpenNavPoint | VerifiedOpenNavPoint,
+  point: IsolatedOpenNavPoint | IsolatedCompositePoint | VerifiedOpenNavPoint,
   production: boolean,
 ) {
   try {
     const evaluate = () =>
       production
         ? evaluateVerifiedOpenNav(point as VerifiedOpenNavPoint)
-        : evaluateIsolatedOpenNavPoint(point as IsolatedOpenNavPoint);
+        : (() => {
+            const composite = evaluateIsolatedCompositePoint(point);
+            return composite.status !== "UNAVAILABLE" ||
+              composite.reason !== "POINT_NOT_VERIFIED"
+              ? composite
+              : evaluateIsolatedOpenNavPoint(point as IsolatedOpenNavPoint);
+          })();
     const prices = evaluate();
     if (prices.status === "UNAVAILABLE") return prices;
     need(
@@ -570,9 +580,11 @@ async function read(
     if (finalPrices.status === "UNAVAILABLE") return finalPrices;
     for (const asset of ASSETS) {
       const f = finalPrices.freshness[asset];
+      // A market's verified observation-window end is NOT oracle publication.
+      const asOf = "observedAtUnix" in f ? f.observedAtUnix : f.publishedAtUnix;
       need(
-        now >= BigInt(f.publishedAtUnix) &&
-          now - BigInt(f.publishedAtUnix) <= BigInt(f.maximumAgeSeconds) &&
+        now >= BigInt(asOf) &&
+          now - BigInt(asOf) <= BigInt(f.maximumAgeSeconds) &&
           Math.abs(Number(now) - finalPrices.evaluatedAtUnix) <=
             f.maximumChainClockSkewSeconds,
         "PRICE_CONTEXT_EXPIRED",
@@ -641,8 +653,10 @@ export function createIsolatedOpenNavPositionReader(
     ) as OpenCompilerPolicy,
     port = Object.freeze({ read: rpc.read.bind(rpc) });
   return Object.freeze({
-    read: (intentId: string, point: IsolatedOpenNavPoint) =>
-      read(pool, copied, port, genesis, intentId, point, false),
+    read: (
+      intentId: string,
+      point: IsolatedOpenNavPoint | IsolatedCompositePoint,
+    ) => read(pool, copied, port, genesis, intentId, point, false),
   });
 }
 /** No caller policy/RPC/price/"verified" flag. Gate runs before all I/O. Owner

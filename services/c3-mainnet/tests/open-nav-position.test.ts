@@ -11,6 +11,7 @@ import {
   findProgramAddress,
 } from "../src/solana.ts";
 import { canonicalize } from "../src/manifest.ts";
+import { compositeFixture } from "./support/composite-nav.ts";
 import {
   openAddresses,
   SHARE_TOKEN_PROGRAM,
@@ -539,6 +540,42 @@ for (const stage of [
       }
     },
   );
+test("candidate composite joins the SAME lifecycle accounting and preserves uncertain signatures", async () => {
+  for (const stage of [
+    "funded",
+    "buying",
+    "active",
+    "selling",
+    "claimable",
+    "redeemed",
+  ] as const) {
+    const f = fixture(stage),
+      c = compositeFixture(NOW, SLOT),
+      point = await c.make().collect();
+    const before = canonicalize(f.snapshot),
+      r = await f.reader.read(ID, point);
+    assert.equal(r.status, "NAV_ACCOUNTING_JOIN", stage + JSON.stringify(r));
+    assert.equal(
+      canonicalize(f.snapshot),
+      before,
+      "read-only candidate cannot rewrite signatures/history",
+    );
+    if (r.status !== "NAV_ACCOUNTING_JOIN") continue;
+    assert.equal(r.evidenceScope, "ISOLATED_ONLY");
+    if (stage === "active") assert.equal(r.math.netUsdE12, "1200000000000");
+    if (stage === "claimable")
+      assert.equal(r.actualFullClaimUsdcBaseUnits, "990000");
+    if (stage === "redeemed") assert.equal(r.math.netUsdE12, "0");
+    f.snapshot.pending = true;
+    const uncertain = canonicalize(f.snapshot);
+    assert.equal((await f.reader.read(ID, point)).status, "UNAVAILABLE");
+    assert.equal(canonicalize(f.snapshot), uncertain);
+    f.snapshot.pending = false;
+    c.times.wall += 61;
+    c.times.mono += 61000;
+    assert.equal((await f.reader.read(ID, point)).status, "UNAVAILABLE");
+  }
+});
 test("missing effects, uncertainty, forged scopes/manifest/hash and deficit fail closed", async () => {
   const { point } = await pricePoint();
   for (const mode of [

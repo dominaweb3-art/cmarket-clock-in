@@ -48,6 +48,7 @@
     "c3:oracle:evidence": "node --experimental-strip-types research/oracle-nav/pyth-evidence-cli.ts",
     "c3:open:oracle-discovery": "node --experimental-strip-types research/oracle-nav/open-vault-source-evidence.ts",
     "c3:open:market-evidence": "node --experimental-strip-types research/oracle-nav/exact-market-evidence.ts",
+    "c3:open:secondary-market-evidence": "node --experimental-strip-types research/oracle-nav/jupiter-market-collector.ts",
     "c3:open:budget-review": "node --experimental-strip-types scripts/open-pilot-budget.ts",
     "c3:open:server-check": "node --experimental-strip-types src/open-owner-entry.ts check",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",

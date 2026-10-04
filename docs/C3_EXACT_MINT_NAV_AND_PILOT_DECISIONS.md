@@ -1,11 +1,235 @@
 # C3: exact-mint valuation and concrete pilot decisions
 
 Client date: 2026-10-04 (America/Bogota). Classification: SHARED.
-Starting code: `5618baf31fa045b3751344a112103dc539df14d6`.
+Latest candidate starts from `c762abd5c3137ace114205ca201e3eb93f8b7763`.
+Earlier evidence below starts from `5618baf31fa045b3751344a112103dc539df14d6` and is preserved as historical provenance.
 Status: PARTIALLY_COMPLETED; economic NAV and Mainnet activation BLOCKED.
 This is the active **open vault**, not the historical Symmetry adapter.
 
-## What this execution implements
+## Current composite candidate — implemented, isolated, NOT approved
+
+`src/open-nav-composite.ts` implements source-specific admission and a sealed,
+non-serializable isolated point. The existing `open-nav-position.ts` reader joins
+it to the SAME raw custody/reserves/supply and durable-receipt accounting used
+before this change. The production entrypoint cannot consume this point and
+still fails before I/O. No source-policy enrollment, wallet action or custody
+transaction changed. Mainnet capability remains false and production policy null.
+
+Indispensable monetary controls remain exact mints/decimals, custody backing,
+excluded reserves/donations, verified non-transferable shares and supply,
+finalized leg effects, immutable generation/receipt context, uncertainty blocking,
+CAS and preservation of signatures. The Pyth Full/layout/authority and confidence
+fields are **provider-specific**, not compulsory fields for every market.
+
+The candidate has two separate evidence contracts:
+
+- Oracle: injected isolated adapter context (live authenticity unverified), exact wrapped mint/USD binding,
+  publication age <=60s and provider confidence <=200 bps.
+- Market: exact wrapped mint/USD, observation and actual trade age <=60s,
+  a 300–600s time-weighted window, >=6 ordered samples with gaps <=60s,
+  time-weighted price consistency, window deviation <=100 bps, liquidity
+  > =100,000 USD, two-sided depth within 100 bps >=100 USD and independently
+  > measured manipulation-cost lower bound >=100 USD for a first 1-USDC pilot.
+  > TVL, volume and liquidity units alone cannot establish the depth/cost bounds.
+
+All four exact mints require two sources with distinct operators and globally
+disjoint declared dependencies, including pool sets **and USD anchors**. The
+100-bps upward-rounded divergence limit cannot admit weak sources by agreement.
+Integer midpoint is a candidate informational mark, not guaranteed realizable
+value or approved share-pricing economics. USDC/USD is measured, not one; Portal
+ETH/ETH and cbBTC/BTC parity are never presumed. Slot spread is bounded, clocks
+include monotonic expiration, and points expire again after custody/PG reads.
+Thresholds are candidate economic assumptions requiring Security/governance review.
+
+The isolated adapter ports use synthetic proofs to test this admission contract.
+They **do not authenticate live market depth, manipulation cost or provenance**.
+Hashes and caller-shaped metadata are not economic proofs. Neither these ports
+nor the candidate point can be registered as production evidence. Production
+still needs raw-account/signed-source adapters with audited dependency mapping;
+setting an operator count to two or a zero confidence is not a remedy.
+
+### Second collector and current live result
+
+`research/oracle-nav/jupiter-market-collector.ts` makes one bounded keyless
+request to the official `https://api.jup.ag/price/v3?ids=<exact mints>`; no key,
+retry, wallet, transaction or persisted payload. It validates requested mint keys,
+decimals/positive values, records response hash and obtains genesis, finalized
+slot and block times from official read-only Solana RPC. It never converts
+Jupiter's numeric JSON precision into transaction authority.
+
+At `2026-10-04T16:12:35.950Z`, HTTP 200, finalized slot `453306804`, response
+SHA-256 `311999f5ca50c3550d4ee8b0eb917873c7dd77a8125a224e6e29f36f4cb3b387`:
+USDC/cbBTC/PortalETH/WSOL marks were `0.999972623179`, `85413.475540084080`,
+`2699.960910137511`, `121.600606923060` USD after E12 truncation. cbBTC and
+PortalETH block times were within 60s and finalized in that snapshot; USDC/WSOL
+block IDs were newer than that finalized barrier and were NOT admitted. This
+is historical diagnostic evidence, not a current executable quote or investment NAV.
+
+[Jupiter's official methodology](https://developers.jup.ag/docs/price) derives
+marks from last swaps with external oracle anchors and heuristic liquidity checks.
+Its response does not disclose the selected pool set/anchor provenance, a signed
+confidence interval, a 5-minute window, tick-depth or manipulation-cost proof.
+Therefore **all observations remain ineligible for monetary NAV**, even when
+fresh and priced. It may share Orca or Pyth dependencies; independent APIs/RPCs
+do not prove independent economics. The live blocker is now specifically
+`UPSTREAM_LINEAGE_UNDISCLOSED` plus `TWAP_DEPTH_MANIPULATION_EVIDENCE_ABSENT`,
+not merely the absence of an oracle-shaped confidence field. A Pyth/API key
+alone will not close it. Refer to [Pyth-specific practices](https://docs.pyth.network/price-feeds/core/best-practices)
+for the oracle leg; confidence is retained where the source actually supplies it.
+
+### Lifecycle verification boundary
+
+Focused tests feed the candidate into the existing accounting reader at funded,
+partial buying, active shares, partial selling, claimable and redeemed states.
+They check USD marks, realized-USDC entitlement, zero post-claim inventory,
+missing/contradictory prices, expired points, preserved uncertain signatures and
+unchanged historical receipts. These raw-account/receipt fixtures are synthetic;
+this execution does NOT rerun or prove a new six-leg Jupiter acquisition.
+The previously tested local/cloned integrated cycle is preserved, not relabeled.
+
+First-pilot issuance is fixed share **units** after verified asset settlement,
+not USD-priced issuance; subsequent deposits and partial redemption remain off.
+Full claim still uses actual verified realized USDC, never midpoint NAV, and does
+not become dependent on price availability. Informational NAV unavailability
+must not prevent recovery/claim of already verified rights. These are existing
+compiler/semantic controls, not a bypass newly enabled by the candidate.
+
+### Concrete Product decision, not automatic fallback
+
+The candidate closes the source-specific _code contract_ and isolated accounting
+join, not production authentication. To retain monetary USD NAV requirements,
+the exact PortalETH/WSOL pool and an economically independent exact PortalETH
+market require raw, reviewed depth/window/trade evidence plus independent USD
+anchors. Aggregate HTTP marks cannot satisfy this. Developing and operating that
+adapter/historical collector remains an implementation prerequisite, not a task
+delegated to the owner or a generic subscription promise.
+
+Smallest concrete alternative for a separate decision: keep all assets and the
+one-owner first 1-USDC/full-redemption scope, issue fixed units only after actual
+reconciled settlement, show inventory and realized USDC as verified, and show
+Jupiter USD marks separately as **informational, not monetary share pricing**.
+No later deposit/partial redemption/fees/SKR. This would require an explicit
+Product + Security + governance exception to the present monetary-NAV gate;
+it is not implemented or enabled by this execution.
+
+## Single deployment decision package — current candidate
+
+Public owner fields (public addresses only; no private key files or credentials):
+
+| Exact field                                            | Required choice/evidence                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `wallet` / VaultConfig `allowlisted_owner`             | Owner's existing pilot public wallet; exactly 1,000,000 USDC base units                                                                          |
+| `programId`, `upgradeAuthority`                        | Public program identity and actual reviewed upgrade authority; no invented key or approval                                                       |
+| `governance`                                           | Actual governance/Squads vault public authority; actual member public keys, threshold and timelock decision (candidate 2-of-3/24h, not approved) |
+| VaultConfig `emergency`                                | Actual pause-only operator public address; unpause/upgrade/withdrawal rights remain governed                                                     |
+| `keeper`                                               | Separate operator public address; may pay reviewed fees, never custody or sign as owner                                                          |
+| `quoteAuthority`                                       | Public Ed25519 identity of isolated durable signer; secret configured only on server, no fallback key                                            |
+| `providers[].providerId/operatorId/reviewEvidenceHash` | Reviewed identities of two genuinely separate RPC operators; private path-key HTTPS endpoints stored server-only                                 |
+| Android certificate fingerprint                        | Owner's production signing-continuity decision; present QA certificate is not production approval                                                |
+
+Derived `vault`, `registry`, `quotePolicy`, configuration/artifact
+hashes, registry/quote revisions and approval hashes are generated/verified against
+the concrete release; `shareMint` is a selected/release-generated and verified
+identity, not a deterministically derived PDA. VaultConfig `emergency` must be
+included in the final configuration review; the present OpenProductionPolicy
+does not separately pin that field. Do not ask the owner to invent approvals. Wallet, governance,
+keeper and quote signer must remain distinct. No authority was created here.
+
+Infrastructure candidate: existing owner HTTPS service on DO 4GiB VM, isolated
+signer adapter on separate 2GiB VM, PG single node with TLS/restore validation,
+Quicknode + Alchemy path-auth HTTPS with reviewed operator metadata; direct TLS
+and reviewed L4 mapping to 8443. Private URLs/DB/TLS/signer credentials go directly
+into permission-restricted server configuration, not chat/Git/APK. The VM signer
+is **not an HSM**, and Vault Transit alone does not implement C3 durable lookup/
+idempotency. Existing systemd template and check/migrate/enroll commands remain
+the reproducible installation path; no infrastructure was contracted or deployed.
+
+Budget per component, using the unchanged disabled binary/rent snapshot:
+
+- Recoverable/locked capital: program/vault/share/plan accounts **3.584366720 SOL**;
+  temporary deployment buffer **3.520587320 SOL** (return only upon verified
+  permitted close); optional owner ATA **0.001488440 SOL**; six-leg renewal account
+  allowance **0.030540960 SOL**. Account closure rights, not optimism, determine recovery.
+- Consumed: Squads app creation **0.1 SOL** if chosen; deployment/base/priority
+  and actual swaps/slippage **not yet priced**, never charged as refundable rent.
+- Margin: **0.05 SOL** proposal, not an approved transaction-fee cap. Known proposed
+  peak **7.286983440 SOL plus separate 1 USDC**, including the above consumed
+  Squads fee and margin once. Not an all-in spend authorization.
+- Recurring published subset: backend **24**, signer VM **12**, proposed daily
+  VM backups **10.80**, PG starting single node **15.15**, Quicknode monthly
+  **49** (previous observation; re-quote before purchase), Alchemy Free **0**
+  within quota = **110.95 USD/month**. Current DO/Alchemy tables rechecked 4 Oct;
+  Quicknode page did not return a usable current response in this recheck.
+- Additional recurring terms: admissible pricing entitlements/historical market
+  capture; signer/HSM operations/adapter; PG HA/additional storage/restore testing;
+  RPC overage/SLA; DNS/tax/egress; operations/security review. **Unpriced, not zero.**
+  DO storage shown at 0.215 USD/GiB/month; Alchemy PAYG at 0.525 USD/million CU.
+- One-time additional terms: final enabled-binary rent delta/upgrade headroom,
+  Squads governance-account rent, actual deploy messages/fees, hardened signer
+  setup and independent review. Unknown until concrete release/authority/quotes.
+
+Full total formula: known SOL peak + enabled-rent delta + governance rent +
+consumed deploy/swap fees + separate 1 USDC + setup/review costs + number of
+months × (110.95 USD + every additional recurring term above). **Total USD is
+UNDETERMINED**; no USD conversion/parity, unknown term omission or spend cap is
+invented. `open-pilot-budget.ts` now emits this incomplete total explicitly.
+The owner can select the infrastructure/authority model now; final procurement
+and monetary approval wait for an actual complete cap and technical gate closure.
+
+Unchanged artifacts requiring future exact-release approval:
+
+- ELF `2026-10-03-production-factory-disabled/c3_pilot_vault-disabled.so`,
+  692864 bytes, SHA-256 `d4aca9adebad10179b51f9d03b40fe399b8619347586370123105c985171beb1`.
+- IDL `2026-10-03-production-factory-disabled/c3_pilot_vault-disabled.idl.json`,
+  SHA-256 `7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb`.
+- APK `2026-10-03-device-message-qa-monotonic-disabled/c-market-c3-mainnet-candidate-0.1.0-disabled.apk`,
+  SHA-256 `1a7b599578359d590f8289662b7f44783157fe81518ec9b73da2c00d2d7a735f`.
+- Artifact paths are under `artifacts/c3-pilot-candidate/`; the current disabled
+  ELF is **not a deployable monetary release**, so its hashes are preservation
+  evidence, not the enabled package approval. No Rust/mobile change or rebuild.
+
+Candidate limits: one public allowlisted owner, exactly 1 USDC first deposit,
+4000/3000/3000 bps, <=100-bps swap slippage, <=1232-byte packet, immutable
+generation/CAS, bounded expiry/recovery, no uncertain auto-resend, full redemption,
+no additional deposits/partial redemptions/fees/SKR. Concrete reviewed TTLs,
+operator identities and approvals must accompany the final configuration hash.
+
+Approval sequence (NOT executed): close raw source authentication or approve the
+separate narrowly scoped NAV exception; owner supplies public roles and selects
+infrastructure; review final source/artifacts/IDL/config/limits/budget; record
+independent Security and governance approvals; then authorize a paused deployment,
+check genesis/roles/programs/tokens from two RPCs, migrations/enrollment/backups,
+pause/recovery, and only thereafter a separate explicit supervised 1-USDC test.
+Stop on absent price/effect evidence, uncertainty, wrong operator/authority/hash,
+stale generation/quote/ALT, excessive size/debit/slippage or missing approved cap.
+No enabling, wallet request, publication, deployment, new APK or funds movement
+occurred. Physical MWA is still PENDING OWNER; PHONE_REQUIRED_NEXT: NO for this task.
+
+### Focused verification and separate review of this delta
+
+Independent AI review reproduced and closed four candidate defects: overridden
+array methods/prototypes before snapshot, unpinned market/oracle kind,
+already-old source lifetime under tolerated wall-clock stall, and freshness
+evaluated before completion of Jupiter block-time collection. Regression tests
+cover each. The reviewer accepts this isolated delta only, not live economics,
+Mainnet deployment, authorities or a professional external audit. Production
+policy/flag remain null/false; no monetary gate is approved by passing tests.
+
+TypeScript/lint/format and focused candidate/Pyth/accounting/compiler/budget tests
+passed. The real disposable PostgreSQL owner-protocol suite independently
+preserves signatures across restart/concurrency/expiry (no chain submission),
+and compiled package-boundary checks exclude the secondary HTTP research collector.
+Service production dependency audit is zero findings; dependencies/lockfiles
+are unchanged. Changed-file secret-pattern scan found no matches; it is not a
+comprehensive secret audit. Artifact hashes were rechecked, with no APK/Rust
+rebuild or repeated visual QA. Existing protected worktrees/releases are untouched.
+
+## Historical checkpoint c762abd — retained implementation and evidence
+
+The sections below preserve the earlier checkpoint, including its direct-feed
+limitations and validation. The current candidate and consolidated decision
+package above supersede its statements about work not yet implemented; live
+production admission remains blocked for the precise reasons above.
 
 `services/c3-mainnet/research/oracle-nav/exact-market-evidence.ts` reads the
 official Mainnet RPC and GeckoTerminal. It decodes exact Orca pool PDAs,
@@ -68,7 +292,7 @@ Sources checked: [Pyth feed definitions](https://docs.pyth.network/price-feeds/c
 No symbol-only match was promoted to exact-mint evidence. Finding no admissible
 combination in these sources is not proof that no provider can ever supply one.
 
-## Precise remaining code/policy link
+## Historical direct-feed code/policy limitation
 
 `open-nav-collector.ts` authenticates raw Pyth PriceUpdateV2, including Full
 verification, feed, authority, layout, age and confidence. Its policy remains
@@ -113,7 +337,7 @@ Concrete alternatives for Product + independent Security + governance review:
 
 No architecture or asset has been changed and neither alternative is active.
 
-## One consolidated owner-input list
+## Historical owner-input list (current consolidated package above supersedes)
 
 **A — public decisions/identities, no secrets:** choose valuation alternative
 above; provide the pilot wallet's public address; nominate three real independent

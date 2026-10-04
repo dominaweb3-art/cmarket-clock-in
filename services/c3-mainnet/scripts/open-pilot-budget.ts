@@ -178,7 +178,7 @@ export function inspectOpenPilotBudget(
       databaseHa: false,
       singleNodeDowntimeRiskMustBeAccepted: true,
       missingCosts: [
-        "Pyth/direct secondary oracle entitlement and exact-mint evidence",
+        "Admissible exact-mint composite price-source entitlement and independent lineage/depth/TWAP evidence (not solved by a generic API key)",
         "isolated signer/HSM operation, security hardening and adapter review",
         "database additional storage/HA and backup restore verification",
         "RPC overage/support SLA",
@@ -186,14 +186,30 @@ export function inspectOpenPilotBudget(
         "Squads accounts/configuration transaction rent/fees not included in app fee",
       ],
     },
+    totalBudget: {
+      status: "UNPRICED_COMPONENTS_BLOCK_FINAL_APPROVAL",
+      upfrontKnownPeak:
+        "7.286983440 SOL plus separate 1 USDC; includes proposed 0.05 SOL reserve and 0.1 SOL consumed Squads app fee",
+      upfrontAdditionalTerms: [
+        "final enabled-binary rent delta and reviewed upgrade headroom",
+        "governance account rent (persistent until permitted closure)",
+        "consumed deployment/base/priority and six-leg swap fees/slippage",
+        "one-time hardened signer adapter, restoration/security review and infrastructure setup",
+      ],
+      recurringFormulaUsd:
+        "110.95 + admitted pricing subscriptions + signer/HSM operation + additional PG storage/HA + RPC overage/SLA + DNS/tax/egress + operations/review",
+      allInTotalUsd: null,
+      reason:
+        "Missing supplier/workload quotes and final release messages; unknown terms are NOT zero. No SOL or USDC parity assumed.",
+    },
     requiredOwnerDecisions: [
-      "Choose reviewed composite/exact-mint oracle policy OR separately reviewed first-only pilot with USD NAV unavailable; neither is enabled here",
+      "Review isolated composite candidate; production remains blocked on authenticated independent market evidence. Separately reviewed first-only pilot with informational/no monetary USD NAV is an alternative, not enabled here",
       "Public wallet + distinct governance/upgrade/pause/keeper/quote-authority identities + 2-of-3 members/timelock decision",
       "Approve hosting/RPC/signer choice and a concrete complete budget after missing quotes; server-only credentials, never chat/APK",
     ],
     codeBlockers: [
-      "No verified exact Portal ETH/USD feed with required confidence/freshness",
-      "Second authenticated independent economic collector and divergence admission not implemented under the current direct-feed policy",
+      "Portal ETH market mark exists but authenticated upstream/depth/window/manipulation proofs are absent",
+      "Composite source-specific admission and secondary market collector implemented only in isolation/research; no authenticated independent production sources enrolled",
       "Current source approval remains null; disabled binary cannot be deployed as a working pilot",
     ],
   });

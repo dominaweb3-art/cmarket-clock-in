@@ -21,7 +21,7 @@ test("exact-market observations and budget proposals cannot enter production", (
     if (!name.endsWith(".js")) continue;
     assert.doesNotMatch(
       readFileSync(new URL(`../dist/${name}`, import.meta.url), "utf8"),
-      /inspectGeckoPools|contrastMarketRatio|collectExactMarketEvidence|inspectOpenPilotBudget/,
+      /inspectGeckoPools|contrastMarketRatio|collectExactMarketEvidence|inspectOpenPilotBudget|collectJupiterMarketEvidence|inspectJupiterMarketPrices/,
     );
   }
 });
