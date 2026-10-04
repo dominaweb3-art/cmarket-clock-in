@@ -187,7 +187,7 @@ test("shared compiler enrollment, manifest, authentication and submission durabi
     "actual production signer SELECTs execute on PG and reject a generation changed across signing",
     async () => {
       const source = await readFile(
-        new URL("../src/open-production-signer.ts", import.meta.url),
+        new URL("../src/open-record-signer.ts", import.meta.url),
         "utf8",
       );
       const queries = [
@@ -199,6 +199,7 @@ test("shared compiler enrollment, manifest, authentication and submission durabi
       const quoteId = randomBytes(32),
         nonce = randomBytes(32),
         payload = Buffer.alloc(300);
+      Buffer.alloc(32, 1).copy(payload, 17);
       quoteId.copy(payload, 49);
       nonce.copy(payload, 81);
       const hash = createHash("sha256").update(payload).digest();

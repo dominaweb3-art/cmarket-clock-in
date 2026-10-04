@@ -493,7 +493,8 @@ export async function readOwnerPosition(
     progress,
     reserves: reserves.map((v) => v.toString()),
     unresolved,
-    scope: "MAINNET_INDEPENDENT_RPC",
+    // Only the immutable production wrapper may attest provider independence.
+    scope: "UNVERIFIED_RPC_ADAPTER",
     nav: null,
     navStatus: "PRICING_NOT_RECONCILED",
   };

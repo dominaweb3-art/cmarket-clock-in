@@ -27,12 +27,12 @@ export async function assertProductionEnrollment(
   pool: Pool,
   p: OpenProductionPolicy,
   id: string,
-  kind: "intent" | "request",
+  kind: "intent" | "request" | "quote",
 ) {
   const row = (
     await pool.query(
-      `SELECT i.wallet,i.vault,i.share_mint,i.configuration_hash,e.policy_hash FROM c3_open.intents i JOIN c3_open.production_enrollments e USING(intent_id) ${kind === "request" ? "JOIN c3_open.owner_requests r USING(intent_id)" : ""} WHERE ${kind === "request" ? "r.request_id" : "i.intent_id"}=$1`,
-      [id],
+      `SELECT i.wallet,i.vault,i.share_mint,i.configuration_hash,e.policy_hash FROM c3_open.intents i JOIN c3_open.production_enrollments e USING(intent_id) ${kind === "request" ? "JOIN c3_open.owner_requests r USING(intent_id)" : kind === "quote" ? "JOIN c3_open.quote_authorizations q USING(intent_id)" : ""} WHERE ${kind === "request" ? "r.request_id" : kind === "quote" ? "q.quote_id" : "i.intent_id"}=$1`,
+      [kind === "quote" ? Buffer.from(id, "hex") : id],
     )
   ).rows[0];
   const expected = createHash("sha256")

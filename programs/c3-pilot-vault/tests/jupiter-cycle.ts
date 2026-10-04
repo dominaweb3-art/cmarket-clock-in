@@ -51,12 +51,24 @@ import {
 } from "../../../services/c3-mainnet/pilot-open-local/jupiter-vault-cpi-inspection.ts";
 import { openValidatorJournal } from "../../../services/c3-mainnet/pilot-open-local/validator-bridge.ts";
 import { IsolatedOpenTestSigner } from "../../../services/c3-mainnet/pilot-open-local/isolated-test-signer.ts";
-import { prepareOpenUnsignedLeg } from "../../../services/c3-mainnet/pilot-open-local/open-quote-workflow.ts";
 import {
-  OpenLocalSettlementRepository,
+  prepareOpenUnsignedLeg,
+  isolatedServerPolicy,
+} from "../../../services/c3-mainnet/pilot-open-local/open-quote-workflow.ts";
+import {
+  VerifiedSettlementJournal,
   type OpenSnapshot,
   type Scope,
-} from "../../../services/c3-mainnet/pilot-open-local/orchestrator.ts";
+} from "../../../services/c3-mainnet/src/open-settlement-journal.ts";
+import {
+  isolatedKeeperJournal,
+  type KeeperEvidenceIntake,
+} from "../../../services/c3-mainnet/src/open-keeper-journal.ts";
+import type { KeeperAction } from "../../../services/c3-mainnet/src/open-keeper-compiler.ts";
+import { JupiterLegCompiler } from "../../../services/c3-mainnet/src/open-jupiter-compiler.ts";
+import { applyReviewedOpenSchema } from "../../../services/c3-mainnet/src/open-owner-schema.ts";
+import { reconcileOwnerEconomicsFromSource } from "../../../services/c3-mainnet/src/open-owner-effects.ts";
+import type { collectFinalizedOpenEconomicEvidence } from "../../../services/c3-mainnet/src/open-economic-quorum.ts";
 import { encodeBase58 } from "../../../services/c3-mainnet/src/solana.ts";
 import { validateDirectWhirlpoolRoute } from "../../../services/c3-mainnet/pilot-open-local/jupiter-route-v2.ts";
 import { createReadServer } from "../../../services/c3-mainnet/pilot-open-local/read-server.ts";
@@ -68,7 +80,6 @@ import {
   recordLocalRenewalSignature,
 } from "../../../services/c3-mainnet/pilot-open-local/plan-generations.ts";
 import { createIsolatedOwnerServer } from "../../../services/c3-mainnet/pilot-open-local/owner-server.ts";
-import { recordLocalFinalizedOwnerMessage } from "../../../services/c3-mainnet/pilot-open-local/owner-operations.ts";
 import { ownerBackend } from "../../../apps/c3-pilot/src/owner-backend.ts";
 import { OwnerController } from "../../../apps/c3-pilot/src/owner-controller.ts";
 import type {
@@ -262,9 +273,9 @@ try {
   // Clone bounded authenticated asset-pair pools, not a growing hardcoded list
   // of pools from failed quotes. No mutation is allowed after bank.start().
   await bank.warmAssetPairPools();
-  // Public tables observed in these official build responses. They are not
-  // trusted by address alone: warmLookupTable checks current RPC ownership and
-  // activity, and each selected authorization binds exact resolved contents.
+  // Tables observed in previous official build responses are also fetched
+  // afresh and checked for owner/activity; not trusted from saved contents.
+  // Jupiter may choose one again during sell preparation, minutes after buy.
   for (const table of [
     "3xNgJps1ngjeLuj586aAmYMoR6HD6hwqkLMDD1sjNRPm",
     "9AsimPML6N36BAe8keQRAHpLuKgCKv9QJV9912TXZhBD",
@@ -275,6 +286,13 @@ try {
     "J7znuMyVHurxwjL19Rbtq2CSbjPEhqWvwEcgdWajEtnc",
   ])
     await bank.warmLookupTable(table);
+  // Pool discovery can outlast the initial routes. Refresh all six directions
+  // once BEFORE bank.start and clone their actual tables/accounts. No address
+  // guessed account contents and no funded-bank injection.
+  for (let n = 0; n < 3; n++) {
+    const buy = await warmFresh(request(n, n === 0 ? 400_000n : 300_000n));
+    await warmFresh(request(n + 3, BigInt(buy.outAmount)));
+  }
   stage = "start-bank";
   local = await bank.start();
   journal = await openValidatorJournal();
@@ -488,11 +506,12 @@ try {
     )[0];
   const depositIntent = intent("deposit"),
     depositPlan = derive("c3-plan-v1", depositIntent),
-    redemptionIntent = intent("redemption"),
-    redemptionPlan = derive("c3-plan-v1", redemptionIntent);
+    redemptionIntent = intent("redemption");
   const id = randomUUID();
-  let db = journal.db;
-  let state: OpenSnapshot = await db.createDraft({
+  await applyReviewedOpenSchema(journal.pool);
+  // Explicit disposable-DB migration only; source services never auto-migrate.
+  let db = new VerifiedSettlementJournal(journal.pool);
+  let state: OpenSnapshot = await journal.db.createDraft({
     intentId: id,
     wallet: owner.publicKey.toBase58(),
     vault: config.toBase58(),
@@ -510,6 +529,216 @@ try {
     expectedChainRevision: state.chainRevision,
     idempotencyHash: cycleHash(Buffer.from(randomUUID())),
   });
+  const serverContext = await isolatedServerPolicy(
+    journal.pool,
+    local,
+    idl,
+    id,
+  );
+  const pairRead = async (method: string, params: unknown[]) => {
+    const [primary, secondary] = await Promise.all([
+      serverContext.rpc.read(method, params),
+      serverContext.rpc.read(method, params),
+    ]);
+    // SAME isolated validator twice, NOT independent production operators.
+    return { status: "AGREED_UNVERIFIED_EFFECTS" as const, primary, secondary };
+  };
+  const collect = async (
+    signature: string,
+    accounts: readonly string[],
+    minimumSlot = 1,
+  ) => {
+    const statuses = await pairRead("getSignatureStatuses", [
+      [signature],
+      { searchTransactionHistory: true },
+    ]);
+    let slot: number | undefined;
+    for (const response of [statuses.primary, statuses.secondary]) {
+      const value = (
+        response as {
+          value: { confirmationStatus: string; err: unknown; slot: number }[];
+        }
+      ).value[0]!;
+      assert.equal(value.confirmationStatus, "finalized");
+      assert.equal(value.err, null);
+      assert.ok(Number.isSafeInteger(value.slot) && value.slot >= minimumSlot);
+      if (slot !== undefined) assert.equal(value.slot, slot);
+      slot = value.slot;
+    }
+    const transaction = await pairRead("getTransaction", [
+      signature,
+      {
+        commitment: "finalized",
+        maxSupportedTransactionVersion: 0,
+        encoding: "json",
+      },
+    ]);
+    for (const response of [transaction.primary, transaction.secondary]) {
+      const value = response as {
+        slot: number;
+        meta: { err: unknown };
+        transaction: { signatures: string[] };
+      };
+      assert.equal(value.slot, slot);
+      assert.equal(value.meta.err, null);
+      assert.equal(value.transaction.signatures[0], signature);
+    }
+    const snapshots = await pairRead("getMultipleAccounts", [
+      accounts,
+      { commitment: "finalized", encoding: "base64", minContextSlot: slot },
+    ]);
+    for (const response of [snapshots.primary, snapshots.secondary]) {
+      const value = response as { context: { slot: number }; value: unknown[] };
+      assert.ok(value.context.slot >= slot!);
+      assert.equal(value.value.length, accounts.length);
+      assert.ok(value.value.every(Boolean));
+    }
+    return {
+      status: "FINALIZED_QUORUM_REQUIRES_SEMANTIC_VERIFICATION" as const,
+      signature,
+      slot: slot!,
+      accounts: Object.freeze([...accounts]),
+      statuses,
+      transaction,
+      snapshots,
+    } satisfies Awaited<
+      ReturnType<typeof collectFinalizedOpenEconomicEvidence>
+    >;
+  };
+  const wire = (signature: string) =>
+    pairRead("getTransaction", [
+      signature,
+      {
+        commitment: "finalized",
+        maxSupportedTransactionVersion: 0,
+        encoding: "base64",
+      },
+    ]);
+  const ownerIntake = {
+    collect,
+    wire,
+    genesis: async () => local!.getGenesisHash(),
+  };
+  const keeperIntake: KeeperEvidenceIntake = {
+    collect: async (signature, accounts, minimumSlot) => {
+      const evidence = await collect(signature, accounts, minimumSlot),
+        genesis = await pairRead("getGenesisHash", []);
+      assert.equal(genesis.primary, serverContext.genesis);
+      assert.equal(genesis.secondary, serverContext.genesis);
+      const meta = (
+        evidence.transaction.primary as {
+          meta: {
+            innerInstructions: unknown[];
+            preTokenBalances: unknown[];
+            postTokenBalances: unknown[];
+          };
+        }
+      ).meta;
+      report.lastKeeperMetadata = {
+        innerGroups: meta.innerInstructions.length,
+        beforeTokens: meta.preTokenBalances,
+        afterTokens: meta.postTokenBalances,
+      }; // Public cloned-bank evidence only; never installed in the APK.
+      return {
+        ...evidence,
+        wire: await wire(signature),
+        genesis: {
+          primary: String(genesis.primary),
+          secondary: String(genesis.secondary),
+        },
+      };
+    },
+  };
+  class ClonedFreshRoutes extends JupiterV2ReadOnlyClient {
+    override async getExactInQuote(r: RouterRequest) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const candidate = await jupiter.getExactInQuote(r);
+        try {
+          await bank.verifyRoute(local!, candidate);
+          return candidate;
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !error.message.startsWith("C3_BANK_FRESH_ROUTE_MISSING:") ||
+            attempt === 2
+          )
+            throw error;
+        }
+      }
+      throw Error("C3_CYCLE_FRESH_ROUTE_MISSING");
+    }
+  }
+  const keeperJournal = isolatedKeeperJournal(
+    journal.pool,
+    serverContext.policy,
+    serverContext.rpc,
+    new JupiterLegCompiler(local, new ClonedFreshRoutes()),
+    serverContext.genesis,
+    keeperIntake,
+  );
+  const keeperOperation = async (action: KeeperAction, planSeconds = 120) => {
+    stage = `keeper-${action}-compile`;
+    const began = Date.now(),
+      chainStart = await now();
+    let prepared: Awaited<ReturnType<typeof keeperJournal.prepare>>;
+    try {
+      prepared = await keeperJournal.prepare(id, action, planSeconds);
+    } finally {
+      let chainEnd: number | null = null;
+      try {
+        chainEnd = await now();
+      } catch {
+        /* Diagnostic failure must not mask the compiler's rejection. */
+      }
+      report.lastKeeperPreparation = {
+        action,
+        planSeconds,
+        elapsedMs: Date.now() - began,
+        chainStart,
+        chainEnd,
+      };
+    }
+    const signed = VersionedTransaction.deserialize(prepared.packet);
+    signed.sign([keeper]); // Ephemeral fixture only; no source signing port.
+    const signature = await keeperJournal.recordSignedPacket(
+      prepared.requestId,
+      signed.serialize(),
+    );
+    assert.equal(
+      await keeperJournal.claimSendAttempt(prepared.requestId),
+      true,
+    );
+    assert.equal(
+      await keeperJournal.claimSendAttempt(prepared.requestId),
+      false,
+    );
+    assert.equal(
+      await local!.sendRawTransaction(signed.serialize(), {
+        maxRetries: 0,
+        skipPreflight: false,
+      }),
+      signature,
+    );
+    await finalized(signature);
+    const proof = await keeperJournal.reconcile(prepared.requestId);
+    assert.equal(proof.status, "reconciled");
+    assert.equal(
+      (await keeperJournal.reconcile(prepared.requestId)).status,
+      "already_reconciled",
+    );
+    state = (await db.read(id))!;
+    report.keeperOperations ??= [] as unknown[];
+    (report.keeperOperations as unknown[]).push({
+      action,
+      requestId: prepared.requestId,
+      signature,
+      messageHash: prepared.manifest.messageHash,
+      minima: prepared.manifest.minima,
+      routes: prepared.manifest.routes,
+      evidenceHash: proof.evidenceHash,
+    });
+    return signature;
+  };
   const clientPolicy: OwnerPolicy = {
     wallet: owner.publicKey.toBytes(),
     program: VAULT_PROGRAM.toBytes(),
@@ -579,6 +808,7 @@ try {
       assert.equal(flow.snapshot.state, "finalized");
     }
     signedPacket = undefined;
+    stage = `owner-${action}-prepare`;
     await flow.prepare(id, action);
     await flow.approve();
     assert.ok(signedPacket);
@@ -589,13 +819,13 @@ try {
       maxRetries: 0,
     });
     await finalized(signature);
-    await recordLocalFinalizedOwnerMessage(
+    await reconcileOwnerEconomicsFromSource(
       journal!.pool,
-      local!,
-      idl,
-      scope(),
+      serverContext.policy,
       flow.snapshot!.requestId,
+      ownerIntake,
     );
+    state = (await db.read(id))!;
     await flow.restore(stored);
     await flow.recover();
     assert.equal(flow.snapshot!.signature, signature);
@@ -603,53 +833,18 @@ try {
       "same mobile controller: atomic owner packets, real HTTP+PG receipt before explicit local broadcast, restart GET recovery and effect-gated advancement; not physical MWA";
     return signature;
   };
-  const depositSig = await ownerOperation("deposit");
-  const depositSettlement = Array(32).fill(1),
-    redemptionSettlement = Array(32).fill(2);
-  const createPlan = async (selling: boolean) => {
-    const timestamp = await now();
-    return instruction(
-      selling
-        ? "createRedemptionSettlementPlan"
-        : "createDepositSettlementPlan",
-      [
-        Array.from({ length: 3 }, (_, i) => Array(32).fill(i + 1)),
-        [new BN(1), new BN(1), new BN(1)],
-        new BN(timestamp),
-        new BN(
-          timestamp +
-            (!selling && process.argv.includes("--renew-plan") ? 5 : 120),
-        ),
-        100,
-        selling ? redemptionSettlement : depositSettlement,
-      ],
-      {
-        keeper: keeper.publicKey,
-        config,
-        intent: selling ? redemptionIntent : depositIntent,
-        plan: selling ? redemptionPlan : depositPlan,
-        systemProgram: SystemProgram.programId,
-      },
-      [keeper],
-    );
-  };
-  const planSig = await createPlan(false);
-  await finalized(planSig);
+  await ownerOperation("deposit");
+  await keeperOperation("create_buy_plan");
   stage = "durable-funding";
-  state = await db.reconcileLocalLifecycle(
-    scope(),
-    "draft",
-    "funded",
-    local,
-    idl,
-    [depositSig, planSig],
-  );
+  assert.equal(state.state, "funded");
   if (process.argv.includes("--renew-plan")) {
     stage = "owner-durable-renewal";
     const old = await local.getAccountInfo(depositPlan, "finalized");
     assert.ok(old);
     const expires = Number(old.data.readBigInt64LE(706));
-    const deadline = Date.now() + 20000;
+    // Real 120 s plan window: compilation of three fresh routes must not be
+    // penalized by a shortened fixture TTL. Renewal still requires actual expiry.
+    const deadline = Date.now() + 135000;
     const finalizedNow = async () => {
       const clock = await local!.getAccountInfo(
         new PublicKey("SysvarC1ock11111111111111111111111111111111"),
@@ -705,29 +900,9 @@ try {
   for (let ordinal = 0; ordinal < 6; ordinal++) {
     if (ordinal === 3) {
       stage = "issue-shares";
-      const recordSig = await instruction(
-        "recordDepositSettlement",
-        [depositSettlement],
-        {
-          keeper: keeper.publicKey,
-          config,
-          intent: depositIntent,
-          plan: depositPlan,
-          ...holdings,
-        },
-        [keeper],
-      );
-      await finalized(recordSig);
-      const shareSig = await ownerOperation("issue_shares");
-      await finalized(shareSig);
-      state = await db.reconcileLocalLifecycle(
-        scope(),
-        "buying",
-        "active",
-        local,
-        idl,
-        [recordSig, shareSig],
-      );
+      await keeperOperation("record_buy");
+      await ownerOperation("issue_shares");
+      assert.equal(state.state, "active");
       assert.equal(
         (
           await getAccount(
@@ -740,17 +915,9 @@ try {
         1_000_000n,
       );
       report.sharesIssued = "1000000";
-      const createSig = await ownerOperation("request_redemption");
-      const redPlanSig = await createPlan(true);
-      await finalized(redPlanSig);
-      state = await db.reconcileLocalLifecycle(
-        scope(),
-        "active",
-        "redemption_requested",
-        local,
-        idl,
-        [createSig, redPlanSig],
-      );
+      await ownerOperation("request_redemption");
+      await keeperOperation("create_sell_plan");
+      assert.equal(state.state, "redemption_requested");
     }
     stage = `leg-${ordinal}-fresh-route`;
     const amount: bigint =
@@ -824,9 +991,13 @@ try {
       },
       { intentId: id, ordinal, expectedRevision: state.dbRevision },
     );
-    const q: { state: string; canonical_payload: Buffer } = (
+    const q: {
+      state: string;
+      canonical_payload: Buffer;
+      evidence: { effectManifest: Record<string, unknown> };
+    } = (
       await journal.pool.query(
-        "SELECT q.*,ctx.context FROM c3_open.quote_authorizations q JOIN c3_open.quote_contexts ctx USING(intent_id,ordinal,intent_revision) WHERE encode(q.quote_id,'hex')=$1",
+        "SELECT q.*,ctx.context FROM c3_open.quote_authorizations q JOIN c3_open.all_quote_contexts ctx USING(intent_id,ordinal,intent_revision) WHERE encode(q.quote_id,'hex')=$1",
         [prepared.quoteId],
       )
     ).rows[0];
@@ -843,7 +1014,7 @@ try {
       inputAmount: amount,
       minimumOutput: seal.readBigUInt64LE(131),
       quoteExpiresAt: new Date(Number(seal.readBigInt64LE(284)) * 1000),
-      expectedEffects: { scope: "LOCAL_CLONED_JUPITER" },
+      expectedEffects: q.evidence.effectManifest,
     });
     assert.ok(seal.readBigUInt64LE(131) >= BigInt(build.otherAmountThreshold));
     const [authBytes, execBytes] = prepared.unsignedPackets;
@@ -873,12 +1044,11 @@ try {
     });
     await confirmed(authSig);
     const signature = encodeBase58(execute.signatures[0]!);
-    state = await db.recordSignature(
+    state = await db.recordSignedExecution(
       scope(),
       ordinal,
       worker,
-      signature,
-      cycleHash(seal),
+      execute.serialize(),
     );
     state = await db.markSubmitted(scope(), ordinal, worker, signature);
     stage = `leg-${ordinal}-real-jupiter-cpi`;
@@ -893,7 +1063,7 @@ try {
         ordinal,
         "LOCAL_OBSERVATION_INTERRUPTED",
       );
-      db = await OpenLocalSettlementRepository.fromVerifiedPool(journal.pool);
+      db = new VerifiedSettlementJournal(journal.pool);
       state = (await db.read(id))!;
       assert.equal((await db.readLeg(id, ordinal)).signature, signature);
       state = await db.beginReconciliation(scope(), ordinal);
@@ -962,8 +1132,22 @@ try {
         "three mutations of actual finalized validator evidence rejected before database promotion";
     }
     stage = `leg-${ordinal}-finalized-reconciliation`;
-    state = await db.reconcileLocalJupiterLeg(scope(), ordinal, local);
-    await assert.rejects(db.reconcileLocalJupiterLeg(scope(), ordinal, local));
+    state = await db.reconcile(
+      scope(),
+      ordinal,
+      local,
+      "ISOLATED_VERIFIED",
+      serverContext.genesis,
+    );
+    await assert.rejects(
+      db.reconcile(
+        scope(),
+        ordinal,
+        local,
+        "ISOLATED_VERIFIED",
+        serverContext.genesis,
+      ),
+    );
     report.duplicateReconciliation =
       "confirmed legs cannot be promoted twice; no resend";
     const output = (
@@ -984,31 +1168,12 @@ try {
     });
     console.log(`LOCAL_CLONED_JUPITER_LEG_${ordinal}:PASS`);
     // Reconstruct the service between legs; do not reconstruct or resend packets.
-    db = await OpenLocalSettlementRepository.fromVerifiedPool(journal.pool);
+    db = new VerifiedSettlementJournal(journal.pool);
     state = (await db.read(id))!;
   }
   stage = "redemption-and-claim";
-  const recordSig = await instruction(
-    "recordRedemptionSettlement",
-    [redemptionSettlement],
-    {
-      keeper: keeper.publicKey,
-      config,
-      intent: redemptionIntent,
-      plan: redemptionPlan,
-      ...holdings,
-    },
-    [keeper],
-  );
-  await finalized(recordSig);
-  state = await db.reconcileLocalLifecycle(
-    scope(),
-    "selling",
-    "claimable",
-    local,
-    idl,
-    [recordSig],
-  );
+  await keeperOperation("record_sell");
+  assert.equal(state.state, "claimable");
   const claimAccounts = {
     owner: owner.publicKey,
     config,
@@ -1022,16 +1187,7 @@ try {
     shareTokenProgram: TOKEN_2022_PROGRAM_ID,
     tokenProgram: TOKEN_PROGRAM_ID,
   };
-  const claimSig = await ownerOperation("claim");
-  await finalized(claimSig);
-  state = await db.reconcileLocalLifecycle(
-    scope(),
-    "claimable",
-    "redeemed",
-    local,
-    idl,
-    [claimSig],
-  );
+  await ownerOperation("claim");
   assert.equal(
     (await getAccount(local, ownerShares, "finalized", TOKEN_2022_PROGRAM_ID))
       .amount,

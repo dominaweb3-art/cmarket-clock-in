@@ -11,6 +11,8 @@ export type OpenProductionPolicy = Readonly<{
   version: "c3-open-production/v1";
   programId: string;
   binaryHash: string;
+  binaryLength: number;
+  upgradeAuthority: string;
   idlHash: string;
   configurationHash: string;
   vault: string;
@@ -40,6 +42,9 @@ export function validateOpenProductionPolicy(p: OpenProductionPolicy): void {
   const hash = /^[a-f0-9]{64}$/;
   if (
     p.version !== "c3-open-production/v1" ||
+    !Number.isSafeInteger(p.binaryLength) ||
+    p.binaryLength < 4 ||
+    p.binaryLength > 2000000 ||
     ![
       p.binaryHash,
       p.idlHash,
@@ -67,6 +72,7 @@ export function validateOpenProductionPolicy(p: OpenProductionPolicy): void {
     p.quoteAuthority,
     p.registry,
     p.quotePolicy,
+    p.upgradeAuthority,
   ])
     publicKeyBytes(k);
   if (new Set([p.wallet, p.governance, p.keeper, p.quoteAuthority]).size !== 4)

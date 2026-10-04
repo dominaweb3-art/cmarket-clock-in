@@ -871,13 +871,58 @@ export function verifyOwnerEconomicEffects(
 }
 /** Requires source approval; caller supplies only a public persisted request ID.
  * Immutable manifest + DB scope are loaded here, never supplied by a client. */
-export async function reconcileProductionOwnerEconomics(
+export async function reconcileOwnerEconomicsFromSource(
   pool: Pool,
+  policy: import("./open-leg-factory.ts").SettlementServerPolicy,
   requestId: string,
-  fetcher: typeof fetch = fetch,
+  intake: Readonly<{
+    genesis: () => Promise<string>;
+    collect: (
+      signature: string,
+      accounts: readonly string[],
+    ) => Promise<
+      Awaited<ReturnType<typeof collectFinalizedOpenEconomicEvidence>>
+    >;
+    wire: (
+      signature: string,
+    ) => Promise<{ primary: unknown; secondary: unknown }>;
+  }>,
 ) {
-  const policy = requireOpenProductionPolicy();
-  await assertProductionEnrollment(pool, policy, requestId, "request");
+  const genesis = await intake.genesis();
+  publicKeyBytes(genesis);
+  if (genesis === C3_MAINNET.genesisHash) {
+    const approved = requireOpenProductionPolicy();
+    await assertProductionEnrollment(pool, approved, requestId, "request");
+    for (const field of Object.keys(policy) as (keyof typeof policy)[])
+      check(
+        canonicalize(policy[field]) === canonicalize(approved[field]),
+        "APPROVED_POLICY",
+      );
+    // A direct core invocation cannot substitute synthetic Mainnet evidence.
+    intake = {
+      genesis: async () => C3_MAINNET.genesisHash,
+      collect: (signature, accounts) =>
+        collectFinalizedOpenEconomicEvidence(
+          approved.providers,
+          signature,
+          accounts,
+          1,
+        ),
+      wire: async (signature) =>
+        (await readIndependentOpenEvidence(
+          approved.providers,
+          "getTransaction",
+          [
+            signature,
+            {
+              commitment: "finalized",
+              maxSupportedTransactionVersion: 0,
+              encoding: "base64",
+            },
+          ],
+        )) as { primary: unknown; secondary: unknown },
+    };
+  }
   const r = (
     await pool.query(
       `SELECT r.*,s.signature,m.manifest,m.manifest_hash,a.manifest AS authorization_manifest,a.manifest_hash AS authorization_hash,a.pre_accounts,i.wallet,i.vault,i.share_mint,i.configuration_hash,i.state,i.deposit_plan,i.redemption_plan FROM c3_open.owner_requests r JOIN c3_open.owner_submissions s USING(request_id) JOIN c3_open.owner_economic_manifests m USING(request_id) JOIN c3_open.owner_authorization_manifests a USING(request_id) JOIN c3_open.intents i USING(intent_id) WHERE r.request_id=$1`,
@@ -958,26 +1003,11 @@ export async function reconcileProductionOwnerEconomics(
       status: "already_reconciled" as const,
       evidenceHash: prior.evidence_hash.toString("hex"),
     };
-  const collected = await collectFinalizedOpenEconomicEvidence(
-    policy.providers,
+  const collected = await intake.collect(
     r.signature,
     manifest.snapshots.map((v) => v.address),
-    1,
-    fetcher,
   );
-  const wire = (await readIndependentOpenEvidence(
-    policy.providers,
-    "getTransaction",
-    [
-      r.signature,
-      {
-        commitment: "finalized",
-        maxSupportedTransactionVersion: 0,
-        encoding: "base64",
-      },
-    ],
-    fetcher,
-  )) as { primary: unknown; secondary: unknown };
+  const wire = await intake.wire(r.signature);
   const proof = verifyOwnerEconomicEffects(
     manifest,
     r.signature,
@@ -1092,4 +1122,39 @@ export async function reconcileProductionOwnerEconomics(
   } finally {
     c.release();
   }
+}
+
+/** Immutable production boundary. Isolated tests reuse the core, never these providers. */
+export async function reconcileProductionOwnerEconomics(
+  pool: Pool,
+  requestId: string,
+  fetcher: typeof fetch = fetch,
+) {
+  const policy = requireOpenProductionPolicy();
+  await assertProductionEnrollment(pool, policy, requestId, "request");
+  return reconcileOwnerEconomicsFromSource(pool, policy, requestId, {
+    genesis: async () => C3_MAINNET.genesisHash,
+    collect: (signature, accounts) =>
+      collectFinalizedOpenEconomicEvidence(
+        policy.providers,
+        signature,
+        accounts,
+        1,
+        fetcher,
+      ),
+    wire: async (signature) =>
+      (await readIndependentOpenEvidence(
+        policy.providers,
+        "getTransaction",
+        [
+          signature,
+          {
+            commitment: "finalized",
+            maxSupportedTransactionVersion: 0,
+            encoding: "base64",
+          },
+        ],
+        fetcher,
+      )) as { primary: unknown; secondary: unknown },
+  });
 }

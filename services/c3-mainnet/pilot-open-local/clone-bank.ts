@@ -18,6 +18,7 @@ import {
 import { C3_MAINNET as c } from "../src/constants.ts";
 import { type RouterBuild } from "../src/jupiter-v2.ts";
 import { verifyWhirlpoolTick } from "./whirlpool-tick.ts";
+import { verifyWhirlpoolOracle } from "../src/open-whirlpool-oracle.ts";
 import {
   VAULT_PROGRAM,
   VAULT_AUTHORITY,
@@ -191,6 +192,10 @@ export class CloneBank {
       new PublicKey(d.subarray(133, 165)),
       new PublicKey(d.subarray(213, 245)),
       ...arrays.map((v) => v.key),
+      PublicKey.findProgramAddressSync(
+        [Buffer.from("oracle"), pool.toBuffer()],
+        new PublicKey(WHIRL),
+      )[0],
     ];
     const snapshot = await this.remote.getMultipleAccountsInfoAndContext(
       addresses,
@@ -211,6 +216,14 @@ export class CloneBank {
           !new PublicKey(account.data.subarray(32, 64)).equals(pool)
         )
           throw Error("C3_BANK_POOL_VAULT");
+      } else if (i === addresses.length - 1) {
+        verifyWhirlpoolOracle(
+          addresses[i]!,
+          pool,
+          account.owner,
+          account.data,
+          account.executable,
+        );
       } else {
         const array = arrays[i - 2]!;
         if (account.owner.toBase58() !== WHIRL)

@@ -15,6 +15,7 @@ import {
 } from "./open-owner-service.ts";
 import { reconcileProductionOwnerEconomics } from "./open-owner-effects.ts";
 import { reconcileProductionOwnerRenewal } from "./open-owner-renewal.ts";
+import { readProductionOpenNavPosition } from "./open-nav-position.ts";
 import { verifyOpenOwnerSchema } from "./open-owner-schema.ts";
 import type {
   OpenCompilerPolicy,
@@ -160,12 +161,29 @@ export async function handleProductionOwnerProtocol(
     ).rows[0];
     if (!row || row.share_mint !== policy.shareMint)
       throw Error("C3_OWNER_HTTP_SCOPE");
-    return readOwnerPosition(
+    const position = await readOwnerPosition(
       pool,
       approvedOwnerCompilerPolicy(policy),
       intentId,
       productionOwnerRpc(fetcher),
     );
+    const nav = await readProductionOpenNavPosition(pool, intentId);
+    return {
+      ...position,
+      scope: "MAINNET_INDEPENDENT_RPC",
+      nav:
+        nav.status === "NAV_ACCOUNTING_JOIN" &&
+        nav.evidenceScope === "PRODUCTION_PRICE_EVIDENCE"
+          ? {
+              status: "VERIFIED",
+              contextSlot: nav.contextSlot,
+              priceContextSlot: nav.priceContextSlot,
+              netUsdE12: nav.math.netUsdE12,
+              sharePriceUsdE12: nav.math.sharePriceUsdE12,
+            }
+          : null,
+      navStatus: nav.status === "UNAVAILABLE" ? nav.reason : nav.status,
+    };
   }
   if (
     url.pathname === "/v1/c3/owner/reconcile" &&

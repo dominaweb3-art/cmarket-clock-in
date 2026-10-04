@@ -13,6 +13,7 @@ const METHODS = new Set([
   "getMultipleAccounts",
   "getSignatureStatuses",
   "getBlockHeight",
+  "getSlot",
   "isBlockhashValid",
   "getLatestBlockhash",
   "getMinimumBalanceForRentExemption",
@@ -69,7 +70,7 @@ async function read(
     v.id !== 1 ||
     v.error ||
     v.result === undefined ||
-    v.result === null
+    (v.result === null && method !== "getTransaction")
   )
     throw new Error("C3_OPEN_RPC_MISSING_EVIDENCE");
   return v.result;

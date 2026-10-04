@@ -137,3 +137,45 @@ test("u64 numeric rounding cannot create false RPC quorum", async () => {
     /UNSAFE_INTEGER/,
   );
 });
+test("explicit null transaction can be negative evidence; no other missing result satisfies quorum", async () => {
+  const missing = (async (_url: unknown, init: RequestInit) => {
+    const request = JSON.parse(String(init.body));
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        result:
+          request.method === "getGenesisHash" ? C3_MAINNET.genesisHash : null,
+      }),
+    );
+  }) as typeof fetch;
+  const result = (await readIndependentOpenEvidence(
+    providers,
+    "getTransaction",
+    ["public-test-signature"],
+    missing,
+  )) as { primary: unknown; secondary: unknown };
+  assert.equal(result.primary, null);
+  assert.equal(result.secondary, null);
+  await assert.rejects(
+    readIndependentOpenEvidence(providers, "getBlockHeight", [], missing),
+    /MISSING_EVIDENCE/,
+  );
+  const absent = (async (_url: unknown, init: RequestInit) =>
+    new Response(
+      JSON.stringify(
+        JSON.parse(String(init.body)).method === "getGenesisHash"
+          ? { jsonrpc: "2.0", id: 1, result: C3_MAINNET.genesisHash }
+          : { jsonrpc: "2.0", id: 1 },
+      ),
+    )) as typeof fetch;
+  await assert.rejects(
+    readIndependentOpenEvidence(
+      providers,
+      "getTransaction",
+      ["public-test-signature"],
+      absent,
+    ),
+    /MISSING_EVIDENCE/,
+  );
+});

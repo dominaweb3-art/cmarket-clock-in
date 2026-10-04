@@ -58,7 +58,6 @@
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.31.1",
-    "@solana/web3.js": "1.99.0",
     "@types/bn.js": "5.2.0",
     "@types/node": "26.6.2",
     "@types/pg": "8.23.1",
@@ -68,6 +67,7 @@
     "typescript-eslint": "8.70.0"
   },
   "dependencies": {
+    "@solana/web3.js": "1.99.0",
     "pg": "8.23.0"
   }
 }

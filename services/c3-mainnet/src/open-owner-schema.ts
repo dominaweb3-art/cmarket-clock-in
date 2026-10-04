@@ -52,6 +52,18 @@ const hashes = [
     "0010_owner_compiler",
     "a4134b9564db7162ccdafb891708995a5b25a22be0806834837e95c4e491bb07",
   ],
+  [
+    "0011_verified_leg_contexts",
+    "223d7fed4c5664903130ccff3c6a59e362bbcb3c2e180117cbf81d7602dd0cc4",
+  ],
+  [
+    "0012_keeper_journal",
+    "5e8848b1705e8f19bdd1df9025eb7ffae96696fa9562e14ecd6ec78f6390f49a",
+  ],
+  [
+    "0013_keeper_outcomes",
+    "7e98163222081fa9780127f9d903c55a0b9e91c941ef42bcc088036157a86bfe",
+  ],
 ] as const;
 const hash = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest("hex");

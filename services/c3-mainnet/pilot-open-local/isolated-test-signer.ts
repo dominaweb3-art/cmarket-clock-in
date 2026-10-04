@@ -10,6 +10,9 @@ import pg from "pg";
 import type { QuoteAuthoritySigner } from "../src/quote-seal.ts";
 import { loadOpenSignerRecord } from "./open-quote.ts";
 import { OpenSigningJournal } from "../src/open-signing-journal.ts";
+import { VerifiedOpenRecordSigner } from "../src/open-record-signer.ts";
+import { encodeBase58 } from "../src/solana.ts";
+import type { SettlementServerPolicy } from "../src/open-leg-factory.ts";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 type Message = {
   kind: string;
@@ -154,15 +157,16 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
   process.send?.({ kind: "ready", publicKey: publicKey.toString("hex") });
   let queue = Promise.resolve();
   const localResults = new Map<string, Buffer>();
-  const journal = new OpenSigningJournal(pool, {
+  const provider = {
     publicKey,
-    signIdempotently: async (id, bytes) => {
+    signIdempotently: async (id: string, bytes: Uint8Array) => {
       const result = localResults.get(id) ?? sign(null, bytes, key.privateKey);
       localResults.set(id, result);
       return result;
     },
-    lookupSignature: async (id) => localResults.get(id) ?? null,
-  });
+    lookupSignature: async (id: string) => localResults.get(id) ?? null,
+  };
+  const journal = new OpenSigningJournal(pool, provider);
   process.on("message", (m: Message) => {
     queue = queue.then(async () => {
       try {
@@ -173,6 +177,45 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
           !/^[a-f0-9]{64}$/.test(m.hash ?? "")
         )
           throw new Error("C3_OPEN_SIGNER_INVALID_REQUEST");
+        const verified = (
+          await pool.query(
+            "SELECT q.*,v.context,v.scope,i.share_mint FROM c3_open.quote_authorizations q JOIN c3_open.all_quote_contexts v USING(intent_id,ordinal,intent_revision) JOIN c3_open.intents i USING(intent_id) WHERE encode(q.quote_id,'hex')=$1",
+            [m.id],
+          )
+        ).rows[0];
+        if (verified?.scope === "ISOLATED_VERIFIED") {
+          const ctx = verified.context;
+          const policy: SettlementServerPolicy = {
+            programId: "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+            idlHash: verified.evidence.idlHash ?? "test-only",
+            configurationHash: ctx.configurationHash,
+            vault: ctx.vault,
+            wallet: ctx.wallet,
+            shareMint: verified.share_mint,
+            governance: ctx.governance,
+            keeper: ctx.keeper,
+            quoteAuthority: encodeBase58(Buffer.from(ctx.authority, "hex")),
+            registry: ctx.registry,
+            registryRevision: ctx.registryRevision,
+            registryHash: ctx.registryHash,
+            quotePolicy: ctx.policy,
+            quotePolicyRevision: ctx.policyRevision,
+            maxSlippageBps: ctx.maxSlippageBps,
+          };
+          const signature = await new VerifiedOpenRecordSigner(
+            pool,
+            provider,
+            policy,
+            encodeBase58(Buffer.from(ctx.genesisHash, "hex")),
+            "ISOLATED_VERIFIED",
+          ).signRecord(m.id!, m.hash!);
+          process.send?.({
+            kind: "signature",
+            request: m.request,
+            signature: Buffer.from(signature).toString("hex"),
+          });
+          return;
+        }
         const row = await loadOpenSignerRecord(pool, m.id!, publicKey);
         if (hash(row.canonical_payload) !== m.hash)
           throw new Error("C3_OPEN_SIGNER_PERSISTED_BYTES_MISMATCH");
