@@ -1,0 +1,32 @@
+# REVIEW TEMPLATE ONLY. Do not install/enable until the concrete source policy,
+# binary, economic sources, authorities and full budget are separately approved.
+[Unit]
+Description=C Market reviewed open-vault owner service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cmarket
+Group=cmarket
+WorkingDirectory=/opt/cmarket/services/c3-mainnet
+# root-owned 0600 server-only file. Never place it in source or the APK.
+EnvironmentFile=/etc/cmarket/owner-server.env
+ExecStartPre=/usr/bin/node dist/open-owner-entry.js check
+ExecStart=/usr/bin/node dist/open-owner-entry.js start
+# Recovery must reconcile before resubmission; restarting the listener is not a
+# permission to retry a wallet/keeper operation. No restart/signing loop here.
+Restart=no
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0077
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,77 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import { inspectOpenPilotBudget } from "../scripts/open-pilot-budget.ts";
+
+const directory = new URL(
+  "../../../artifacts/c3-pilot-candidate/2026-10-03-production-factory-disabled/",
+  import.meta.url,
+);
+const [text, binary, idl] = await Promise.all([
+  readFile(new URL("public-rent-estimate.json", directory), "utf8"),
+  readFile(new URL("c3_pilot_vault-disabled.so", directory)),
+  readFile(new URL("c3_pilot_vault-disabled.idl.json", directory)),
+]);
+const input = () => JSON.parse(text);
+test("public artifact budget is reproducible, itemized and never approval", () => {
+  const r = inspectOpenPilotBudget(input(), binary, idl);
+  assert.equal(r.status, "INCOMPLETE_NOT_APPROVED");
+  assert.equal(r.capital.persistentSol, "3.584366720");
+  assert.equal(r.capital.recoverableBufferSol, "3.520587320");
+  assert.equal(r.capital.measuredPeakSol, "7.104954040");
+  assert.equal(r.capital.proposedKnownPeakSol, "7.286983440");
+  assert.equal(r.infrastructure.monthlyPublishedSubtotalUsd, "110.95");
+  assert.equal(r.budgetApproved, false);
+  assert.ok(r.infrastructure.missingCosts.length > 0);
+});
+test("changed binary/IDL, mixed snapshots, duplicate rows and unsafe arithmetic reject", () => {
+  for (const change of [
+    (r: ReturnType<typeof input>) => {
+      r.binaryHash = "0".repeat(64);
+    },
+    (r: ReturnType<typeof input>) => {
+      r.idlHash = "0".repeat(64);
+    },
+    (r: ReturnType<typeof input>) => {
+      r.persistentRentLamports++;
+    },
+    (r: ReturnType<typeof input>) => {
+      r.accounts.push(r.accounts[0]);
+    },
+    (r: ReturnType<typeof input>) => {
+      r.accounts[0].count = -1;
+    },
+    (r: ReturnType<typeof input>) => {
+      r.accounts[0].count = Number.MAX_SAFE_INTEGER + 1;
+    },
+    (r: ReturnType<typeof input>) => {
+      r.accounts[0].totalLamports++;
+    },
+    (r: ReturnType<typeof input>) => {
+      r.artifactScope = "MAINNET_REVIEWED";
+    },
+    (r: ReturnType<typeof input>) => {
+      r.timestamp = "invalid";
+      r.accounts.forEach(
+        (a: {
+          lamportsPerAccount: number;
+          totalLamports: number;
+          count: number;
+        }) => {
+          a.lamportsPerAccount = 1;
+          a.totalLamports = a.count;
+        },
+      );
+      r.persistentRentLamports = r.accounts
+        .filter((a: { kind: string }) => a.kind !== "transientDeploymentBuffer")
+        .reduce((n: number, a: { count: number }) => n + a.count, 0);
+      r.transientPeakRentLamports = r.persistentRentLamports + 1;
+    },
+  ]) {
+    const r = input();
+    change(r);
+    assert.throws(() => inspectOpenPilotBudget(r, binary, idl));
+  }
+  assert.throws(() => inspectOpenPilotBudget(input(), binary.subarray(1), idl));
+  assert.throws(() => inspectOpenPilotBudget(input(), binary, idl.subarray(1)));
+});

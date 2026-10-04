@@ -9,6 +9,23 @@ const manifest = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 
+test("exact-market observations and budget proposals cannot enter production", () => {
+  for (const name of readdirSync(new URL("../src/", import.meta.url))) {
+    if (!name.endsWith(".ts")) continue;
+    assert.doesNotMatch(
+      readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8"),
+      /from\s+["'][^"']*(?:research\/oracle-nav|scripts\/open-pilot-budget)[^"']*["']/,
+    );
+  }
+  for (const name of readdirSync(new URL("../dist/", import.meta.url))) {
+    if (!name.endsWith(".js")) continue;
+    assert.doesNotMatch(
+      readFileSync(new URL(`../dist/${name}`, import.meta.url), "utf8"),
+      /inspectGeckoPools|contrastMarketRatio|collectExactMarketEvidence|inspectOpenPilotBudget/,
+    );
+  }
+});
+
 test("compiled package exports only the read-only facade", async () => {
   assert.deepEqual(Object.keys(manifest.exports), ["."]);
   assert.equal(manifest.exports["."].default, "./dist/public.js");

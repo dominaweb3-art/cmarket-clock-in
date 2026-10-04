@@ -2,6 +2,36 @@
   "classification": "server-only names and descriptions; no values",
   "variables": [
     {
+      "name": "DATABASE_URL",
+      "purpose": "Server-only PostgreSQL connection; no URL query. TLS CA is supplied separately by the existing owner service entry",
+      "scope": "owner service only; configure directly on server, never source/chat/APK"
+    },
+    {
+      "name": "C3_DATABASE_CA_FILE",
+      "purpose": "Readable managed PostgreSQL CA file; TLS verification remains required",
+      "scope": "owner service only"
+    },
+    {
+      "name": "C3_OWNER_HTTPS_ORIGIN",
+      "purpose": "Owner-selected exact public HTTPS origin matching its trusted TLS certificate; no proxy-derived origin",
+      "scope": "owner service; public origin, not an approval flag"
+    },
+    {
+      "name": "C3_OWNER_HTTPS_PORT",
+      "purpose": "Direct TLS listener unprivileged port, 8443 by default; public routing must match approved origin",
+      "scope": "owner service only"
+    },
+    {
+      "name": "C3_OWNER_TLS_KEY_FILE",
+      "purpose": "Path to server-only TLS private material, not its contents",
+      "scope": "owner service only; owner configures outside repository"
+    },
+    {
+      "name": "C3_OWNER_TLS_CERT_FILE",
+      "purpose": "Path to trusted HTTPS certificate chain matching origin",
+      "scope": "owner service only"
+    },
+    {
       "name": "C3_JUPITER_API_KEY",
       "purpose": "Authenticated Jupiter Swap V2 builder access",
       "scope": "isolated builder only"

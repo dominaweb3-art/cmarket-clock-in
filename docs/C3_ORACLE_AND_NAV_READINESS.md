@@ -1,5 +1,12 @@
 # C3 oracle and NAV readiness — research-only, NO-GO
 
+**Active open-vault update (2026-10-04):** The historical Symmetry evidence below
+is preserved, not the active pilot configuration. See
+[exact-mint NAV findings and actionable pilot decisions](C3_EXACT_MINT_NAV_AND_PILOT_DECISIONS.md).
+Raw exact-mint market collectors now exist, but no two-source authenticated
+economic NAV combination is enrolled. Mainnet remains disabled; market quotes
+and cloned tests are not real C3 purchases. No BTC/ETH wrapper parity is assumed.
+
 **M4.5 integration boundary (2026-09-25):** The [isolated Symmetry SDK harness](C3_SYMMETRY_V3_INTEGRATION_HARNESS.md) proceeds without Pyth Hermes; the previous authenticated HTTP 403 remains unresolved but is not a prerequisite for **integration research**. Symmetry vault accounts, shares, intents and finalized effects are the intended operational position source after verification. Pyth remains an independent price/safety monitor; official Solana Pyth Push accounts could be evaluated later. No current authoritative C3 NAV or live price was calculated, and Mainnet C3 remains disabled.
 
 ## M4.4 authenticated Pyth evidence attempt — 2026-09-25 UTC
