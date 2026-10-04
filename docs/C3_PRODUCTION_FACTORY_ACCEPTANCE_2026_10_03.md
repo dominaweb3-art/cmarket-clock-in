@@ -1,5 +1,10 @@
 # C3: shared service-core acceptance and remaining production gate
 
+Historical foundation snapshot. Follow-up evidence, dependency changes and the
+prepared physical message QA are recorded in
+[C3_PRICING_DEVICE_QA_2026_10_03.md](C3_PRICING_DEVICE_QA_2026_10_03.md).
+The pricing and Mainnet approval blockers below are not silently cleared.
+
 Classification: SHARED. Execution date: 2026-10-03 (America/Bogota).
 Starting commit: `ecb6213a4b49c706bb1530c1ffb4648cf25c4995`.
 Branch: `feature/c3-open-pilot-vault`.

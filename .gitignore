@@ -33,5 +33,6 @@ credentials.json
 /programs/c3-pilot-vault/node_modules/
 /programs/c3-pilot-vault/.env*
 /programs/c3-pilot-vault/results/
+/services/c3-mainnet/results/oracle-source-discovery/
 /.c3fork-*/
 .c3cycle-*/

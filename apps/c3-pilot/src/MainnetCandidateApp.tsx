@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { connectCandidateWallet } from "./candidate-wallet";
+import { prepareDeviceQa, signDeviceQa } from "./device-message-qa-wallet";
 import { OwnerLifecyclePanel } from "./OwnerLifecyclePanel";
 import {
   candidateLanguages,
@@ -29,6 +30,7 @@ export default function MainnetCandidateApp() {
   const [tab, setTab] = useState<"home" | "indices" | "activity">("home");
   const [wallet, setWallet] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [qaDigest, setQaDigest] = useState<string | null>(null);
   const lock = useRef(false);
   useEffect(() => {
     let active = true;
@@ -47,6 +49,7 @@ export default function MainnetCandidateApp() {
     if (lock.current) return;
     lock.current = true;
     setConnecting(true);
+    setQaDigest(null);
     try {
       setWallet(await connectCandidateWallet());
     } catch {
@@ -54,6 +57,42 @@ export default function MainnetCandidateApp() {
     } finally {
       lock.current = false;
       setConnecting(false);
+    }
+  };
+  const reviewDeviceQa = () => {
+    if (!wallet || lock.current) return;
+    lock.current = true;
+    setConnecting(true);
+    setQaDigest(null);
+    const release = () => {
+      lock.current = false;
+      setConnecting(false);
+    };
+    try {
+      const review = prepareDeviceQa(wallet);
+      Alert.alert(
+        t.qaTitle,
+        `${t.qaNotice}\n\n${review.text}`,
+        [
+          { text: t.qaCancel, style: "cancel", onPress: release },
+          {
+            text: t.qaSign,
+            onPress: () => {
+              void signDeviceQa(review)
+                .then((r) => {
+                  setQaDigest(r.messageSha256);
+                  Alert.alert(t.qaTitle, t.qaSuccess);
+                })
+                .catch(() => Alert.alert(t.qaTitle, t.qaError))
+                .finally(release);
+            },
+          },
+        ],
+        { cancelable: false },
+      );
+    } catch {
+      release();
+      Alert.alert(t.qaTitle, t.qaError);
     }
   };
   return (
@@ -113,6 +152,21 @@ export default function MainnetCandidateApp() {
             >
               <Text style={s.text}>{connecting ? t.loading : t.connect}</Text>
             </Pressable>
+            <Text style={s.notice}>{t.qaNotice}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: connecting || !wallet }}
+              disabled={connecting || !wallet}
+              style={s.button}
+              onPress={reviewDeviceQa}
+            >
+              <Text style={s.text}>{t.qaReview}</Text>
+            </Pressable>
+            {qaDigest ? (
+              <Text style={s.text}>
+                {t.qaDigest}: {qaDigest}
+              </Text>
+            ) : null}
           </View>
         )}
         {tab !== "activity" ? (
