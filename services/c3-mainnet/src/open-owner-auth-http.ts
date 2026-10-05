@@ -19,7 +19,11 @@ import {
   readProductionOpenNavPosition,
   readProductionRestrictedPosition,
 } from "./open-nav-position.ts";
-import { verifyOpenOwnerSchema } from "./open-owner-schema.ts";
+import { verifyOpenOwnerSchema, enrollOpenOwner } from "./open-owner-schema.ts";
+import {
+  issueOpenEnrollmentChallenge,
+  readOpenEnrollmentAccounts,
+} from "./open-owner-enrollment.ts";
 import { captureProductionMinimumReview } from "./open-leg-factory.ts";
 import { JupiterLegCompiler } from "./open-jupiter-compiler.ts";
 import { productionQuorumConnection } from "./open-quorum-connection.ts";
@@ -60,6 +64,47 @@ export async function handleProductionOwnerProtocol(
   const policy = requireOpenProductionPolicy(),
     journal = new OpenOwnerJournal(pool, origin);
   const fields = Object.keys(body).sort().join(",");
+  if (
+    path === "/v1/c3/owner/enrollment-challenge" &&
+    fields === "nonce,requestedAtUnix,signature" &&
+    typeof body.nonce === "string" &&
+    typeof body.requestedAtUnix === "number"
+  ) {
+    await verifyOpenOwnerSchema(pool);
+    return issueOpenEnrollmentChallenge(
+      pool,
+      approvedOwnerCompilerPolicy(policy),
+      origin,
+      {
+        nonce: body.nonce,
+        requestedAtUnix: body.requestedAtUnix,
+        signature: bytes(body.signature, 64),
+      },
+    );
+  }
+  if (
+    path === "/v1/c3/owner/enroll" &&
+    fields === "challengeId,message,signature" &&
+    typeof body.challengeId === "string"
+  ) {
+    await verifyOpenOwnerSchema(pool);
+    const proof = {
+      origin,
+      challengeId: body.challengeId,
+      message: bytes(body.message),
+      signature: bytes(body.signature, 64),
+    };
+    const compiler = approvedOwnerCompilerPolicy(policy);
+    const accounts = await readOpenEnrollmentAccounts(
+      pool,
+      compiler,
+      proof,
+      productionOwnerRpc(fetcher),
+    );
+    return {
+      intentId: await enrollOpenOwner(pool, compiler, accounts, proof),
+    };
+  }
   if (
     path === "/v1/c3/owner/challenge" &&
     fields === "intentId" &&

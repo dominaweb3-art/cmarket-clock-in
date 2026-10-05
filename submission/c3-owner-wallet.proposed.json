@@ -1,0 +1,16 @@
+{
+  "schema": "c3-owner-wallet-proposal/v1",
+  "wallet": "FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ",
+  "intendedRoles": ["pilotOwner", "realizedUsdcRecipient"],
+  "source": "OWNER_CHAT_PUBLIC_ADDRESS",
+  "format": "CANONICAL_BASE58_32_BYTES_ON_CURVE",
+  "mwaControlProof": "UNVERIFIED",
+  "physicalConnection": "UNVERIFIED",
+  "physicalMessageSignature": "UNVERIFIED",
+  "enrolled": false,
+  "approvedWallet": null,
+  "otherRolesAssigned": false,
+  "supersededLocalOwnerCandidate": "8fFFdNEirMgDHmAdSP8RiKhgCWNqWJSTEmipnQsX8ULP",
+  "enrollmentRequires": "Fresh server challenge signed explicitly via MWA by this exact public key, verified server-side with session/wallet binding; connection alone is insufficient.",
+  "mainnetExecutionEnabled": false
+}

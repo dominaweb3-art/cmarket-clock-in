@@ -31,7 +31,11 @@ export async function assertProductionEnrollment(
 ) {
   const row = (
     await pool.query(
-      `SELECT i.wallet,i.vault,i.share_mint,i.configuration_hash,e.policy_hash FROM c3_open.intents i JOIN c3_open.production_enrollments e USING(intent_id) ${kind === "request" ? "JOIN c3_open.owner_requests r USING(intent_id)" : kind === "quote" ? "JOIN c3_open.quote_authorizations q USING(intent_id)" : ""} WHERE ${kind === "request" ? "r.request_id" : kind === "quote" ? "q.quote_id" : "i.intent_id"}=$1`,
+      `SELECT i.wallet,i.vault,i.share_mint,i.configuration_hash,e.policy_hash,
+       EXISTS(SELECT 1 FROM c3_open.owner_enrollment_consumptions c
+         JOIN c3_open.owner_enrollment_challenges h USING(challenge_id)
+         WHERE c.intent_id=i.intent_id AND h.wallet=i.wallet AND h.policy_hash=e.policy_hash) AS control_proven
+       FROM c3_open.intents i JOIN c3_open.production_enrollments e USING(intent_id) ${kind === "request" ? "JOIN c3_open.owner_requests r USING(intent_id)" : kind === "quote" ? "JOIN c3_open.quote_authorizations q USING(intent_id)" : ""} WHERE ${kind === "request" ? "r.request_id" : kind === "quote" ? "q.quote_id" : "i.intent_id"}=$1`,
       [kind === "quote" ? Buffer.from(id, "hex") : id],
     )
   ).rows[0];
@@ -44,7 +48,8 @@ export async function assertProductionEnrollment(
     row.vault !== p.vault ||
     row.share_mint !== p.shareMint ||
     row.configuration_hash !== p.configurationHash ||
-    row.policy_hash !== expected
+    row.policy_hash !== expected ||
+    row.control_proven !== true
   )
     throw Error("C3_OWNER_PRODUCTION_ENROLLMENT_REQUIRED");
 }

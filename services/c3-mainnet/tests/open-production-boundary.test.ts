@@ -8,6 +8,81 @@ import {
 import { OpenProductionRecordSigner } from "../src/open-production-signer.ts";
 import { readIndependentOpenEvidence } from "../src/open-rpc-quorum.ts";
 import { C3_MAINNET } from "../src/constants.ts";
+import { handleProductionOwnerProtocol } from "../src/open-owner-auth-http.ts";
+import { ownerServiceEntry } from "../src/open-owner-entry.ts";
+import {
+  issueOpenEnrollmentChallenge,
+  enrollmentRequestMessage,
+} from "../src/open-owner-enrollment.ts";
+
+test("pre-intent HTTPS enrollment and removed CLI enrollment cannot bypass source approval", async () => {
+  let calls = 0;
+  const forbidden = () => {
+    calls++;
+    throw Error("unexpected I/O");
+  };
+  const pool = { query: forbidden, connect: forbidden } as unknown as Pool;
+  const fetcher = forbidden as unknown as typeof fetch;
+  for (const [path, body] of [
+    ["/v1/c3/owner/enrollment-challenge", {}],
+    [
+      "/v1/c3/owner/enrollment-challenge",
+      { nonce: "a".repeat(64), requestedAtUnix: 1, signature: "AA==" },
+    ],
+    [
+      "/v1/c3/owner/enroll",
+      { challengeId: "forged", message: "AA==", signature: "AA==" },
+    ],
+  ] as const) {
+    await assert.rejects(
+      () =>
+        handleProductionOwnerProtocol(
+          pool,
+          "https://c3-api.example.org",
+          path,
+          body,
+          undefined,
+          fetcher,
+        ),
+      /NOT_APPROVED/,
+    );
+  }
+  await assert.rejects(() => ownerServiceEntry("enroll"), /NOT_APPROVED/);
+  assert.equal(calls, 0);
+});
+
+test("anonymous or invalid enrollment issuance cannot reach PostgreSQL or exhaust owner quota", async () => {
+  let calls = 0;
+  const pool = {
+    connect: async () => {
+      calls++;
+      throw Error("unexpected PG");
+    },
+  } as unknown as Pool;
+  const policy = { wallet: C3_MAINNET.cbBtcMint } as unknown as Parameters<
+    typeof enrollmentRequestMessage
+  >[0];
+  for (let n = 0; n < 65; n++)
+    await assert.rejects(
+      () =>
+        issueOpenEnrollmentChallenge(
+          pool,
+          policy,
+          "https://c3-api.example.org",
+        ),
+      /SIGNATURE_REQUIRED/,
+    );
+  await assert.rejects(
+    () =>
+      issueOpenEnrollmentChallenge(pool, policy, "https://c3-api.example.org", {
+        nonce: "a".repeat(64),
+        requestedAtUnix: 1,
+        signature: new Uint8Array(64),
+      }),
+    /REQUEST_REJECTED/,
+  );
+  assert.equal(calls, 0);
+});
 
 test("missing source-reviewed approval prevents PG and isolated signer invocation", async () => {
   let calls = 0;

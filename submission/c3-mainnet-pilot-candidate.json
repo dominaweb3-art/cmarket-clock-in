@@ -3,17 +3,21 @@
   "classification": "SHARED",
   "status": "LOCAL_INTEGRATION_PASSED_MAINNET_BLOCKED",
   "implementationCommit": null,
-  "startingCommit": "bc5634ce92d34d40f5a8fca5c733900f875c4454",
-  "artifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled",
-  "preservedPreviousArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-04-restricted-single-position-qa",
+  "startingCommit": "3b6a3df0637084b4da94dd897738c6dcebdd5f85",
+  "artifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled",
+  "preservedPreviousArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled",
+  "preservedEarlierArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-04-restricted-single-position-qa",
+  "ownerWalletProposalFile": "submission/c3-owner-wallet.proposed.json",
   "program": {
-    "declaredLocalUnapprovedId": "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+    "declaredLocalUnapprovedId": "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
     "approvedMainnetId": null,
     "file": "c3_pilot_vault-disabled.so",
-    "sha256": "bd531c7ced7f00c2929446906f627982c55f151f2fdb8e5f34a8d9d236a892d2",
+    "sha256": "0c0010e10d198243152a4071d8e7f4edbbfa0a5eeaefdd767ddd2d0f55a9e02f",
     "bytes": 659456,
     "idlFile": "c3_pilot_vault-disabled.idl.json",
-    "idlSha256": "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138",
+    "idlSha256": "2620cc64a0335aef420f1e5722277f6967593e4d453ebf6684d79a12d74d1c13",
+    "buildToolchain": "solana-cargo-build-sbf 2.1.0 / platform-tools v1.43 / rustc 1.79.0; default features disabled; offline build",
+    "candidateIdentityAligned": true,
     "settlementPlanSchema": 2,
     "settlementPlanBytes": 901,
     "mainnetEnabled": false,
@@ -40,7 +44,9 @@
     "monetarySigningReachable": false,
     "httpsBackendConfiguration": null,
     "physicalMwaConnection": "UNVERIFIED",
-    "physicalMwaSignature": "UNVERIFIED"
+    "physicalMwaSignature": "UNVERIFIED",
+    "currentDeviceVerification": "ADB_DEVICE_INSTALLED_APK_SHA256_MATCHES_PRESERVED_APK_NO_INSTALL_OR_DATA_CLEAR_CURRENT_EXECUTION",
+    "currentColdLaunchRepeated": false
   },
   "policy": {
     "weightsBps": [4000, 3000, 3000],
@@ -84,8 +90,8 @@
   },
   "costEvidence": {
     "file": "public-rent-estimate.json",
-    "sha256": "17b2bdcd9c73bd313fb30959073348fa8352629cf2bc6cda69339ff74844ad1e",
-    "timestampUtc": "2026-10-05T02:16:45.824Z",
+    "sha256": "b2e823755d2d4c68e4159fba858364b5bc3a495e3c3eb4196f51d1fa3609a8aa",
+    "timestampUtc": "2026-10-05T19:58:15.119Z",
     "officialMainnetGenesisVerified": true,
     "persistentRentLamports": "3414654080",
     "recoverableTemporaryBufferLamports": "3350874680",
@@ -93,7 +99,7 @@
     "networkPrioritySwapAndServiceCostsMeasured": false,
     "allInBudgetApproved": false,
     "depositSeparateFromCosts": true,
-    "canonicalJsonSha256": "bf91224801bd232d7c1659fc65f61222bc606d5768462bae83b87fb9b9cd36ca",
+    "canonicalJsonSha256": "bae46983c9bd34c15a54d5fd2ade118d445a9734e7789aacb852da983044042c",
     "proposedKnownPeakSol": "6.947558160",
     "monthlyPublishedSubtotalUsd": "110.80",
     "monthlyHaPairPublishedSubtotalUsd": "155.80",
@@ -108,6 +114,8 @@
     ]
   },
   "gates": {
+    "currentCycleValidatedOnCandidateId": false,
+    "programIdentityRebuildScope": "DEFAULT_DISABLED_BINARY_IDL_BACKEND_ALIGNMENT_ONLY",
     "independentSourceReview": "SCOPED_AGENT_REVIEW_NO_NEW_ACTIONABLE_FINDINGS_NOT_EXTERNAL_AUDIT",
     "professionalExternalAudit": "NOT_PERFORMED",
     "freshSchemaV2CloneCycle": "PASS_SIX_LEGS_AND_PARTIAL_MINIMUM_RESOLUTION_LOCAL_ONLY",
@@ -122,6 +130,8 @@
     "mainnetTransactionAuthorizedOrSubmitted": false
   },
   "localCycleEvidence": {
+    "programId": "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+    "scope": "PRESERVED_PRIOR_PROGRAM_ID_LOCAL_CYCLE_NOT_RERUN_OR_CLAIMED_ON_NEW_ID_OR_MAINNET",
     "ignoredReport": "programs/c3-pilot-vault/results/jupiter-cycle-RhWWf1/report.json",
     "intentId": "94e2054c-f392-4c65-9e85-12f94625eff1",
     "mainnetAcquisition": false,
@@ -150,12 +160,12 @@
     }
   },
   "sourceCommitRule": "The commit containing this manifest identifies source; artifact hashes identify builds. No self-referential commit hash.",
-  "previousManifestCommit": "ee4c69ab5d11bcc6b8ef6ddf5b51815a4a1f8542",
+  "previousManifestCommit": "3b6a3df0637084b4da94dd897738c6dcebdd5f85",
   "backend": {
     "file": "cmarket-c3-mainnet-services-0.1.0.tgz",
-    "sha256": "6493cd34cfdb97d842fa1e99ee643e0aedd253cda661ffd14753b5290c62ec18",
+    "sha256": "c7f129046eff65a6708e6036b7c7a1f47db0a0aba609fefb98009ffa7901e514",
     "reviewedIdlIncluded": true,
-    "openMigrationCount": 13,
+    "openMigrationCount": 14,
     "cloneExecutableIncluded": false,
     "secretsIncluded": false,
     "deployed": false,
@@ -165,11 +175,24 @@
     "startupExpectedError": "C3_OPEN_PRODUCTION_NOT_APPROVED",
     "explicitPostApprovalServiceCommands": [
       "node dist/open-owner-entry.js migrate",
-      "node dist/open-owner-entry.js enroll",
       "node dist/open-owner-entry.js check",
       "node dist/open-owner-entry.js start"
     ],
-    "commandsExecutedOnProduction": false
+    "commandsExecutedOnProduction": false,
+    "ownerEnrollment": {
+      "serverChallenge": "POST /v1/c3/owner/enrollment-challenge with nonce, requestedAtUnix and owner signature over the canonical policy-bound request message",
+      "ownerProof": "POST /v1/c3/owner/enroll with challengeId and exact message/signature in canonical base64",
+      "freshPolicyBoundWalletSignatureRequired": true,
+      "deviceQaMessageAccepted": false,
+      "legacyRowsWithoutConsumedProofAccepted": false,
+      "invalidProofReadsRpc": false,
+      "maximumRpcAttemptsPerChallenge": 3,
+      "maximumChallengesPerMinutePerWallet": 3,
+      "maximumLifetimeChallengesPerPilotWallet": 60,
+      "anonymousChallengeIssuance": false,
+      "signedChallengeRequestReplayAccepted": false,
+      "productionOwnerEnrolled": false
+    }
   },
   "deploymentBoundary": {
     "activePolicySource": "services/c3-mainnet/src/open-production-policy.ts",
@@ -179,5 +202,5 @@
     "creationOfMissingAccountsAuthorized": false,
     "providerOrHostingPurchaseAuthorized": false
   },
-  "physicalNextAction": "Owner explicitly connects Phantom on this disabled APK and reports return/cancel/restart; no monetary signature."
+  "physicalNextAction": "Owner selects proposed FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ in Phantom, connects on the unchanged disabled APK, and explicitly reviews DEVICE QA ONLY Devnet message signing (no transaction/funds/login/enrollment); report verified-message result and digest or exact error. Production enrollment still requires fresh server-bound owner challenge."
 }

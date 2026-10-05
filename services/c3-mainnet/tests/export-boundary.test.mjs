@@ -109,7 +109,7 @@ test("production artifact and package physically exclude synthetic builder state
         ),
       )
       .digest("hex"),
-    "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138",
+    "2620cc64a0335aef420f1e5722277f6967593e4d453ebf6684d79a12d74d1c13",
   );
   assert.deepEqual(
     files.filter((file) => file.startsWith("resources/")),

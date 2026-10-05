@@ -26,6 +26,15 @@ const SNAPSHOTS = [
       "bd531c7ced7f00c2929446906f627982c55f151f2fdb8e5f34a8d9d236a892d2",
     idlHash: "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138",
     bytes: 659456,
+    historical: true,
+  },
+  {
+    digest: "bae46983c9bd34c15a54d5fd2ade118d445a9734e7789aacb852da983044042c",
+    timestamp: "2026-10-05T19:58:15.119Z",
+    binaryHash:
+      "0c0010e10d198243152a4071d8e7f4edbbfa0a5eeaefdd767ddd2d0f55a9e02f",
+    idlHash: "2620cc64a0335aef420f1e5722277f6967593e4d453ebf6684d79a12d74d1c13",
+    bytes: 659456,
     historical: false,
   },
 ] as const;
@@ -244,7 +253,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     )
       throw Error("C3_BUDGET_DISABLED_BOUNDARY_CHANGED");
     const directory = new URL(
-      "../../../artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/",
+      "../../../artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled/",
       import.meta.url,
     );
     const [r, binary, idl] = await Promise.all([

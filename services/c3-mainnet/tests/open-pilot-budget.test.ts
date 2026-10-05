@@ -93,7 +93,7 @@ test("minimum-resolution artifact has its own pinned costs; historical artifacts
     readFile(new URL("c3_pilot_vault-disabled.idl.json", current)),
   ]);
   const result = inspectOpenPilotBudget(JSON.parse(rent), elf, currentIdl);
-  assert.equal(result.historicalArtifact, false);
+  assert.equal(result.historicalArtifact, true);
   assert.equal(
     inspectOpenPilotBudget(input(), binary, idl).historicalArtifact,
     true,
@@ -109,4 +109,24 @@ test("minimum-resolution artifact has its own pinned costs; historical artifacts
     inspectOpenPilotBudget(JSON.parse(rent), binary, currentIdl),
   );
   assert.throws(() => inspectOpenPilotBudget(JSON.parse(rent), elf, idl));
+});
+
+test("identity-aligned artifact has new hash pins; unchanged rent never means approval", async () => {
+  const current = new URL(
+    "../../../artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled/",
+    import.meta.url,
+  );
+  const [rent, elf, currentIdl] = await Promise.all([
+    readFile(new URL("public-rent-estimate.json", current), "utf8"),
+    readFile(new URL("c3_pilot_vault-disabled.so", current)),
+    readFile(new URL("c3_pilot_vault-disabled.idl.json", current)),
+  ]);
+  const r = inspectOpenPilotBudget(JSON.parse(rent), elf, currentIdl);
+  assert.equal(r.historicalArtifact, false);
+  assert.equal(r.capital.persistentSol, "3.414654080");
+  assert.equal(r.capital.recoverableBufferSol, "3.350874680");
+  assert.equal(r.capital.measuredPeakSol, "6.765528760");
+  assert.equal(r.totalBudget.allInTotalUsd, null);
+  assert.equal(r.budgetApproved, false);
+  assert.throws(() => inspectOpenPilotBudget(input(), elf, currentIdl));
 });

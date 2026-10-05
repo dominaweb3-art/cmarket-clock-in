@@ -8,15 +8,13 @@ import { createProductionOwnerHttpsServer } from "./open-owner-http-server.ts";
 import {
   verifyOpenOwnerSchema,
   applyReviewedOpenSchema,
-  enrollOpenOwner,
 } from "./open-owner-schema.ts";
-import { productionOwnerRpc } from "./open-owner-service.ts";
-import type { OpenCompilerPolicy } from "./open-owner-compiler.ts";
-import type { OpenAccount } from "./open-state-semantics.ts";
 export async function ownerServiceEntry(command: string) {
-  const policy = requireOpenProductionPolicy(); // before reading ANY secret/config
+  requireOpenProductionPolicy(); // before reading ANY secret/config
   if (!["check", "migrate", "enroll", "start"].includes(command))
     throw Error("C3_OWNER_START_COMMAND");
+  if (command === "enroll")
+    throw Error("C3_OWNER_MWA_ENROLLMENT_REQUIRED_USE_HTTPS");
   const origin = process.env.C3_OWNER_HTTPS_ORIGIN;
   const address = process.env.DATABASE_URL;
   if (!origin || !address || !process.env.C3_DATABASE_CA_FILE)
@@ -51,38 +49,6 @@ export async function ownerServiceEntry(command: string) {
     }
     await verifyOpenOwnerSchema(pool);
     if (command === "check") return;
-    if (command === "enroll") {
-      const rpc = productionOwnerRpc(),
-        response = (await rpc.read("getMultipleAccounts", [
-          [policy.vault, policy.shareMint],
-          { commitment: "finalized", encoding: "base64" },
-        ])) as { context: { slot: number }; value: OpenAccount[] };
-      if (
-        !Number.isSafeInteger(response.context?.slot) ||
-        response.context.slot < 1 ||
-        response.value?.length !== 2
-      )
-        throw Error("C3_OWNER_ENROLLMENT_EVIDENCE");
-      const compiler: OpenCompilerPolicy = {
-        version: "c3-owner-compiler/v1",
-        program: policy.programId,
-        vault: policy.vault,
-        wallet: policy.wallet,
-        shareMint: policy.shareMint,
-        governance: policy.governance,
-        keeper: policy.keeper,
-        maxSlippageBps: policy.maxSlippageBps,
-        idlHash: policy.idlHash,
-        configurationHash: policy.configurationHash,
-        registryRevision: policy.registryRevision,
-        quotePolicyRevision: policy.quotePolicyRevision,
-      };
-      await enrollOpenOwner(pool, compiler, {
-        [policy.vault]: response.value[0]!,
-        [policy.shareMint]: response.value[1]!,
-      });
-      return;
-    }
     if (
       !process.env.C3_OWNER_TLS_KEY_FILE ||
       !process.env.C3_OWNER_TLS_CERT_FILE

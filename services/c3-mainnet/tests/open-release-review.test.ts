@@ -152,7 +152,12 @@ test("full offline review verifies existing artifacts but never reads secret val
   assert.equal(r.artifactsVerified, 5);
   assert.equal(r.executionAuthorized, false);
   assert.equal(r.productionExecutionEnabled, false);
-  assert.equal(r.newlyGeneratedProgramRequiresSeparateRebuildReview, true);
+  assert.equal(r.newlyGeneratedProgramRequiresSeparateRebuildReview, false);
+  assert.equal(r.finalEnabledReleaseRequiresSeparateRebuildReview, true);
+  assert.equal(r.ownerWalletControlVerified, false);
+  assert.equal(r.ownerWalletEnrolled, false);
+  assert.equal(r.proposedInfrastructureSubtotalUsd, "155.80");
+  assert.equal(r.affordability, "UNVERIFIED_CAPS_AND_ALL_IN_COSTS_MISSING");
   assert.ok(r.requiredServerEnvironmentNames.includes("DATABASE_URL"));
   const source = await readFile(
     new URL("../scripts/open-release-review.ts", import.meta.url),
@@ -164,5 +169,5 @@ test("full offline review verifies existing artifacts but never reads secret val
     r.publicInputsHash,
     inspectOwnerInputs(template).publicInputsHash,
   );
-  assert.equal(r.proposedProgramIdMatchesCurrentIdl, false);
+  assert.equal(r.proposedProgramIdMatchesCurrentIdl, true);
 });

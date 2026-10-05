@@ -1,5 +1,5 @@
 [programs.localnet]
-c3_pilot_vault = "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb"
+c3_pilot_vault = "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV"
 
 [provider]
 cluster = "localnet"

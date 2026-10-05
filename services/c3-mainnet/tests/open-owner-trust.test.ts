@@ -25,6 +25,7 @@ test("production scope rejects legacy enrollment, substituted mint and policy re
     share_mint: p.shareMint,
     configuration_hash: p.configurationHash,
     policy_hash: policyHash,
+    control_proven: true as boolean | undefined,
   };
   for (const defect of [
     "",
@@ -34,6 +35,8 @@ test("production scope rejects legacy enrollment, substituted mint and policy re
     "wallet",
     "vault",
     "config",
+    "unproved",
+    "legacy",
   ]) {
     const r = { ...row };
     if (defect === "mint") r.share_mint = f.policy.governance;
@@ -41,9 +44,15 @@ test("production scope rejects legacy enrollment, substituted mint and policy re
     if (defect === "wallet") r.wallet = f.policy.keeper;
     if (defect === "vault") r.vault = f.policy.governance;
     if (defect === "config") r.configuration_hash = "b".repeat(64);
+    if (defect === "unproved") r.control_proven = false;
+    if (defect === "legacy") r.control_proven = undefined;
     const pool = {
       query: async (sql: string) => {
         assert.ok(sql.includes("production_enrollments"));
+        assert.ok(sql.includes("owner_enrollment_consumptions"));
+        assert.ok(
+          sql.includes("h.wallet=i.wallet AND h.policy_hash=e.policy_hash"),
+        );
         return { rows: defect === "missing" ? [] : [r] };
       },
     } as unknown as Pool;

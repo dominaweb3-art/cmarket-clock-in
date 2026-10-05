@@ -186,7 +186,7 @@ if (process.env.C3_OPEN_EPHEMERAL_SIGNER === "1") {
         if (verified?.scope === "ISOLATED_VERIFIED") {
           const ctx = verified.context;
           const policy: SettlementServerPolicy = {
-            programId: "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+            programId: "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
             idlHash: verified.evidence.idlHash ?? "test-only",
             configurationHash: ctx.configurationHash,
             vault: ctx.vault,

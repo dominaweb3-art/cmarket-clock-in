@@ -18,7 +18,7 @@ const digest = (...parts: readonly Uint8Array[]): Buffer =>
 const discriminator = (name: string): Buffer =>
   digest(Buffer.from(`global:${name}`)).subarray(0, 8);
 export const VAULT_PROGRAM = new PublicKey(
-  "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+  "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
 );
 export const VAULT_AUTHORITY = PublicKey.findProgramAddressSync(
   [Buffer.from("c3-authority-v1")],

@@ -19,6 +19,10 @@ import {
 } from "../src/open-owner-service.ts";
 import { OpenOwnerJournal } from "../src/open-owner-journal.ts";
 import { verifiedGenerationDeadline } from "../src/open-production-signer.ts";
+import {
+  issueOpenEnrollmentChallenge,
+  enrollmentRequestMessage,
+} from "../src/open-owner-enrollment.ts";
 const url = new URL(process.env.DATABASE_URL!);
 if (
   url.hostname !== "127.0.0.1" ||
@@ -40,8 +44,59 @@ test("shared compiler enrollment, manifest, authentication and submission durabi
     clock,
     "Sysvar1111111111111111111111111111111111111",
   );
-  const intentId = await enrollOpenOwner(pool, f.policy, f.accounts);
-  assert.equal(await enrollOpenOwner(pool, f.policy, f.accounts), intentId);
+  const origin = "https://cmarket.example.org";
+  const ownerPrivate = createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("302e020100300506032b657004220420", "hex"),
+      Buffer.from(f.wallet.secretKey.subarray(0, 32)),
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
+  const proof = async () => {
+    const nonce = randomBytes(32).toString("hex"),
+      requestedAtUnix = Math.floor(Date.now() / 1000);
+    const challenge = await issueOpenEnrollmentChallenge(
+      pool,
+      f.policy,
+      origin,
+      {
+        nonce,
+        requestedAtUnix,
+        signature: sign(
+          null,
+          enrollmentRequestMessage(f.policy, origin, nonce, requestedAtUnix),
+          ownerPrivate,
+        ),
+      },
+    );
+    const message = Buffer.from(challenge.message);
+    return {
+      origin,
+      challengeId: challenge.challengeId,
+      message,
+      signature: sign(null, message, ownerPrivate),
+    };
+  };
+  await assert.rejects(
+    () => enrollOpenOwner(pool, f.policy, f.accounts),
+    /MWA_ENROLLMENT_PROOF_REQUIRED/,
+  );
+  const firstProof = await proof();
+  const intentId = await enrollOpenOwner(
+    pool,
+    f.policy,
+    f.accounts,
+    firstProof,
+  );
+  await assert.rejects(
+    () => enrollOpenOwner(pool, f.policy, f.accounts, firstProof),
+    /PROOF_CONSUMED/,
+  );
+  assert.equal(
+    await enrollOpenOwner(pool, f.policy, f.accounts, await proof()),
+    intentId,
+  );
   const rpc = {
     read: async (method: string, params: unknown[]) => {
       if (method === "getMultipleAccounts")

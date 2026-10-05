@@ -57,7 +57,7 @@ export async function createProductionOwnerHttpsServer(
         if (!body || typeof body !== "object" || Array.isArray(body))
           throw Error("C3_OWNER_HTTP_SHAPE");
         const mutation =
-          /\/(?:challenge|session|prepare|bind|recovery-bind|submit|close-expired|reconcile)$/.test(
+          /\/(?:enrollment-challenge|enroll|challenge|session|prepare|bind|recovery-bind|submit|close-expired|reconcile)$/.test(
             req.url,
           );
         if (mutation !== (req.method === "POST"))

@@ -18,7 +18,7 @@ type LookupEvidence = Readonly<{
 const digest = (...parts: readonly Uint8Array[]): Buffer =>
   createHash("sha256").update(Buffer.concat(parts)).digest();
 export const VAULT_PROGRAM = new PublicKey(
-  "AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb",
+  "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
 );
 export const VAULT_AUTHORITY = PublicKey.findProgramAddressSync(
   [Buffer.from("c3-authority-v1")],

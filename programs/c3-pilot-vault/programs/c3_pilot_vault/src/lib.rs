@@ -33,7 +33,7 @@ use state::*;
 use token_validation::*;
 use transitions::*;
 
-declare_id!("AFVCPVUExRgftDsE88NUewCnFyG3gRpEmkUiAdzs5qhb");
+declare_id!("HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV");
 
 #[program]
 pub mod c3_pilot_vault {

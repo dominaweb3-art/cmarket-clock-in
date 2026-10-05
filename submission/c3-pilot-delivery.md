@@ -10,7 +10,7 @@ historical Devnet payment as basket ownership.
 - Source: `feature/c3-open-pilot-vault`; use the commit containing the current
   [package manifest](c3-mainnet-pilot-candidate.json).
 - Signed APK, ELF, IDL, backend tarball and public rent report:
-  `artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/`.
+  `artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled/`.
   Binaries are intentionally ignored; release hashes are in the manifest.
 - Mainnet acquisition, shares, redemption and receipt: NOT ACCEPTED. The current
   APK is disabled, QA-signed, has no approved HTTPS backend configuration and is
@@ -137,7 +137,14 @@ It verifies the five existing artifact hashes, validates only public decisions,
 lists required server-variable names without reading values, rejects mixed roles
 and malformed data, and **always exits 2** because collecting inputs never grants
 execution. The new candidate program identity differs from the current disabled
-ELF/IDL; rebuilding and approving the exact future artifact is still mandatory.
+ELF/IDL in the preserved previous snapshot only. The current Rust declaration,
+Anchor localnet config, diagnostic PDA, rebuilt ELF/IDL and packaged backend
+now agree on `HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV`.
+The candidate is still disabled and unapproved; a future enabled artifact needs
+its own review, hashes and rent evidence. No local deployment key was generated
+or promoted: old ignored local-test keypair files are not deployment material
+for the new candidate ID. Future local-validator runs must load the reviewed
+binary at its exact ID, not silently reuse the historical keypair's address.
 It does not build transactions, sign, submit, provision or turn on Mainnet.
 
 Remaining human decisions: actual three governance members/Squads vault and
@@ -146,14 +153,27 @@ accounts, domain control/TLS and hardened signer enrollment still need access
 and provisioning approval. Do not send funds to a program ID/share-mint address
 or treat the previous partial capital estimate as approved funding.
 
-1. Sole wallet: public address from Phantom “Receive”. Controls the one position
-   and physically signs owner operations.
+1. Sole wallet PROPOSAL: `FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ`,
+   supplied by the owner. Canonical Base58, 32 bytes, on-curve format verified.
+   Control is **UNVERIFIED**; connection/signature results in chat are placeholders.
+   The proposal has NOT been enrolled, assigned to governance/update/payer or
+   approved. The previously generated local owner key remains a provenance
+   candidate, not this Phantom identity. See `c3-owner-wallet.proposed.json`.
+   Enrollment requires a fresh server-bound challenge signed through MWA by
+   this exact wallet and verified server-side; a device-QA message is not login
+   or production enrollment.
 2. Authorities: actual program/update authority, share mint, Squads vault and
    member public keys, chosen threshold/delay, pause public key, keeper fee payer
    and isolated quote signer public key. Proposal: Squads 2-of-3/24 h for update
    and configuration; separate pause-only operator; four distinct owner,
    governance, keeper and quote identities. No member/key/approval is invented.
    Missing account creation requires separate permission, not chat secrets.
+   If the owner confirms only one real member, a private owner-controlled 1/1
+   alternative may be reviewed separately, retaining a 24 h delay and pause-only
+   identity. This is NOT independent multisig governance and creates a single
+   compromise point for upgrades/configuration. No policy has been changed;
+   the current checker still requires three members and 2/3. Explicit risk/model
+   approval plus source-policy/tests/security review must precede any change.
 3. Infrastructure: select independent Quicknode/Alchemy operators or reviewed
    alternatives, hosting region, HTTPS origin and PG single-node vs HA decision.
    Backend/signer separate VMs; server-only TLS/CA/DB/RPC/Jupiter/signer credentials.
@@ -167,6 +187,77 @@ or treat the previous partial capital estimate as approved funding.
 After these inputs, prepare ONE explicit approval request binding final enabled
 hashes, derived accounts/configuration, exact actions, full budget and stop rules.
 This worksheet does not authorize publishing, deployment or payment.
+
+### Current package and exact physical step
+
+The identity-only rebuild used `solana-cargo-build-sbf 2.1.0`, platform tools
+v1.43 / rustc 1.79.0, default features disabled, offline; Anchor 0.31.1 generated
+the IDL. ELF = 659,456 bytes. IDL economics match the previous IDL after
+normalizing only the program address/its bytes. Prior six-leg cloned evidence
+is explicitly tied to old `AFV...` in the manifest, not re-labelled as a cycle
+under the new ID or as Mainnet asset acquisition. The build emitted existing
+Anchor deprecation/syscall warnings; these do not authorize deployment.
+An exploratory 3.1.10 build had a different size and is retained separately as
+ignored measurement evidence, NOT the pinned delivery binary.
+The proposed infrastructure has PostgreSQL HA selected, so its applicable
+published subtotal is **155.80 USD/month**, not the 110.80 single-node alternative.
+Neither is an all-in price or demonstrably within the owner's unknown ceilings.
+
+Official read-only RPC rent, remeasured 2026-10-05T19:58:15.119Z:
+persistent 3.414654080 SOL, temporary recoverable buffer 3.350874680 SOL,
+measured peak 6.765528760 SOL. The 6.947558160 SOL proposal adds existing
+allowances; it is not total consumed spend or a funding request. All-in costs,
+government/authorities and owner caps remain unconfirmed. Literal `[number]`
+placeholders are not spending limits. No affordability claim can be made.
+
+The APK was not rebuilt; its SHA-256 remains
+`7c5151de935184a72982e45ddeaa8933789a4cb2226300d513af85f843d04dc6`.
+ADB detected the Seeker as `device`; its installed `base.apk` has that exact
+SHA-256. Local APK signature/certificate verification passed. The already-running
+candidate was foregrounded without installation or data deletion. Cold launch,
+visual QA and monetary tests were not repeated in this execution.
+For the next supervised Seeker QA: select the proposed wallet in Phantom,
+connect/return in Home, open the existing **DEVICE QA ONLY** message review,
+check `Network: solana:devnet` and its no-funds/no-login disclaimer, then the
+OWNER may explicitly approve that message if correct. It signs only a message,
+not a transaction/transfer/token approval/Mainnet authorization. Return the
+verified-message result/digest or exact error. Do not send seed phrases, keys
+or account screenshots. A cancelled request is not retried automatically.
+Production owner enrollment remains blocked separately even if this QA passes.
+
+### Current focused implementation and review
+
+The public owner proposal now participates in the offline review fingerprint;
+substituted wallets or false enrolled/control claims fail. Server enrollment
+requires a fresh, exact Ed25519-signed policy-bound challenge before any RPC
+account read, followed by transactional revalidation and one-use consumption.
+Legacy rows without consumed proof cannot enter production signer, preparation,
+reconciliation or position paths. Restricted pilot resource limits are durable:
+three RPC attempts per challenge, three challenges per minute and sixty lifetime
+challenges per configured wallet. Only a valid owner-signed, domain/policy-bound
+issuance request can consume that budget; unsigned, substituted, stale or
+replayed requests cannot issue a challenge. Reaching the lifetime cap requires review;
+history must not be deleted or counters reset to bypass it. No automatic retry.
+
+Focused disposable PostgreSQL tests cover malformed/domain/policy substitution,
+expiry, replay, concurrent enrollment, restart, immutable rows, fresh-proof
+idempotency, legacy rejection, invalid proof with zero RPC, concurrent issuance
+and resource-budget exhaustion. Fixture keys prove server verification only,
+not physical MWA control of the proposed wallet. The separate agent's code
+review is not a professional external audit or Mainnet approval. The previous
+six-leg cloned cycle was not repeated, relabelled or promoted to Mainnet.
+
+Separate agent review closed the identified enrollment-control, proposal-binding
+and anonymous-quota defects after inspecting the actual remediation. It checked
+invalid issuance with zero pool connections and distinct messages for substituted
+contexts. Focused PostgreSQL enrollment/quota and compiler integrations each
+passed 7/7; TypeScript, lint, package-boundary tests and changed-file formatting
+passed. Rust/Anchor builds passed for the identity-only binary rebuild, with the
+existing warnings described above. No operational identities were regenerated,
+no APK was rebuilt and no services were provisioned. Owner proof and physical
+MWA acceptance remain UNVERIFIED; no Mainnet buy, position or redemption is
+claimed. Public-role/governance selection and actual SOL/USD ceilings remain
+required owner decisions, not assumed approvals.
 
 ## Submission form / official portal
 
@@ -219,7 +310,21 @@ publication, not permission to deliver unsafe/incomplete fund handling now.
   this. Never place a quote/keeper key in the mobile app or an environment flag
   that supplies approval. Do not load the local key files into production before
   approving isolation, backup and access controls.
-- Verify backup restoration, enrollment, five artifact hashes, approved immutable
-  source policy and spending ceilings before the explicit migrate/enroll/check/
-  start commands. An unchanged disabled candidate must still fail before secrets
+- Verify backup restoration, five artifact hashes, approved immutable source
+  policy and spending ceilings before the explicit migrate/check/start commands.
+  After approval, owner enrollment is a separate HTTPS message-only MWA flow:
+  first explicitly sign the canonical non-monetary request produced by
+  `enrollmentRequestMessage` for the reviewed policy/HTTPS origin, a random
+  32-byte nonce encoded as 64 lowercase hex characters and current Unix seconds.
+  Send `nonce`, `requestedAtUnix`, and canonical-base64 `signature` to
+  `POST /v1/c3/owner/enrollment-challenge`. Anonymous requests cannot consume
+  the wallet's budget. Then review the
+  exact server challenge, then send `challengeId`, `message`, `signature` to
+  `POST /v1/c3/owner/enroll`. Message/signature use canonical base64. The server
+  binds wallet, HTTPS audience, program, vault, policy and revisions; verifies
+  Ed25519 and database expiry; and atomically consumes the proof with enrollment.
+  A DEVICE QA message, a connection-only result, or a legacy enrollment row is
+  insufficient. CLI `enroll` is intentionally blocked. Fourteen pinned additive
+  migrations preserve earlier history; no production migrations ran here.
+  An unchanged disabled candidate must still fail before secrets
   are read. No automated transfer, blockchain retry or deployment is included.

@@ -101,7 +101,7 @@ function signature(v: unknown) {
  */
 const READ = `SELECT jsonb_build_object(
  'intent',jsonb_build_object('id',i.intent_id,'wallet',i.wallet,'vault',i.vault,'shareMint',i.share_mint,'configurationHash',i.configuration_hash,'state',i.state,'dbRevision',i.db_revision::text,'chainRevision',i.chain_revision::text,'depositPlan',i.deposit_plan,'redemptionPlan',i.redemption_plan,'amount',i.deposit_amount::text),
- 'enrollment',(SELECT e.policy_hash FROM c3_open.production_enrollments e WHERE e.intent_id=i.intent_id),
+ 'enrollment',(SELECT e.policy_hash FROM c3_open.production_enrollments e WHERE e.intent_id=i.intent_id AND (NOT $2::boolean OR EXISTS(SELECT 1 FROM c3_open.owner_enrollment_consumptions c JOIN c3_open.owner_enrollment_challenges h USING(challenge_id) WHERE c.intent_id=i.intent_id AND h.wallet=i.wallet AND h.policy_hash=e.policy_hash))),
  'legs',COALESCE((SELECT jsonb_agg(jsonb_build_object('ordinal',l.ordinal,'state',l.state,'signature',l.submitted_signature,'evidenceHash',l.evidence_hash,'effects',l.observed_effects,'context',(SELECT jsonb_build_object('scope',v.scope,'genesis',v.context->>'genesisHash','authorizationHash',encode(q.payload_hash,'hex')) FROM c3_open.quote_authorizations q JOIN c3_open.all_quote_contexts v USING(intent_id,ordinal,intent_revision) WHERE q.intent_id=l.intent_id AND q.ordinal=l.ordinal AND encode(q.payload_hash,'hex')=l.authorization_hash AND q.state='consumed')) ORDER BY l.ordinal) FROM c3_open.legs l WHERE l.intent_id=i.intent_id),'[]'::jsonb),
  'receipts',COALESCE((SELECT jsonb_agg(jsonb_build_object('action',r.action,'stage',e.lifecycle_stage,'requestHash',encode(r.message_hash,'hex'),'submissionHash',encode(s.message_hash,'hex'),'signature',s.signature,'slot',m.slot::text,'messageEvidence',encode(m.evidence_hash,'hex'),'effectEvidence',encode(e.evidence_hash,'hex'),'authorization',a.manifest,'authorizationHash',encode(a.manifest_hash,'hex'),'policyHash',a.policy_hash,'economic',x.manifest,'economicHash',encode(x.manifest_hash,'hex')) ORDER BY r.action) FROM c3_open.owner_requests r JOIN c3_open.owner_effect_receipts e USING(request_id) JOIN c3_open.owner_submissions s USING(request_id) JOIN c3_open.owner_message_receipts m USING(request_id) JOIN c3_open.owner_authorization_manifests a USING(request_id) JOIN c3_open.owner_economic_manifests x USING(request_id) WHERE r.intent_id=i.intent_id),'[]'::jsonb),
  'pending',EXISTS(SELECT 1 FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) LEFT JOIN c3_open.plan_generations g USING(request_id) WHERE r.intent_id=i.intent_id AND e.request_id IS NULL AND o.request_id IS NULL AND g.request_id IS NULL)
@@ -109,8 +109,8 @@ const READ = `SELECT jsonb_build_object(
  OR EXISTS(SELECT 1 FROM c3_open.signing_requests s JOIN c3_open.quote_authorizations q USING(quote_id) WHERE q.intent_id=i.intent_id AND s.state<>'result')
  OR EXISTS(SELECT 1 FROM c3_open.keeper_packets k LEFT JOIN c3_open.keeper_effect_receipts e USING(request_id) LEFT JOIN c3_open.keeper_request_outcomes o USING(request_id) WHERE k.intent_id=i.intent_id AND e.request_id IS NULL AND o.request_id IS NULL)
 ) AS snapshot FROM c3_open.intents i WHERE i.intent_id=$1`;
-async function durable(pool: Pool, id: string) {
-  const rows = (await pool.query(READ, [id])).rows;
+async function durable(pool: Pool, id: string, production: boolean) {
+  const rows = (await pool.query(READ, [id, production])).rows;
   need(rows.length === 1, "INTENT");
   const s = exact(rows[0].snapshot, [
     "intent",
@@ -600,7 +600,7 @@ async function readAccounting(
   minimumSlot: number,
 ) {
   need(policy.program === VAULT_PROGRAM.toBase58(), "PROGRAM_PIN");
-  const before = await durable(pool, id);
+  const before = await durable(pool, id, production);
   need(before.pending === false, "UNCERTAIN_SETTLEMENT");
   need((await rpc.read("getGenesisHash", [])) === genesis, "GENESIS");
   const a = openAddresses(policy),
@@ -660,7 +660,7 @@ async function readAccounting(
     genesis,
     production,
   );
-  const after = await durable(pool, id);
+  const after = await durable(pool, id, production);
   need(digest(before) === digest(after), "SNAPSHOT_CHANGED");
   return { inventory, slot, now };
 }

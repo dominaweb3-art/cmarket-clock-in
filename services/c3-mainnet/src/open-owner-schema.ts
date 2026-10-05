@@ -11,6 +11,10 @@ import {
   type OpenAccount,
 } from "./open-state-semantics.ts";
 import type { OpenCompilerPolicy } from "./open-owner-compiler.ts";
+import {
+  verifyOpenEnrollmentProof,
+  type OpenEnrollmentProof,
+} from "./open-owner-enrollment.ts";
 const hashes = [
   [
     "0001_open_settlement",
@@ -63,6 +67,10 @@ const hashes = [
   [
     "0013_keeper_outcomes",
     "7e98163222081fa9780127f9d903c55a0b9e91c941ef42bcc088036157a86bfe",
+  ],
+  [
+    "0014_owner_enrollment_proof",
+    "4dbce05632b3b73277a36220aa889d873d235771863804b4a0b5c53dce0d220e",
   ],
 ] as const;
 const hash = (v: Uint8Array | string) =>
@@ -138,7 +146,9 @@ export async function enrollOpenOwner(
   pool: Pool,
   policy: OpenCompilerPolicy,
   accounts: Readonly<Record<string, OpenAccount | null>>,
+  proof?: OpenEnrollmentProof,
 ) {
+  if (!proof) throw Error("C3_OWNER_MWA_ENROLLMENT_PROOF_REQUIRED");
   const cfg = verifyOpenConfig(policy, accounts[policy.vault]!),
     mint = verifyOpenShareMint(policy, accounts[policy.shareMint]!);
   if (
@@ -152,7 +162,18 @@ export async function enrollOpenOwner(
     client = await pool.connect();
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+    await client.query("SET LOCAL lock_timeout='3s'");
     await client.query("SELECT pg_advisory_xact_lock(734432992)");
+    const verifiedProof = await verifyOpenEnrollmentProof(
+      client,
+      policy,
+      proof,
+    );
+    const consume = async (intentId: string) =>
+      client.query(
+        "INSERT INTO c3_open.owner_enrollment_consumptions(challenge_id,intent_id,signature_hash) VALUES($1,$2,$3)",
+        [verifiedProof.challengeId, intentId, verifiedProof.signatureHash],
+      );
     const prior = (
       await client.query(
         "SELECT i.*,e.policy_hash FROM c3_open.intents i LEFT JOIN c3_open.production_enrollments e USING(intent_id) WHERE i.wallet=$1 ORDER BY i.created_at DESC LIMIT 1 FOR UPDATE OF i",
@@ -166,6 +187,7 @@ export async function enrollOpenOwner(
         prior.configuration_hash !== policy.configurationHash
       )
         throw Error("C3_OPEN_ENROLLMENT_CONFLICT");
+      await consume(prior.intent_id);
       await client.query("COMMIT");
       return prior.intent_id as string;
     }
@@ -194,6 +216,7 @@ export async function enrollOpenOwner(
       "INSERT INTO c3_open.events(event_id,intent_id,idempotency_hash,db_revision,state) VALUES($1,$2,$3,1,'draft')",
       [randomUUID(), id, hash("enroll:" + id)],
     );
+    await consume(id);
     await client.query("COMMIT");
     return id;
   } catch (e) {

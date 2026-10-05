@@ -11,6 +11,7 @@ import { canonicalize } from "../src/manifest.ts";
 import { C3_MAINNET_EXECUTION_CAPABILITY } from "../src/constants.ts";
 import { APPROVED_OPEN_PRODUCTION_POLICY } from "../src/open-production-policy.ts";
 import { inspectOpenPilotBudget } from "./open-pilot-budget.ts";
+import { VAULT_PROGRAM } from "../src/open-v0-envelope.ts";
 
 const fail = (): never => {
   throw Error("C3_RELEASE_PUBLIC_INPUT_INVALID");
@@ -236,6 +237,66 @@ export async function verifyReviewArtifact(
     throw Error("C3_RELEASE_ARTIFACT_HASH_CHANGED");
   return b;
 }
+
+/** Build-coherence check, not proof of deployment or owner/authority approval.
+ * The IDL and ELF are already SHA-pinned by verifyReviewArtifact. */
+export function verifyProgramIdentity(
+  proposed: string,
+  idl: Uint8Array,
+  binary: Uint8Array,
+  rust: string,
+  anchor: string,
+) {
+  const compiled = JSON.parse(Buffer.from(idl).toString()).address;
+  if (
+    proposed !== VAULT_PROGRAM.toBase58() ||
+    compiled !== proposed ||
+    rust.match(/declare_id!\("([1-9A-HJ-NP-Za-km-z]+)"\)/)?.[1] !== proposed ||
+    anchor.match(/c3_pilot_vault = "([1-9A-HJ-NP-Za-km-z]+)"/)?.[1] !==
+      proposed ||
+    !Buffer.from(binary).includes(Buffer.from(publicKeyBytes(proposed)))
+  )
+    throw Error("C3_RELEASE_PROGRAM_IDENTITY_MISMATCH");
+  return Object.freeze({ programId: proposed, deploymentApproved: false });
+}
+export function verifyOwnerWalletProposal(
+  inputWallet: string,
+  proposal: unknown,
+) {
+  const p = object(proposal, [
+    "schema",
+    "wallet",
+    "intendedRoles",
+    "source",
+    "format",
+    "mwaControlProof",
+    "physicalConnection",
+    "physicalMessageSignature",
+    "enrolled",
+    "approvedWallet",
+    "otherRolesAssigned",
+    "supersededLocalOwnerCandidate",
+    "enrollmentRequires",
+    "mainnetExecutionEnabled",
+  ]);
+  if (
+    p.schema !== "c3-owner-wallet-proposal/v1" ||
+    p.wallet !== inputWallet ||
+    p.mwaControlProof !== "UNVERIFIED" ||
+    p.physicalMessageSignature !== "UNVERIFIED" ||
+    p.enrolled !== false ||
+    p.approvedWallet !== null ||
+    p.otherRolesAssigned !== false ||
+    p.mainnetExecutionEnabled !== false
+  )
+    throw Error("C3_RELEASE_OWNER_PROPOSAL_MISMATCH");
+  publicKeyBytes(inputWallet);
+  return Object.freeze({
+    wallet: inputWallet,
+    controlVerified: false,
+    proposalHash: createHash("sha256").update(canonicalize(p)).digest("hex"),
+  });
+}
 export async function releaseReview() {
   if (C3_MAINNET_EXECUTION_CAPABILITY || APPROVED_OPEN_PRODUCTION_POLICY)
     throw Error("C3_RELEASE_REVIEW_DISABLED_ARTIFACT_REQUIRED");
@@ -257,6 +318,15 @@ export async function releaseReview() {
     ),
   );
   const inputs = inspectOwnerInputs(publicInputs);
+  const ownerProposal = verifyOwnerWalletProposal(
+    publicInputs.wallet,
+    JSON.parse(
+      await readFile(
+        resolve(root, "submission/c3-owner-wallet.proposed.json"),
+        "utf8",
+      ),
+    ),
+  );
   const m = JSON.parse(
     await readFile(
       resolve(root, "submission/c3-mainnet-pilot-candidate.json"),
@@ -285,12 +355,32 @@ export async function releaseReview() {
     files.get("c3_pilot_vault-disabled.so")!,
     files.get("c3_pilot_vault-disabled.idl.json")!,
   );
+  const programIdentity = verifyProgramIdentity(
+    publicInputs.programId,
+    files.get("c3_pilot_vault-disabled.idl.json")!,
+    files.get("c3_pilot_vault-disabled.so")!,
+    await readFile(
+      resolve(
+        root,
+        "programs/c3-pilot-vault/programs/c3_pilot_vault/src/lib.rs",
+      ),
+      "utf8",
+    ),
+    await readFile(
+      resolve(root, "programs/c3-pilot-vault/Anchor.toml"),
+      "utf8",
+    ),
+  );
   return {
     sourceHead,
     branch,
     artifactsVerified: 5,
     ...inputs,
     knownCapital: budget.capital,
+    proposedInfrastructureSubtotalUsd: publicInputs.infrastructure.databaseHa
+      ? budget.infrastructure.haPairPublishedSubtotalUsd
+      : budget.infrastructure.monthlyPublishedSubtotalUsd,
+    affordability: "UNVERIFIED_CAPS_AND_ALL_IN_COSTS_MISSING",
     deploymentBlockers: [
       "PUBLIC_AUTHORITY_ONCHAIN_VERIFICATION",
       "INDEPENDENT_RPC_ENROLLMENT",
@@ -310,7 +400,12 @@ export async function releaseReview() {
     proposedProgramIdMatchesCurrentIdl:
       JSON.parse(files.get("c3_pilot_vault-disabled.idl.json")!.toString())
         .address === publicInputs.programId,
-    newlyGeneratedProgramRequiresSeparateRebuildReview: true,
+    programIdentity,
+    newlyGeneratedProgramRequiresSeparateRebuildReview: false,
+    finalEnabledReleaseRequiresSeparateRebuildReview: true,
+    ownerWalletControlVerified: false,
+    ownerWalletEnrolled: false,
+    ownerProposal,
     noSecretsReadOrPrinted: true,
     productionExecutionEnabled: false,
   };
