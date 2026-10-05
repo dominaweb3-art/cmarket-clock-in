@@ -15,7 +15,7 @@ import {
 } from "./candidate-wallet";
 import { createOwnerSession } from "./owner-session";
 import { OwnerController } from "./owner-controller";
-import { ownerBackend } from "./owner-backend";
+import { ownerBackend, authenticatedOwnerPreparation } from "./owner-backend";
 import type { OwnerPolicy } from "./owner-policy";
 import { parseOwnerPosition, type OwnerPosition } from "./owner-position";
 /** Source-controlled reviewed public release configuration, never env/constructor
@@ -89,11 +89,10 @@ export function candidateOwnerController(wallet: string): OwnerController {
             throw Error("C3_OWNER_RECOVERY_BINDING");
         }
       },
-      prepare: async (intentId, action) => {
-        // Only explicit prepare opens sign-in; restart/recover never asks a wallet.
-        await session.authenticate();
-        return backend.prepare(intentId, action);
-      },
+      // Only explicit prepare opens sign-in; restart/recover never asks a wallet.
+      prepare: authenticatedOwnerPreparation(backend, () =>
+        session.authenticate(),
+      ),
     },
     now: () => Math.floor(Date.now() / 1000),
     save: async (r) =>

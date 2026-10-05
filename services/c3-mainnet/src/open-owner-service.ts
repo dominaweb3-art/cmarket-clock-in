@@ -23,6 +23,7 @@ import { publicKeyBytes } from "./solana.ts";
 import { readIndependentOpenEvidence } from "./open-rpc-quorum.ts";
 import { requireOpenProductionPolicy } from "./open-production-policy.ts";
 import type { OwnerEffectManifest } from "./open-owner-effects.ts";
+import type { MinimumResolution } from "./open-minimum-resolution.ts";
 export interface OwnerReadonlyRpc {
   read(method: string, params: unknown[]): Promise<unknown>;
 }
@@ -372,6 +373,10 @@ export async function prepareOwnerFromDurableState(
   intentId: string,
   action: OpenOwnerAction,
   rpc: OwnerReadonlyRpc,
+  minimumReview?: (
+    pre: Buffer,
+    context: OpenOwnerContext,
+  ) => Promise<MinimumResolution | undefined>,
 ) {
   const s = await state(pool, policy, intentId, rpc);
   const previous = (
@@ -406,7 +411,31 @@ export async function prepareOwnerFromDurableState(
     lastValidHeight: block.value.lastValidBlockHeight,
     accounts: s.accounts,
   };
-  const compiled = compileTrustedOwnerPacket(policy, context, idl, action);
+  const plan = ["selling", "redemption_requested"].includes(context.state)
+    ? openAddresses(policy).redemptionPlan
+    : openAddresses(policy).depositPlan;
+  const resolution =
+    action === "renew_plan" && minimumReview
+      ? await minimumReview(
+          accountBytes(
+            context.accounts[plan],
+            policy.program,
+            901,
+            "SettlementPlan",
+          ),
+          context,
+        )
+      : undefined;
+  const trustedContext = {
+    ...context,
+    ...(resolution ? { minimumResolution: resolution } : {}),
+  };
+  const compiled = compileTrustedOwnerPacket(
+    policy,
+    trustedContext,
+    idl,
+    action,
+  );
   const rent =
     action === "deposit" || action === "request_redemption"
       ? await rpc.read("getMinimumBalanceForRentExemption", [
@@ -430,7 +459,7 @@ export async function prepareOwnerFromDurableState(
   return persistCompiledOwnerPacket(
     pool,
     policy,
-    context,
+    trustedContext,
     compiled,
     action,
     manifest,

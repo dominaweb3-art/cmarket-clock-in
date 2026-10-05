@@ -14,6 +14,7 @@ import { collectFinalizedOpenEconomicEvidence } from "./open-economic-quorum.ts"
 import { readIndependentOpenEvidence } from "./open-rpc-quorum.ts";
 import { requireOpenProductionPolicy } from "./open-production-policy.ts";
 import { assertProductionEnrollment } from "./open-owner-trust.ts";
+import { renewalPostimage } from "./open-minimum-resolution.ts";
 const demand = (v: unknown, code: string): void => {
   if (!v) throw Error("C3_OWNER_RENEWAL_" + code);
 };
@@ -142,10 +143,12 @@ export function verifyOwnerRenewalEvidence(
       expiry > before.readBigInt64LE(706),
     "PREIMAGE",
   );
-  const expected = Buffer.from(before);
-  expected.writeBigInt64LE(expiry, 706);
-  expected.writeBigUInt64LE(revision + 1n, 716);
-  expected.fill(0, 860, 900);
+  const expected = renewalPostimage(
+    before,
+    Buffer.from(decoded.instructions[0]!.dataBase64, "base64"),
+    revision,
+    expiry,
+  );
   demand(expected.equals(after), "INVENTORY_OR_HISTORY_CHANGED");
   return {
     slot: t.slot,

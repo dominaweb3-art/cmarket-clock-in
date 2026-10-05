@@ -1,6 +1,10 @@
 /** Source-reviewed first-pilot policy. Never accept account templates from the
  * same server that supplies a transaction. The release has no approved policy. */
 import type { OwnerInstructionReview } from "./owner-transaction-review.ts";
+import {
+  validateResolutionReview,
+  type MinimumResolutionReview,
+} from "./minimum-resolution.ts";
 export type MoneyAction =
   "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
 export type OwnerPolicy = Readonly<{
@@ -10,6 +14,10 @@ export type OwnerPolicy = Readonly<{
 }>;
 // Exact current reviewed IDL ordering/privileges. '*' is writable, '+' signer.
 const methods = {
+  resolve_settlement_minimums: {
+    d: [113, 229, 173, 91, 8, 189, 58, 220],
+    a: ["owner+", "config", "plan*"],
+  },
   renew_settlement_plan: {
     d: [184, 149, 8, 59, 254, 68, 86, 19],
     a: ["owner+", "config", "plan*"],
@@ -97,7 +105,11 @@ export function ownerTemplates(
   action: MoneyAction,
   expiry: number,
   now: number,
-  renewal?: Readonly<{ chainRevision: string; planDirection: "buy" | "sell" }>,
+  renewal?: Readonly<{
+    chainRevision: string;
+    planDirection: "buy" | "sell";
+    minimumResolution?: MinimumResolutionReview;
+  }>,
 ): OwnerInstructionReview[] {
   if (
     !Number.isSafeInteger(expiry) ||
@@ -117,7 +129,9 @@ export function ownerTemplates(
             action === "issue_shares"
               ? "issue_initial_shares"
               : action === "renew_plan"
-                ? "renew_settlement_plan"
+                ? renewal?.minimumResolution
+                  ? "resolve_settlement_minimums"
+                  : "renew_settlement_plan"
                 : "claim_usdc",
           ];
   const prefix =
@@ -134,7 +148,7 @@ export function ownerTemplates(
     view.setBigUint64(8, 1_000_000n, true);
     view.setBigUint64(16, 1n, true);
     view.setBigInt64(24, BigInt(expiry), true);
-    const renewArgs = new Uint8Array(16);
+    const renewArgs = new Uint8Array(renewal?.minimumResolution ? 112 : 16);
     if (action === "renew_plan") {
       if (
         !renewal ||
@@ -149,6 +163,36 @@ export function ownerTemplates(
         true,
       );
       new DataView(renewArgs.buffer).setBigInt64(8, BigInt(expiry), true);
+      if (renewal.minimumResolution) {
+        const r = renewal.minimumResolution;
+        validateResolutionReview(r, now);
+        const output =
+          renewal.planDirection === "sell"
+            ? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            : [
+                "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+                "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+                "So11111111111111111111111111111111111111112",
+              ][r.leg];
+        if (r.outputMint !== output)
+          throw Error("C3_OWNER_ECONOMIC_ASSET_CHANGED");
+        const unhex = (s: string) =>
+          new Uint8Array(s.match(/../g)!.map((v) => parseInt(v, 16)));
+        renewArgs.set(unhex(r.planHash), 16);
+        r.minima.forEach((v, n) =>
+          new DataView(renewArgs.buffer).setBigUint64(
+            48 + 8 * n,
+            BigInt(v),
+            true,
+          ),
+        );
+        renewArgs.set(unhex(r.evidenceHash), 72);
+        new DataView(renewArgs.buffer).setBigInt64(
+          104,
+          BigInt(r.quoteExpiresAt),
+          true,
+        );
+      }
     }
     return {
       program: new Uint8Array(policy.program),
@@ -156,7 +200,8 @@ export function ownerTemplates(
         ...def.d,
         ...(name.startsWith("create_")
           ? args
-          : name === "renew_settlement_plan"
+          : name === "renew_settlement_plan" ||
+              name === "resolve_settlement_minimums"
             ? renewArgs
             : []),
       ]),

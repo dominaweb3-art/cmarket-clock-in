@@ -7,10 +7,28 @@ import { fileURLToPath } from "node:url";
 import { C3_MAINNET_EXECUTION_CAPABILITY } from "../src/constants.ts";
 import { APPROVED_OPEN_PRODUCTION_POLICY } from "../src/open-production-policy.ts";
 
-const BINARY_HASH =
-  "d4aca9adebad10179b51f9d03b40fe399b8619347586370123105c985171beb1";
-const IDL_HASH =
-  "7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb";
+// Preserve the historical snapshot; only exact independently measured artifacts
+// may enter this estimator. A newly enabled build requires a new reviewed pin.
+const SNAPSHOTS = [
+  {
+    digest: "0bbfe183c7c79dcc75431580a5f72af6de6ee20c2a48e38d210f02c4b07d0b70",
+    timestamp: "2026-10-04T00:00:32.535Z",
+    binaryHash:
+      "d4aca9adebad10179b51f9d03b40fe399b8619347586370123105c985171beb1",
+    idlHash: "7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb",
+    bytes: 692864,
+    historical: true,
+  },
+  {
+    digest: "bf91224801bd232d7c1659fc65f61222bc606d5768462bae83b87fb9b9cd36ca",
+    timestamp: "2026-10-05T02:16:45.824Z",
+    binaryHash:
+      "bd531c7ced7f00c2929446906f627982c55f151f2fdb8e5f34a8d9d236a892d2",
+    idlHash: "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138",
+    bytes: 659456,
+    historical: false,
+  },
+] as const;
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const fail = (): never => {
   throw Error("C3_BUDGET_PUBLIC_EVIDENCE_INVALID");
@@ -35,21 +53,21 @@ export function inspectOpenPilotBudget(
 ) {
   const r = object(input);
   // Fix the exact reviewed rent snapshot too, not just self-consistent sums.
-  if (
-    sha(Buffer.from(JSON.stringify(r))) !==
-      "0bbfe183c7c79dcc75431580a5f72af6de6ee20c2a48e38d210f02c4b07d0b70" ||
-    r.timestamp !== "2026-10-04T00:00:32.535Z"
-  )
-    return fail();
+  const snapshot = SNAPSHOTS.find(
+    (s) =>
+      s.digest === sha(Buffer.from(JSON.stringify(r))) &&
+      s.timestamp === r.timestamp,
+  );
+  if (!snapshot) return fail();
   if (
     r.version !== "c3-pilot-costs/v1" ||
     r.artifactScope !== "DISABLED_NOT_DEPLOYABLE" ||
     r.genesisVerified !== true ||
-    r.binaryHash !== BINARY_HASH ||
-    r.idlHash !== IDL_HASH ||
-    sha(binary) !== BINARY_HASH ||
-    sha(idl) !== IDL_HASH ||
-    binary.length !== 692864 ||
+    r.binaryHash !== snapshot.binaryHash ||
+    r.idlHash !== snapshot.idlHash ||
+    sha(binary) !== snapshot.binaryHash ||
+    sha(idl) !== snapshot.idlHash ||
+    binary.length !== snapshot.bytes ||
     r.binaryBytes !== binary.length ||
     !Array.isArray(r.accounts)
   )
@@ -134,13 +152,14 @@ export function inspectOpenPilotBudget(
     },
   ];
   return Object.freeze({
-    version: "c3-open-budget-review/v1",
+    version: "c3-open-budget-review/v2",
+    historicalArtifact: snapshot.historical,
     status: "INCOMPLETE_NOT_APPROVED",
-    pricingObservedClientDate: "2026-10-04",
+    pricingObservedClientDate: "2026-10-05",
     evidenceTimestampUtc: r.timestamp,
     artifactScope: r.artifactScope,
-    binaryHash: BINARY_HASH,
-    idlHash: IDL_HASH,
+    binaryHash: snapshot.binaryHash,
+    idlHash: snapshot.idlHash,
     mainnetEnabled: false,
     monetaryGate: "BLOCKED",
     budgetApproved: false,
@@ -177,6 +196,8 @@ export function inspectOpenPilotBudget(
       })),
       alchemyPaygRateUsdPerMillionCu: "0.525",
       databaseHa: false,
+      haPairPublishedSubtotalUsd: "155.80",
+      haPairIsNotAllIn: true,
       singleNodeDowntimeRiskMustBeAccepted: true,
       missingCosts: [
         "Optional informational pricing quota/availability; independent monetary NAV is NOT used by the restricted single-position candidate (pooled/later deposits still require separate reviewed pricing)",
@@ -189,8 +210,7 @@ export function inspectOpenPilotBudget(
     },
     totalBudget: {
       status: "UNPRICED_COMPONENTS_BLOCK_FINAL_APPROVAL",
-      upfrontKnownPeak:
-        "7.286983440 SOL plus separate 1 USDC; includes proposed 0.05 SOL reserve and 0.1 SOL consumed Squads app fee",
+      upfrontKnownPeak: `${sol(proposedPeak)} SOL plus separate 1 USDC; includes proposed 0.05 SOL reserve and 0.1 SOL consumed Squads app fee`,
       upfrontAdditionalTerms: [
         "final enabled-binary rent delta and reviewed upgrade headroom",
         "governance account rent (persistent until permitted closure)",
@@ -224,7 +244,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     )
       throw Error("C3_BUDGET_DISABLED_BOUNDARY_CHANGED");
     const directory = new URL(
-      "../../../artifacts/c3-pilot-candidate/2026-10-03-production-factory-disabled/",
+      "../../../artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/",
       import.meta.url,
     );
     const [r, binary, idl] = await Promise.all([

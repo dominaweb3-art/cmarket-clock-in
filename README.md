@@ -10,6 +10,30 @@ C Market is an experimental Android application designed for Seeker users who wa
 
 The project is being prepared for **CLOCK IN — A Solana Mobile Hackathon**.
 
+## Active restricted C3 candidate — 5 October 2026
+
+The current open-vault work is in `apps/c3-pilot`, `services/c3-mainnet` and
+`programs/c3-pilot-vault`; the earlier `apps/mobile` CLOCK IN/Devnet application
+is preserved separately. The candidate permits exactly one authorized wallet,
+one lifetime deposit of 1 USDC and one full redemption per vault. Its target is
+40% cbBTC, 30% Portal ETH and 30% WSOL held by the vault PDA, with on-chain shares.
+Other baskets remain upcoming. Prices are informational; payout is actual
+finalized USDC proceeds, not a promised return of 1 USDC.
+
+The updated six-leg local validator/PostgreSQL cycle passed, including explicit
+owner-approved minimum recovery after a partial buy, share issuance, all three
+sales, burn and claim. This uses cloned Jupiter programs/pools, synthetic funding
+and test keys: **it is not a Mainnet purchase or physical MWA acceptance**.
+Mainnet execution and mobile monetary actions remain disabled. Production
+identities, two independent RPC operators, HTTPS/signer provisioning, full
+budget and exact release authorization are not yet approved.
+
+Current artifact hashes, limitations and public inputs:
+[restricted candidate](docs/C3_RESTRICTED_ONE_USDC_CANDIDATE.md),
+[machine-readable package](submission/c3-mainnet-pilot-candidate.json),
+[delivery script and form](submission/c3-pilot-delivery.md).
+Do not submit or describe the disabled candidate as a completed Mainnet product.
+
 ## Product concept
 
 C Market turns a complex multi-asset purchase flow into a focused mobile experience:
@@ -32,7 +56,7 @@ The repository now contains an initial Expo/React Native mobile foundation with:
 - A working C3 prototype with future basket sizes clearly marked as upcoming.
 - Mobile Wallet Adapter wallet connection.
 - Devnet USDC balance lookup.
-- C3 Devnet USDC purchase flow.
+- Devnet USDC test-payment flow (not acquisition of C3 shares).
 - Transaction confirmation and Explorer links.
 - A read-only activity screen with deduplicated confirmed payment receipts.
 - A reusable C3 Core overview showing the planned Bitcoin 40% / Ethereum 30% / Solana 30% methodology.
@@ -43,7 +67,7 @@ The earlier local prototype also demonstrated the following flow on Solana Devne
 - Android/Seeker development-client execution.
 - Phantom connection through Mobile Wallet Adapter.
 - Devnet USDC balance verification.
-- A $5 minimum test purchase.
+- A 5-USDC minimum test payment.
 - Wallet approval and transaction confirmation.
 - USDC transfer to the configured Devnet treasury.
 - Confirmation feedback inside the app.
@@ -57,7 +81,10 @@ Reference transaction from the prototype demonstration:
 
 The current demonstration proves payment routing and confirmation. It does **not** yet prove a production-ready, atomic distribution of the treasury balance into every underlying basket constituent.
 
-Until that module is implemented and tested, the interface must describe the transaction accurately as a recorded Devnet purchase/payment. It must not claim that a final basket allocation has already occurred.
+The historical Devnet interface must describe that transaction as a recorded
+test payment. It must not call it a purchase of C3 shares or claim a final basket
+allocation. The separate open-vault local evidence above does not convert a
+treasury payment into basket ownership.
 
 Devnet assets have no real-world value. The prototype is not ready for mainnet funds or public financial use.
 

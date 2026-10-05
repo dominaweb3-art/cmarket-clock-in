@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
@@ -96,6 +97,24 @@ test("production artifact and package physically exclude synthetic builder state
   const files = JSON.parse(packed.stdout)[0].files.map((entry) => entry.path);
   assert.ok(files.includes("dist/postgres.js"));
   assert.ok(files.includes("dist/public.js"));
+  assert.ok(
+    files.includes("resources/c3_pilot_vault.json"),
+    "reviewed IDL must ship with the HTTPS service",
+  );
+  assert.equal(
+    createHash("sha256")
+      .update(
+        readFileSync(
+          new URL("../resources/c3_pilot_vault.json", import.meta.url),
+        ),
+      )
+      .digest("hex"),
+    "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138",
+  );
+  assert.deepEqual(
+    files.filter((file) => file.startsWith("resources/")),
+    ["resources/c3_pilot_vault.json"],
+  );
   assert.ok(files.every((file) => !/^(?:tests|scripts|src)\//.test(file)));
   assert.ok(files.every((file) => !/synthetic|fixture|builder\.js/.test(file)));
 });

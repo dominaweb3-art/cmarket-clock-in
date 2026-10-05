@@ -30,6 +30,12 @@ import { loadOpenSignerRecord } from "./open-quote.ts";
 import { OpenSigningJournal } from "../src/open-signing-journal.ts";
 import { OwnerFlow } from "../../../apps/c3-pilot/src/owner-flow.ts";
 import { inspectOwnerTransaction } from "../../../apps/c3-pilot/src/owner-transaction-review.ts";
+import { recordLocalOwnerSignature } from "./owner-operations.ts";
+import { applyReviewedOpenSchema } from "../src/open-owner-schema.ts";
+import {
+  closeExpiredLocalOwnerRequest,
+  ownerStateImage,
+} from "./owner-expiry.ts";
 const url = new URL(process.env.DATABASE_URL!);
 if (
   url.hostname !== "127.0.0.1" ||
@@ -248,6 +254,157 @@ test("append-only owner generations, CAS and uncertainty preserve previous evide
       db,
     };
   }
+  const testAtomicReceipt = () =>
+    t.test(
+      "owner and renewal receipts commit atomically across a simulated insert crash",
+      async () => {
+        await applyReviewedOpenSchema(pool);
+        const f = await fixture(),
+          r = await f.prepare();
+        f.signed(r);
+        const bytes = f.packet(),
+          tx = VersionedTransaction.deserialize(bytes);
+        await pool.query(
+          "INSERT INTO c3_open.owner_requests(request_id,intent_id,action,expected_db_revision,expected_chain_revision,message_hash,blockhash,last_valid_height,expires_at) VALUES($1,$2,'renew_plan',$3,$4,$5,$6,1000,$7)",
+          [
+            r.requestId,
+            f.scope.intentId,
+            f.scope.expectedDbRevision.toString(),
+            f.scope.expectedChainRevision.toString(),
+            createHash("sha256").update(tx.message.serialize()).digest(),
+            tx.message.recentBlockhash,
+            new Date(Date.now() - 1000),
+          ],
+        );
+        await pool.query(
+          "CREATE FUNCTION c3_open.test_receipt_crash() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'ISOLATED_RECEIPT_CRASH'; END $$",
+        );
+        await pool.query(
+          "CREATE TRIGGER test_receipt_crash BEFORE INSERT ON c3_open.renewal_submissions FOR EACH ROW EXECUTE FUNCTION c3_open.test_receipt_crash()",
+        );
+        try {
+          await assert.rejects(
+            () =>
+              recordLocalOwnerSignature(
+                pool,
+                f.rpc,
+                idl,
+                f.scope,
+                r.requestId,
+                bytes,
+              ),
+            /ISOLATED_RECEIPT_CRASH/,
+          );
+          const counts = (
+            await pool.query(
+              "SELECT (SELECT count(*) FROM c3_open.owner_submissions WHERE request_id=$1) AS owner_count,(SELECT count(*) FROM c3_open.renewal_submissions WHERE request_id=$1) AS renewal_count",
+              [r.requestId],
+            )
+          ).rows[0];
+          assert.equal(counts.owner_count, "0");
+          assert.equal(counts.renewal_count, "0");
+        } finally {
+          await pool.query(
+            "DROP TRIGGER test_receipt_crash ON c3_open.renewal_submissions",
+          );
+          await pool.query("DROP FUNCTION c3_open.test_receipt_crash()");
+        }
+        const sig = await recordLocalOwnerSignature(
+          pool,
+          f.rpc,
+          idl,
+          f.scope,
+          r.requestId,
+          bytes,
+        );
+        assert.equal(
+          await recordLocalOwnerSignature(
+            pool,
+            f.rpc,
+            idl,
+            f.scope,
+            r.requestId,
+            bytes,
+          ),
+          sig,
+        );
+        // A lost response / unexecuted expired packet must close BOTH journals.
+        // These are synthetic RPC fixtures, not evidence from the live cycle.
+        const originalSnapshot = f.rpc.getMultipleAccountsInfoAndContext;
+        f.rpc.getBlockHeight = async () => 1001;
+        f.rpc.isBlockhashValid = async () => ({
+          context: { slot: 101 },
+          value: false,
+        });
+        f.rpc.getSignatureStatuses = async () => ({
+          context: { slot: 101 },
+          value: [null],
+        });
+        f.rpc.getMultipleAccountsInfoAndContext = async () => ({
+          context: { slot: 101 },
+          value: [
+            {
+              data: f.pre,
+              owner: VAULT_PROGRAM,
+              executable: false,
+              lamports: 10000,
+              rentEpoch: 0,
+            },
+            null,
+          ],
+        });
+        const barrier = await ownerStateImage(f.rpc, [r.plan, f.scope.vault]);
+        await pool.query(
+          "INSERT INTO c3_open.owner_expiry_barriers(request_id,accounts,state_hash) VALUES($1,$2,$3)",
+          [r.requestId, [r.plan, f.scope.vault], barrier.hash],
+        );
+        await closeExpiredLocalOwnerRequest(
+          pool,
+          f.rpc,
+          f.scope.intentId,
+          f.scope.wallet,
+          r.requestId,
+          true,
+        );
+        const terminal = (
+          await pool.query(
+            "SELECT r.disposition,r.db_revision,s.signature FROM c3_open.renewal_outcomes r JOIN c3_open.renewal_submissions s USING(request_id) WHERE request_id=$1",
+            [r.requestId],
+          )
+        ).rows[0];
+        assert.equal(terminal.disposition, "expired_unexecuted");
+        assert.equal(terminal.signature, sig);
+        assert.equal(terminal.db_revision, "3");
+        f.rpc.getMultipleAccountsInfoAndContext = originalSnapshot;
+        f.clock.writeBigInt64LE(r.expiresAt + 1n, 32);
+        const scope = { ...f.scope, expectedDbRevision: 3n };
+        const next = await prepareLocalRenewal(pool, f.rpc, idl, scope, {
+          replaceExpired: true,
+        });
+        assert.notEqual(next.requestId, r.requestId);
+        assert.equal(
+          await recordLocalOwnerSignature(
+            pool,
+            f.rpc,
+            idl,
+            scope,
+            r.requestId,
+            bytes,
+          ),
+          sig,
+          "historical receipt remains idempotent after successor",
+        );
+        assert.equal(
+          (
+            await pool.query(
+              "SELECT signature FROM c3_open.renewal_submissions WHERE request_id=$1",
+              [r.requestId],
+            )
+          ).rows[0].signature,
+          sig,
+        );
+      },
+    );
   await t.test(
     "owner, revision and every preserved byte including partial inventory",
     async () => {
@@ -1250,4 +1407,8 @@ test("append-only owner generations, CAS and uncertainty preserve previous evide
       assert.equal(calls, 1);
     },
   );
+  // This subtest installs the production schema. Run after legacy LOCAL_MOCK
+  // generation fixtures, whose deliberately synthetic contexts are not admitted
+  // by that schema. Never weaken its constraints to share fixtures.
+  await testAtomicReceipt();
 });

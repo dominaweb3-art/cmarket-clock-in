@@ -101,6 +101,7 @@ export default function MainnetCandidateApp() {
         <Text style={s.title}>{t.title}</Text>
         <Text style={s.notice}>{t.network}</Text>
         <Text style={s.text}>{t.gate}</Text>
+        <Text style={s.notice}>{t.singlePosition}</Text>
         <View style={s.row}>
           {(["home", "indices", "activity"] as const).map((v) => (
             <Pressable

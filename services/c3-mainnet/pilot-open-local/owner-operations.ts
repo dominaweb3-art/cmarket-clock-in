@@ -13,7 +13,7 @@ import { applyReviewedOpenSchema } from "../src/open-owner-schema.ts";
 import { prepareOwnerFromDurableState } from "../src/open-owner-service.ts";
 import type { OpenCompilerPolicy } from "../src/open-owner-compiler.ts";
 export type OwnerOperation =
-  "deposit" | "issue_shares" | "request_redemption" | "claim";
+  "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
 const hash = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest();
 const check = (v: unknown, code: string): void => {
   if (!v) throw Error("C3_OWNER_" + code);
@@ -48,7 +48,7 @@ async function pending(client: PoolClient, id: string, own?: string) {
     `SELECT 1 FROM c3_open.legs WHERE intent_id=$1 AND state IN ('signed','submitted','uncertain','manual_review','reconciliation_required')
     UNION ALL SELECT 1 FROM c3_open.signing_requests s JOIN c3_open.quote_authorizations q USING(quote_id) WHERE q.intent_id=$1 AND s.state<>'result'
     UNION ALL SELECT 1 FROM c3_open.renewal_submissions s JOIN c3_open.renewal_requests r USING(request_id) LEFT JOIN c3_open.plan_generations g USING(request_id) LEFT JOIN c3_open.renewal_outcomes o USING(request_id) WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL
-    UNION ALL SELECT 1 FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_message_receipts m USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) WHERE r.intent_id=$1 AND m.request_id IS NULL AND o.request_id IS NULL AND ($2::uuid IS NULL OR r.request_id<>$2) LIMIT 1`,
+    UNION ALL SELECT 1 FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) LEFT JOIN c3_open.plan_generations g USING(request_id) WHERE r.intent_id=$1 AND e.request_id IS NULL AND o.request_id IS NULL AND g.request_id IS NULL AND ($2::uuid IS NULL OR r.request_id<>$2) LIMIT 1`,
     [id, own ?? null],
   );
   check(!r.rowCount, "RECONCILE_PENDING_FIRST");
@@ -61,6 +61,7 @@ export async function prepareLocalOwnerOperation(
   idl: Idl,
   scope: Scope,
   action: OwnerOperation,
+  minimumReview?: Parameters<typeof prepareOwnerFromDurableState>[6],
 ) {
   await isolated(rpc, idl);
   await applyReviewedOpenSchema(pool);
@@ -133,6 +134,7 @@ export async function prepareLocalOwnerOperation(
         return data.result;
       },
     },
+    minimumReview,
   );
   return { ...prepared, packet: Buffer.from(prepared.packet, "base64") };
 }
@@ -218,6 +220,43 @@ export async function recordLocalOwnerSignature(
       await client.query(
         "INSERT INTO c3_open.owner_submissions(request_id,signature,message_hash) VALUES($1,$2,$3)",
         [requestId, signature, hash(message)],
+      );
+    }
+    if (request.action === "renew_plan") {
+      const renewal = (
+        await client.query(
+          "SELECT * FROM c3_open.renewal_requests WHERE request_id=$1 AND intent_id=$2",
+          [requestId, scope.intentId],
+        )
+      ).rows[0];
+      const latest = (
+        await client.query(
+          "SELECT request_id FROM c3_open.renewal_requests WHERE intent_id=$1 AND plan=$2 AND expected_chain_revision=$3 ORDER BY created_at DESC,request_id DESC LIMIT 1",
+          [scope.intentId, renewal?.plan, renewal?.expected_chain_revision],
+        )
+      ).rows[0];
+      check(
+        renewal &&
+          (prior || latest?.request_id === requestId) &&
+          renewal.message_hash.equals(hash(message)) &&
+          renewal.expected_chain_revision === request.expected_chain_revision &&
+          renewal.expected_db_revision === request.expected_db_revision,
+        "EXACT_OWNER_RENEWAL_MESSAGE",
+      );
+      await client.query(
+        "INSERT INTO c3_open.renewal_submissions(request_id,signature,message_hash) VALUES($1,$2,$3) ON CONFLICT(request_id) DO NOTHING",
+        [requestId, signature, hash(message)],
+      );
+      const stored = (
+        await client.query(
+          "SELECT * FROM c3_open.renewal_submissions WHERE request_id=$1",
+          [requestId],
+        )
+      ).rows[0];
+      check(
+        stored.signature === signature &&
+          stored.message_hash.equals(hash(message)),
+        "IMMUTABLE_RENEWAL_RESULT",
       );
     }
     await client.query("COMMIT");

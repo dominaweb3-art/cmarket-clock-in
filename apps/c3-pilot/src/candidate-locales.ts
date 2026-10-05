@@ -68,6 +68,12 @@ const en = {
   ownerSignIn: "Authenticate owner for recovery",
   renewRequest: "Prepare a new generation after reconciliation",
   renewPlan: "Review expired plan renewal (no swap)",
+  reviewMinimum:
+    "Request a fresh quote to review an unattainable minimum (no swap)",
+  minimumResolutionNotice:
+    "Economic change: lower only the next pending swap minimum. Review explicitly; previously acquired assets stay in the vault. This does not execute a swap or guarantee recovery of the original USDC.",
+  minimumResolutionUnits: "Previous → proposed minimum (token base units)",
+  minimumResolutionExpiry: "Quote review expires (UTC)",
 } as const;
 type Dictionary = Record<keyof typeof en, string>;
 export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
@@ -142,6 +148,13 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     ownerSignIn: "Autenticar propietario para recuperar",
     renewRequest: "Preparar nueva generación tras conciliación",
     renewPlan: "Revisar renovación del plan vencido (sin swap)",
+    reviewMinimum:
+      "Solicitar cotización fresca para revisar un mínimo inalcanzable (sin swap)",
+    minimumResolutionNotice:
+      "Cambio económico: reducir solo el mínimo del siguiente swap pendiente. Requiere revisión explícita; los activos adquiridos siguen en la bóveda. No ejecuta un swap ni garantiza recuperar el USDC original.",
+    minimumResolutionUnits:
+      "Mínimo anterior → propuesto (unidades base del token)",
+    minimumResolutionExpiry: "Vencimiento de revisión (UTC)",
   },
   "zh-CN": {
     qaTitle: "设备 QA · 仅 Devnet 消息",
@@ -206,6 +219,11 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     ownerSignIn: "验证所有者以恢复操作",
     renewRequest: "核对后准备新一代请求",
     renewPlan: "检查过期计划续期（不进行兑换）",
+    reviewMinimum: "请求新报价以审核无法达到的最低值（不进行兑换）",
+    minimumResolutionNotice:
+      "经济变更：仅降低下一笔待执行兑换的最低输出。须明确审核；已购资产仍在金库中。这不执行兑换，也不保证收回原始 USDC。",
+    minimumResolutionUnits: "原最低值 → 建议最低值（代币基础单位）",
+    minimumResolutionExpiry: "报价审核到期时间（UTC）",
   },
   "pt-BR": {
     qaTitle: "QA do dispositivo · apenas mensagem Devnet",
@@ -275,5 +293,12 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     ownerSignIn: "Autenticar proprietário para recuperação",
     renewRequest: "Preparar nova geração após reconciliação",
     renewPlan: "Revisar renovação do plano expirado (sem swap)",
+    reviewMinimum:
+      "Solicitar cotação nova para revisar mínimo inalcançável (sem swap)",
+    minimumResolutionNotice:
+      "Alteração econômica: reduzir apenas o mínimo do próximo swap pendente. Exige revisão explícita; ativos comprados ficam no vault. Não executa swap nem garante recuperar o USDC original.",
+    minimumResolutionUnits:
+      "Mínimo anterior → proposto (unidades base do token)",
+    minimumResolutionExpiry: "Revisão da cotação expira (UTC)",
   },
 };

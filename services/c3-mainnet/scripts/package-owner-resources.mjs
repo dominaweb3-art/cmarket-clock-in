@@ -9,7 +9,7 @@ const source = new URL(
 const bytes = await readFile(source);
 if (
   createHash("sha256").update(bytes).digest("hex") !==
-  "7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb"
+  "f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138"
 )
   throw Error("C3_OWNER_REVIEWED_IDL_REQUIRED");
 await mkdir(new URL("../resources/", import.meta.url), { recursive: true });

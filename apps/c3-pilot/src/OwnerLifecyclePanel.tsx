@@ -14,6 +14,7 @@ import {
   type CandidateLanguage,
 } from "./candidate-locales";
 import type { OwnerPosition } from "./owner-position";
+import type { MinimumResolutionReview } from "./minimum-resolution";
 /** Existing design, no clone launcher. Buttons wire to the real protocol;
  * immutable release gate keeps every monetary action disabled. */
 export function OwnerLifecyclePanel({
@@ -32,6 +33,8 @@ export function OwnerLifecyclePanel({
   const [receipt, setReceipt] = useState<OwnerReceipt | null>(null),
     [busy, setBusy] = useState(false);
   const [position, setPosition] = useState<OwnerPosition | null>(null);
+  const [economicReview, setEconomicReview] =
+    useState<MinimumResolutionReview | null>(null);
   const readPosition = async () => {
     if (lock.current || !wallet) return;
     lock.current = true;
@@ -48,7 +51,13 @@ export function OwnerLifecyclePanel({
   };
   const run = async (
     action:
-      MoneyAction | "approve" | "recover" | "close" | "renew" | "authenticate",
+      | MoneyAction
+      | "approve"
+      | "recover"
+      | "close"
+      | "renew"
+      | "authenticate"
+      | "reviewMinimum",
   ) => {
     if (lock.current || !wallet) return;
     lock.current = true;
@@ -69,11 +78,14 @@ export function OwnerLifecyclePanel({
       else if (action === "close") await controller.current.closeExpired();
       else if (action === "renew")
         await controller.current.renewExpiredRequest();
+      else if (action === "reviewMinimum")
+        await controller.current.prepare(config.intentId, "renew_plan", true);
       else await controller.current.prepare(config.intentId, action);
     } catch {
       Alert.alert(t.activity, t.operationError);
     } finally {
       setReceipt(controller.current?.snapshot ?? null);
+      setEconomicReview(controller.current?.economicReview ?? null);
       lock.current = false;
       setBusy(false);
     }
@@ -163,9 +175,35 @@ export function OwnerLifecyclePanel({
           <Text style={{ color: "#e2ffee" }}>{labels[a]}</Text>
         </Pressable>
       ))}
+      {!activityOnly ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled }}
+          disabled={disabled}
+          onPress={() => {
+            void run("reviewMinimum");
+          }}
+        >
+          <Text style={{ color: "#ffc96b" }}>{t.reviewMinimum}</Text>
+        </Pressable>
+      ) : null}
       {!activityOnly && receipt?.state === "review" ? (
         <>
           <Text style={{ color: "#e2ffee" }}>{t.reviewNotice}</Text>
+          {economicReview ? (
+            <Text accessibilityRole="alert" style={{ color: "#ffc96b" }}>
+              {t.minimumResolutionNotice}
+              {"\n"}
+              {t.minimumResolutionUnits}: {economicReview.oldMinimum}
+              {" → "}
+              {economicReview.newMinimum}
+              {"\n"}
+              {economicReview.outputMint}
+              {"\n"}
+              {t.minimumResolutionExpiry}:{" "}
+              {new Date(economicReview.quoteExpiresAt * 1000).toISOString()}
+            </Text>
+          ) : null}
           <Pressable
             disabled={disabled}
             accessibilityRole="button"

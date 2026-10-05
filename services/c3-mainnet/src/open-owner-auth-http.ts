@@ -20,6 +20,10 @@ import {
   readProductionRestrictedPosition,
 } from "./open-nav-position.ts";
 import { verifyOpenOwnerSchema } from "./open-owner-schema.ts";
+import { captureProductionMinimumReview } from "./open-leg-factory.ts";
+import { JupiterLegCompiler } from "./open-jupiter-compiler.ts";
+import { productionQuorumConnection } from "./open-quorum-connection.ts";
+import { proposeMinimumResolution } from "./open-minimum-resolution.ts";
 import type {
   OpenCompilerPolicy,
   OpenOwnerAction,
@@ -112,7 +116,10 @@ export async function handleProductionOwnerProtocol(
     );
   if (
     url.pathname === "/v1/c3/owner/prepare" &&
-    fields === "action,intentId" &&
+    (fields === "action,intentId" ||
+      (fields === "action,intentId,reviewMinimum" &&
+        body.reviewMinimum === true &&
+        body.action === "renew_plan")) &&
     typeof body.intentId === "string" &&
     typeof body.action === "string" &&
     [
@@ -145,6 +152,32 @@ export async function handleProductionOwnerProtocol(
       body.intentId,
       body.action as OpenOwnerAction,
       productionOwnerRpc(fetcher),
+      body.action === "renew_plan" && body.reviewMinimum === true
+        ? async (pre, context) => {
+            const next =
+              pre[714] === 0 ? 0 : pre[714] === 1 ? 1 : pre[714] === 3 ? 2 : -1;
+            if (next < 0) throw Error("C3_OWNER_MINIMUM_NO_PENDING_LEG");
+            const ordinal = next + (pre[145] === 2 ? 3 : 0);
+            const trusted = await captureProductionMinimumReview(
+              pool,
+              body.intentId as string,
+              ordinal,
+              BigInt(context.dbRevision),
+            );
+            const compiler = new JupiterLegCompiler(
+              productionQuorumConnection(fetcher),
+            );
+            const material = await compiler.reviewMinimum(trusted);
+            if (material.quotedOutput >= BigInt(trusted.planMinimumOutput!))
+              return undefined;
+            return proposeMinimumResolution(
+              pre,
+              trusted,
+              material,
+              context.chainNow,
+            );
+          }
+        : undefined,
     );
     await journal.bindRequest(token, prepared.requestId);
     return prepared;

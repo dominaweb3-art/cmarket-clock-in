@@ -2,6 +2,23 @@ import type {
   OwnerBackend,
   PreparedOwnerOperation,
 } from "./owner-controller.ts";
+import {
+  validateResolutionReview,
+  type MinimumResolutionReview,
+} from "./minimum-resolution.ts";
+/** The release and isolated tests share this exact explicit preparation wrapper.
+ * Preserve the review flag across authentication; recovery never calls it. */
+export function authenticatedOwnerPreparation(
+  backend: Pick<OwnerBackend, "prepare">,
+  authenticate: () => Promise<unknown>,
+): OwnerBackend["prepare"] {
+  return async (intentId, action, reviewMinimum = false) => {
+    if (reviewMinimum && action !== "renew_plan")
+      throw Error("C3_OWNER_RESPONSE_INVALID");
+    await authenticate();
+    return backend.prepare(intentId, action, reviewMinimum);
+  };
+}
 /** Portable HTTP adapter; the release supplies only a source-reviewed HTTPS
  * origin. Isolated loopback is supplied by tests, never the candidate factory. */
 export function ownerBackend(
@@ -37,8 +54,14 @@ export function ownerBackend(
         throw Error("C3_OWNER_RESPONSE_INVALID");
       return { requestId, state: "closed_unexecuted" };
     },
-    prepare: async (intentId, action) => {
-      const r = await read("/v1/c3/owner/prepare", { intentId, action });
+    prepare: async (intentId, action, reviewMinimum = false) => {
+      if (reviewMinimum && action !== "renew_plan")
+        throw Error("C3_OWNER_RESPONSE_INVALID");
+      const r = await read("/v1/c3/owner/prepare", {
+        intentId,
+        action,
+        ...(reviewMinimum ? { reviewMinimum: true } : {}),
+      });
       if (
         typeof r.packet !== "string" ||
         r.packet.length > 1644 ||
@@ -63,6 +86,14 @@ export function ownerBackend(
           !["buy", "sell"].includes(String(r.planDirection)))
       )
         throw Error("C3_OWNER_RESPONSE_INVALID");
+      if (r.minimumResolution !== undefined) {
+        if (action !== "renew_plan" || !reviewMinimum)
+          throw Error("C3_OWNER_RESPONSE_INVALID");
+        validateResolutionReview(
+          r.minimumResolution as MinimumResolutionReview,
+          Math.floor(Date.now() / 1000),
+        );
+      }
       return { ...r, packet: decode(r.packet) } as PreparedOwnerOperation;
     },
     recordSignature: async (requestId, signed) => {

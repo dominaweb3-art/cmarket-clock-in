@@ -40,6 +40,11 @@ test("entrypoint physically excludes clone launcher and signing callbacks", () =
     new URL("../src/MainnetCandidateApp.tsx", import.meta.url),
     "utf8",
   );
+  assert.match(app, /<Text style=\{s\.notice\}>\{t\.singlePosition\}<\/Text>/);
+  assert.ok(
+    app.indexOf("{t.singlePosition}") < app.indexOf("{tab ==="),
+    "restrictions must be visible before wallet or position state",
+  );
   assert.doesNotMatch(
     app,
     /from\s+["']\.\/(?:LocalCyclePanel|backend|local-cycle)["']/,

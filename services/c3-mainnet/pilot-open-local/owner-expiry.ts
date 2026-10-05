@@ -68,6 +68,15 @@ export async function closeExpiredLocalOwnerRequest(
     (await rpc.getGenesisHash()) === C3_MAINNET.genesisHash
   )
     throw Error("C3_OWNER_ISOLATION_REQUIRED");
+  if (
+    (
+      await pool.query(
+        "SELECT 1 FROM c3_open.owner_request_outcomes WHERE request_id=$1",
+        [requestId],
+      )
+    ).rowCount
+  )
+    return { requestId, state: "closed_unexecuted" as const };
   const height = await rpc.getBlockHeight("finalized"),
     valid = await rpc.isBlockhashValid(r.blockhash, {
       commitment: "finalized",
@@ -103,6 +112,17 @@ export async function closeExpiredLocalOwnerRequest(
       )
     ).rows[0];
     if (
+      (
+        await c.query(
+          "SELECT 1 FROM c3_open.owner_request_outcomes WHERE request_id=$1",
+          [requestId],
+        )
+      ).rowCount
+    ) {
+      await c.query("COMMIT");
+      return { requestId, state: "closed_unexecuted" as const };
+    }
+    if (
       current.wallet !== wallet ||
       current.db_revision !== r.expected_db_revision ||
       current.chain_revision !== r.expected_chain_revision ||
@@ -118,21 +138,46 @@ export async function closeExpiredLocalOwnerRequest(
       ).rowCount
     )
       throw Error("C3_OWNER_EXPIRY_FINALIZED");
+    const evidenceHash = hash(
+      canonicalize({
+        requestId,
+        height,
+        slot: image.slot,
+        stateHash: image.hash.toString("hex"),
+        blockhash: r.blockhash,
+      }),
+    );
+    const live = (
+      await c.query(
+        "SELECT signature FROM c3_open.owner_submissions WHERE request_id=$1",
+        [requestId],
+      )
+    ).rows[0];
+    if ((live?.signature ?? null) !== (r.signature ?? null))
+      throw Error("C3_OWNER_EXPIRY_SIGNATURE_CHANGED");
     await c.query(
       "INSERT INTO c3_open.owner_request_outcomes(request_id,outcome,evidence_hash) VALUES($1,$2,$3) ON CONFLICT(request_id) DO NOTHING",
       [
         requestId,
         cancelled ? "cancelled_unexecuted" : "expired_unexecuted",
-        hash(
-          canonicalize({
-            requestId,
-            height,
-            slot: image.slot,
-            stateHash: image.hash.toString("hex"),
-            blockhash: r.blockhash,
-          }),
-        ),
+        evidenceHash,
       ],
+    );
+    if (r.action === "renew_plan" && r.signature) {
+      await c.query(
+        "INSERT INTO c3_open.renewal_outcomes(request_id,disposition,finalized_slot,db_revision,evidence,evidence_hash) VALUES($1,'expired_unexecuted',$2,$3,$4,$5)",
+        [
+          requestId,
+          image.slot,
+          (BigInt(current.db_revision) + 1n).toString(),
+          { ownerOutcomeHash: evidenceHash.toString("hex") },
+          evidenceHash,
+        ],
+      );
+    }
+    await c.query(
+      "UPDATE c3_open.intents SET db_revision=db_revision+1,updated_at=clock_timestamp() WHERE intent_id=$1",
+      [intentId],
     );
     await c.query("COMMIT");
     return { requestId, state: "closed_unexecuted" as const };

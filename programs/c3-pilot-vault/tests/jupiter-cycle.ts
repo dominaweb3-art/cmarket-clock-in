@@ -89,6 +89,9 @@ import { ownerBackend } from "../../../apps/c3-pilot/src/owner-backend.ts";
 import { OwnerController } from "../../../apps/c3-pilot/src/owner-controller.ts";
 import { createIsolatedRestrictedPositionReader } from "../../../services/c3-mainnet/src/open-nav-position.ts";
 import { approvedOwnerCompilerPolicy } from "../../../services/c3-mainnet/src/open-owner-trust.ts";
+import { isolatedLegFactory } from "../../../services/c3-mainnet/src/open-leg-factory.ts";
+import { proposeMinimumResolution } from "../../../services/c3-mainnet/src/open-minimum-resolution.ts";
+import { verifyOwnerRenewalEvidence } from "../../../services/c3-mainnet/src/open-owner-renewal.ts";
 import type { OpenProductionPolicy } from "../../../services/c3-mainnet/src/open-production-policy.ts";
 import type {
   MoneyAction,
@@ -358,9 +361,10 @@ try {
     }
     throw Error("C3_CYCLE_FINALITY_TIMEOUT");
   };
-  const now = async () => {
+  const now = async (commitment: "confirmed" | "finalized" = "confirmed") => {
     const clock = await local!.getAccountInfo(
       new PublicKey("SysvarC1ock11111111111111111111111111111111"),
+      commitment,
     );
     assert.ok(clock);
     return Number(clock.data.readBigInt64LE(32));
@@ -540,7 +544,8 @@ try {
     )[0];
   const depositIntent = intent("deposit"),
     depositPlan = derive("c3-plan-v1", depositIntent),
-    redemptionIntent = intent("redemption");
+    redemptionIntent = intent("redemption"),
+    redemptionPlan = derive("c3-plan-v1", redemptionIntent);
   await applyReviewedOpenSchema(journal.pool);
   // Explicit disposable-DB migration only; source services never auto-migrate.
   let db = new VerifiedSettlementJournal(journal.pool);
@@ -839,6 +844,8 @@ try {
         config,
         deposit_intent: depositIntent,
         redemption_intent: redemptionIntent,
+        deposit_plan: depositPlan,
+        redemption_plan: redemptionPlan,
         deposit: depositIntent,
         system_program: SystemProgram.programId,
         vault_authority: VAULT_AUTHORITY,
@@ -861,6 +868,36 @@ try {
     idl,
     id,
     (code) => console.error("LOCAL_OWNER_GATE", code),
+    process.argv.includes("--resolve-minimum")
+      ? async (pre, ctx) => {
+          const leg = pre[714] === 0 ? 0 : pre[714] === 1 ? 1 : 2,
+            ordinal = (pre[145] === 1 ? 0 : 3) + leg;
+          const trusted = await isolatedLegFactory(
+            journal!.pool,
+            serverContext.policy,
+            serverContext.rpc,
+            serverContext.genesis,
+          ).capture(id, ordinal, BigInt(ctx.dbRevision), true);
+          const material = await new JupiterLegCompiler(
+            local!,
+            new ClonedFreshRoutes(),
+          ).reviewMinimum(trusted);
+          if (material.quotedOutput >= pre.readBigUInt64LE(672 + 8 * leg))
+            return undefined;
+          const proposal = proposeMinimumResolution(
+            pre,
+            trusted,
+            material,
+            ctx.chainNow,
+          );
+          report.minimumProposal = {
+            ...proposal,
+            fixture:
+              "unreachable owner floor deliberately installed on isolated validator; fresh Jupiter response unchanged",
+          };
+          return proposal;
+        }
+      : undefined,
   );
   await new Promise<void>((resolve) =>
     ownerServer!.listen(0, "127.0.0.1", resolve),
@@ -992,7 +1029,169 @@ try {
     };
   }
   const buys: bigint[] = [];
+  const waitExpiry = async (plan: PublicKey) => {
+    const expiry = Number(
+        (await local!.getAccountInfo(plan, "finalized"))!.data.readBigInt64LE(
+          706,
+        ),
+      ),
+      deadline = Date.now() + 140000;
+    while ((await now("finalized")) < expiry) {
+      assert.ok(Date.now() < deadline, "bounded recovery expiry");
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  };
   for (let ordinal = 0; ordinal < 6; ordinal++) {
+    if (ordinal === 1 && process.argv.includes("--resolve-minimum")) {
+      stage = "partial-economic-floor-fixture";
+      await waitExpiry(depositPlan);
+      const pre: Buffer = (await local.getAccountInfo(
+        depositPlan,
+        "finalized",
+      ))!.data;
+      assert.equal(
+        pre[714],
+        1,
+        "one actual Jupiter buy completed before recovery",
+      );
+      const minima = [0, 1, 2].map((n) => pre.readBigUInt64LE(672 + 8 * n));
+      minima[1] = 1_000_000_000_000n;
+      const fixture = await prepareLocalRenewal(
+        journal.pool,
+        local,
+        idl,
+        scope(),
+        { testMinimumOutputs: minima },
+      );
+      const fixtureTx = VersionedTransaction.deserialize(fixture.transaction);
+      fixtureTx.sign([owner]);
+      await recordLocalRenewalSignature(
+        journal.pool,
+        local,
+        idl,
+        scope(),
+        fixture.requestId,
+        fixtureTx.serialize(),
+      );
+      const fixtureSig = await local.sendTransaction(fixtureTx, {
+        maxRetries: 0,
+        skipPreflight: false,
+      });
+      await finalized(fixtureSig);
+      await reconcileLocalRenewal(
+        journal.pool,
+        local,
+        idl,
+        scope(),
+        fixture.requestId,
+        fixtureSig,
+      );
+      state = (await db.read(id))!;
+      await waitExpiry(depositPlan);
+      stage = "partial-economic-owner-review";
+      await flow.restore(stored);
+      await flow.recover();
+      assert.equal(flow.snapshot!.state, "finalized");
+      await flow.prepare(id, "renew_plan", true);
+      assert.ok(flow.economicReview);
+      await assert.rejects(
+        backend.prepare(id, "renew_plan"),
+        "concurrent owner preparation must fail CAS/pending barrier",
+      );
+      signedPacket = undefined;
+      await flow.approve();
+      assert.ok(signedPacket);
+      const rid = flow.snapshot!.requestId,
+        sig = flow.snapshot!.signature!;
+      // Crash/lost response BEFORE broadcast: receipt survives; reading status
+      // cannot resend or call signer. The test caller broadcasts once explicitly.
+      await flow.restore(stored);
+      await flow.recover();
+      assert.equal(flow.snapshot!.signature, sig);
+      assert.notEqual(flow.snapshot!.state, "finalized");
+      await assert.rejects(backend.prepare(id, "renew_plan"));
+      assert.equal(
+        await local.sendRawTransaction(signedPacket, {
+          maxRetries: 0,
+          skipPreflight: false,
+        }),
+        sig,
+      );
+      await finalized(sig);
+      const req: {
+        message_hash: Buffer;
+        pre_state: Buffer;
+        expected_chain_revision: string;
+        expires_at: string;
+        observed_slot: string;
+      } = (
+        await journal.pool.query(
+          "SELECT * FROM c3_open.renewal_requests WHERE request_id=$1",
+          [rid],
+        )
+      ).rows[0];
+      const wire = await serverContext.rpc.read("getTransaction", [
+        sig,
+        {
+          commitment: "finalized",
+          encoding: "base64",
+          maxSupportedTransactionVersion: 0,
+        },
+      ]);
+      const tx = await serverContext.rpc.read("getTransaction", [
+        sig,
+        {
+          commitment: "finalized",
+          encoding: "json",
+          maxSupportedTransactionVersion: 0,
+        },
+      ]);
+      const snap = await serverContext.rpc.read("getMultipleAccounts", [
+        [depositPlan.toBase58()],
+        { commitment: "finalized", encoding: "base64" },
+      ]);
+      verifyOwnerRenewalEvidence(
+        {
+          wallet: state.wallet,
+          program: idl.address,
+          plan: depositPlan.toBase58(),
+          signature: sig,
+          messageHash: req.message_hash,
+          preState: req.pre_state,
+          revision: req.expected_chain_revision,
+          expiry: req.expires_at,
+          observedSlot: Number(req.observed_slot),
+        },
+        wire,
+        tx,
+        snap,
+      );
+      const proof = await reconcileLocalRenewal(
+        journal.pool,
+        local,
+        idl,
+        scope(),
+        rid,
+        sig,
+      );
+      state = (await db.read(id))!;
+      await flow.restore(stored);
+      await flow.recover();
+      assert.equal(flow.snapshot!.state, "finalized");
+      assert.equal(
+        state.chainRevision,
+        BigInt(req.expected_chain_revision) + 1n,
+      );
+      report.minimumResolution = {
+        signature: sig,
+        generation: proof.generation.toString(),
+        revision: state.chainRevision.toString(),
+        restartAndUncertain: true,
+        concurrentRequestRejected: true,
+        productionMessageVerifier: true,
+        physicalMwa: false,
+      };
+    }
     if (ordinal === 3) {
       stage = "issue-shares";
       await keeperOperation("record_buy");

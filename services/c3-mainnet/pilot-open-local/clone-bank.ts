@@ -29,6 +29,46 @@ const root = fileURLToPath(
   new URL("../../../programs/c3-pilot-vault/", import.meta.url),
 );
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Read-only public account collection. Serialize/throttle only cloning RPC;
+// no monetary retry. A 429 has at most two retries, honoring Retry-After.
+let remoteReadTail: Promise<unknown> = Promise.resolve();
+let remoteReadAt = 0;
+function publicCloneFetch(
+  url: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  const read = async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await wait(Math.max(0, remoteReadAt - performance.now()));
+      remoteReadAt = performance.now() + 1100;
+      const result = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(60000),
+      });
+      if (result.status !== 429 || attempt === 2) return result;
+      const header = result.headers.get("retry-after");
+      const delay =
+        header && /^\d+$/.test(header)
+          ? Number(header) * 1000
+          : header
+            ? Math.max(0, Date.parse(header) - Date.now())
+            : 5000;
+      if (!Number.isFinite(delay) || delay > 30000) return result;
+      await result.arrayBuffer();
+      remoteReadAt = Math.max(
+        remoteReadAt,
+        performance.now() + Math.max(delay, 5000),
+      );
+    }
+    throw Error("C3_BANK_READ_RETRY_EXHAUSTED");
+  };
+  const pending = remoteReadTail.then(read, read);
+  remoteReadTail = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  return pending;
+}
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const s = createServer();
@@ -77,8 +117,7 @@ export class CloneBank {
   readonly remote = new Connection("https://api.mainnet-beta.solana.com", {
     commitment: "finalized",
     disableRetryOnRateLimit: true,
-    fetch: (url, init) =>
-      fetch(url, { ...init, signal: AbortSignal.timeout(60_000) }),
+    fetch: publicCloneFetch,
   });
   private readonly accounts = new Map<string, AccountInfo<Buffer>>();
   private readonly fixtures = new Set<string>();

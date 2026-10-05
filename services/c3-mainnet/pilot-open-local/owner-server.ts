@@ -18,12 +18,14 @@ import {
   type OwnerOperation,
 } from "./owner-operations.ts";
 import { closeExpiredLocalOwnerRequest } from "./owner-expiry.ts";
+import type { prepareOwnerFromDurableState } from "../src/open-owner-service.ts";
 export function createIsolatedOwnerServer(
   pool: Pool,
   rpc: Connection,
   idl: Idl,
   intentId: string,
   onFailure?: (code: string) => void,
+  minimumReview?: Parameters<typeof prepareOwnerFromDurableState>[6],
 ) {
   if (
     !/^http:\/\/127\.0\.0\.1:\d+\/?$/.test(rpc.rpcEndpoint) ||
@@ -96,11 +98,19 @@ export function createIsolatedOwnerServer(
       } else if (
         req.method === "POST" &&
         u.pathname === "/v1/c3/owner/prepare" &&
-        Object.keys(body).sort().join(",") === "action,intentId" &&
+        (Object.keys(body).sort().join(",") === "action,intentId" ||
+          (Object.keys(body).sort().join(",") ===
+            "action,intentId,reviewMinimum" &&
+            body.action === "renew_plan" &&
+            body.reviewMinimum === true)) &&
         body.intentId === intentId &&
-        ["deposit", "issue_shares", "request_redemption", "claim"].includes(
-          String(body.action),
-        )
+        [
+          "deposit",
+          "issue_shares",
+          "request_redemption",
+          "claim",
+          "renew_plan",
+        ].includes(String(body.action))
       ) {
         const p = await prepareLocalOwnerOperation(
           pool,
@@ -108,6 +118,7 @@ export function createIsolatedOwnerServer(
           idl,
           scope,
           body.action as OwnerOperation,
+          body.reviewMinimum === true ? minimumReview : undefined,
         );
         const expiry = (
           await pool.query(
@@ -120,7 +131,10 @@ export function createIsolatedOwnerServer(
             ...p,
             packet: Buffer.from(p.packet).toString("base64"),
             templates: undefined,
-            expiry: Math.floor(expiry.getTime() / 1000),
+            expiry:
+              body.action === "renew_plan"
+                ? p.expiry
+                : Math.floor(expiry.getTime() / 1000),
           }),
         );
       } else if (
@@ -225,7 +239,7 @@ export function createIsolatedOwnerServer(
       ) {
         const r = (
           await pool.query(
-            "SELECT r.request_id,r.message_hash,s.signature,e.evidence_hash,o.evidence_hash AS closure_hash FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_submissions s USING(request_id) LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) WHERE r.request_id=$1 AND r.intent_id=$2",
+            "SELECT r.request_id,r.message_hash,s.signature,COALESCE(e.evidence_hash,g.evidence_hash) AS evidence_hash,o.evidence_hash AS closure_hash FROM c3_open.owner_requests r LEFT JOIN c3_open.owner_submissions s USING(request_id) LEFT JOIN c3_open.owner_effect_receipts e USING(request_id) LEFT JOIN c3_open.plan_generations g USING(request_id) LEFT JOIN c3_open.owner_request_outcomes o USING(request_id) WHERE r.request_id=$1 AND r.intent_id=$2",
             [u.searchParams.get("requestId"), intentId],
           )
         ).rows[0];

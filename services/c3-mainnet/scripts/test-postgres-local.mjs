@@ -105,6 +105,9 @@ try {
             "--experimental-strip-types",
             "tests/jupiter-cycle.ts",
             ...(process.argv.includes("--renew-plan") ? ["--renew-plan"] : []),
+            ...(process.argv.includes("--resolve-minimum")
+              ? ["--resolve-minimum"]
+              : []),
             ...(process.argv.includes("--app-control")
               ? ["--app-control"]
               : []),

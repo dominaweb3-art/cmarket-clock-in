@@ -18,6 +18,10 @@ import {
   type OpenAccount,
 } from "./open-state-semantics.ts";
 import type { OwnerEffectManifest } from "./open-owner-effects.ts";
+import {
+  validateMinimumResolution,
+  type MinimumResolution,
+} from "./open-minimum-resolution.ts";
 export type OpenOwnerAction =
   "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
 export type OpenCompilerPolicy = OpenSemanticScope &
@@ -44,6 +48,7 @@ export type OpenOwnerContext = Readonly<{
   blockhash: string;
   lastValidHeight: number;
   accounts: Readonly<Record<string, OpenAccount | null>>;
+  minimumResolution?: MinimumResolution;
 }>;
 const requireValue = (v: unknown, code: string): void => {
   if (!v) throw Error("C3_OWNER_COMPILER_" + code);
@@ -296,6 +301,14 @@ export function compileTrustedOwnerPacket(
         p.bitmap === 7 && p.activeAuthorization.every((v) => v === 0),
         "LEGS_NOT_SETTLED",
       );
+    if (context.minimumResolution) {
+      requireValue(action === "renew_plan", "ECONOMIC_ACTION");
+      validateMinimumResolution(
+        context.minimumResolution,
+        p.bytes,
+        context.chainNow,
+      );
+    }
     const d = verifyOpenIntent(
       policy,
       context.accounts[selling ? a.redemption : a.deposit]!,
@@ -360,7 +373,9 @@ export function compileTrustedOwnerPacket(
               ? "issue_initial_shares"
               : action === "claim"
                 ? "claim_usdc"
-                : "renew_settlement_plan",
+                : context.minimumResolution
+                  ? "resolve_settlement_minimums"
+                  : "renew_settlement_plan",
           ];
   const instructions = names.map((name): Ix => {
     const def = idl.instructions.find((ix) => ix.name === name);
@@ -379,20 +394,39 @@ export function compileTrustedOwnerPacket(
       ? Buffer.alloc(32)
       : name === "renew_settlement_plan"
         ? Buffer.alloc(16)
-        : Buffer.alloc(0);
+        : name === "resolve_settlement_minimums"
+          ? Buffer.alloc(112)
+          : Buffer.alloc(0);
     if (args.length === 32) {
       args.writeBigUInt64LE(1n);
       args.writeBigUInt64LE(1000000n, 8);
       args.writeBigUInt64LE(1n, 16);
       args.writeBigInt64LE(BigInt(context.expiry), 24);
     }
-    if (args.length === 16) {
+    if (args.length === 16 || args.length === 112) {
       args.writeBigUInt64LE(BigInt(context.chainRevision));
       args.writeBigInt64LE(BigInt(context.expiry), 8);
     }
+    if (args.length === 112) {
+      const r = context.minimumResolution!;
+      Buffer.from(r.planHash, "hex").copy(args, 16);
+      r.minima.forEach((v, n) => args.writeBigUInt64LE(BigInt(v), 48 + 8 * n));
+      Buffer.from(r.evidenceHash, "hex").copy(args, 72);
+      args.writeBigInt64LE(BigInt(r.quoteExpiresAt), 104);
+    }
     requireValue(
-      def!.args.length === args.length / 8 &&
-        def!.args.every((v) => v.type === "u64" || v.type === "i64"),
+      name === "resolve_settlement_minimums"
+        ? canonicalize(def!.args) ===
+            canonicalize([
+              { name: "expected_revision", type: "u64" },
+              { name: "expires_at", type: "i64" },
+              { name: "expected_plan_hash", type: { array: ["u8", 32] } },
+              { name: "minimum_outputs", type: { array: ["u64", 3] } },
+              { name: "economic_evidence_hash", type: { array: ["u8", 32] } },
+              { name: "review_expires_at", type: "i64" },
+            ])
+        : def!.args.length === args.length / 8 &&
+            def!.args.every((v) => v.type === "u64" || v.type === "i64"),
       "IDL_ARGS",
     );
     return {
@@ -440,7 +474,18 @@ export function compileTrustedOwnerPacket(
     accountEvidenceHash: hash(canonicalize(context.accounts)),
     shareMint: policy.shareMint,
     plan: planAddress,
-    budgets: ["400000", "300000", "300000"],
+    budgets:
+      action === "renew_plan"
+        ? verifyOpenPlan(
+            policy,
+            planAddress,
+            context.accounts[planAddress]!,
+            context.chainRevision,
+          ).budgets.map((v) => v.toString())
+        : ["400000", "300000", "300000"],
+    ...(context.minimumResolution
+      ? { minimumResolution: context.minimumResolution }
+      : {}),
     feesEnabled: false,
   };
   return {
@@ -477,7 +522,12 @@ export async function persistCompiledOwnerPacket(
         row.db_revision === context.dbRevision &&
         row.chain_revision === context.chainRevision &&
         row.state === context.state &&
-        row.now.getTime() < context.expiry * 1000,
+        row.now.getTime() <
+          Math.min(
+            context.expiry,
+            context.minimumResolution?.quoteExpiresAt ?? context.expiry,
+          ) *
+            1000,
       "CAS",
     );
     requireValue(
@@ -523,7 +573,12 @@ export async function persistCompiledOwnerPacket(
         Buffer.from(compiled.messageHash, "hex"),
         context.blockhash,
         context.lastValidHeight,
-        new Date(context.expiry * 1000),
+        new Date(
+          Math.min(
+            context.expiry,
+            context.minimumResolution?.quoteExpiresAt ?? context.expiry,
+          ) * 1000,
+        ),
         context.generation,
         prior?.request_id ?? null,
       ],
@@ -625,6 +680,9 @@ export async function persistCompiledOwnerPacket(
       ...(action === "renew_plan"
         ? {
             chainRevision: context.chainRevision,
+            ...(context.minimumResolution
+              ? { minimumResolution: context.minimumResolution }
+              : {}),
             planDirection:
               compiled.manifest.plan === compiled.accounts.plan &&
               compiled.accounts.intent === compiled.accounts.deposit

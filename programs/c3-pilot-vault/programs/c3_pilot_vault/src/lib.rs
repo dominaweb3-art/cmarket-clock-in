@@ -1045,6 +1045,48 @@ pub mod c3_pilot_vault {
         )
     }
 
+    /// Owner-signed economic resolution, never an automatic quote fallback.
+    pub fn resolve_settlement_minimums(
+        ctx: Context<RenewSettlementPlan>,
+        expected_revision: u64,
+        expires_at: i64,
+        expected_plan_hash: [u8; 32],
+        minimum_outputs: [u64; 3],
+        economic_evidence_hash: [u8; 32],
+        review_expires_at: i64,
+    ) -> Result<()> {
+        let c = &ctx.accounts.config;
+        require_keys_eq!(
+            ctx.accounts.owner.key(),
+            c.allowlisted_owner,
+            VaultError::Unauthorized
+        );
+        require_eq!(
+            ctx.accounts.plan.config_version,
+            c.config_version,
+            VaultError::InvalidConfig
+        );
+        require!(economic_evidence_hash != [0; 32], VaultError::InvalidPlan);
+        let data = ctx.accounts.plan.to_account_info();
+        let actual_hash =
+            anchor_lang::solana_program::hash::hash(&data.try_borrow_data()?).to_bytes();
+        require!(actual_hash == expected_plan_hash, VaultError::InvalidPlan);
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            now < review_expires_at
+                && review_expires_at <= expires_at
+                && review_expires_at <= now.checked_add(30).ok_or(VaultError::Math)?,
+            VaultError::Expired
+        );
+        settlement_plan::resolve_minimums(
+            &mut ctx.accounts.plan,
+            expected_revision,
+            Clock::get()?.unix_timestamp,
+            expires_at,
+            minimum_outputs,
+        )
+    }
+
     /// Partial positions never enter this branch. Late old envelopes fail their
     /// plan lifecycle/revision atomically. Refund remains available under pause.
     pub fn refund_unswapped_deposit(ctx: Context<RefundUnswappedDeposit>) -> Result<()> {

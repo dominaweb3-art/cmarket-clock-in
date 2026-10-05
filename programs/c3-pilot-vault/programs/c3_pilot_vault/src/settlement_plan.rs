@@ -208,6 +208,64 @@ mod router_binding_tests {
         finished.executed_bitmap = 2;
         assert!(renew(&mut finished, 3, 100, 120).is_err());
     }
+    #[test]
+    fn economic_resolution_only_changes_next_pending_floor() {
+        let fresh = |bitmap: u8| SettlementPlan {
+            schema_version: 2,
+            revision: 7,
+            expires_at: 100,
+            executed_bitmap: bitmap,
+            lifecycle: if bitmap == 0 {
+                plan_lifecycle::FUNDED
+            } else {
+                plan_lifecycle::BUYING
+            },
+            direction: plan_direction::DEPOSIT,
+            input_budgets: [40, 30, 30],
+            actual_inputs: if bitmap == 0 {
+                [0; 3]
+            } else if bitmap == 1 {
+                [40, 0, 0]
+            } else {
+                [40, 30, 0]
+            },
+            actual_outputs: if bitmap == 0 {
+                [0; 3]
+            } else if bitmap == 1 {
+                [110, 0, 0]
+            } else {
+                [110, 110, 0]
+            },
+            minimum_outputs: [100; 3],
+            active_swap_authorization: [9; 32],
+            active_swap_expires_at: 100,
+            ..Default::default()
+        };
+        for (bitmap, next) in [(0, 0), (1, 1), (3, 2)] {
+            let mut minima = [100; 3];
+            minima[next] = 90;
+            assert!(resolve_minimums(&mut fresh(bitmap), 6, 100, 220, minima).is_err());
+            assert!(resolve_minimums(&mut fresh(bitmap), 7, 99, 220, minima).is_err());
+            assert!(resolve_minimums(&mut fresh(bitmap), 7, 100, 221, minima).is_err());
+            let mut wrong = minima;
+            wrong[(next + 1) % 3] = 80;
+            assert!(resolve_minimums(&mut fresh(bitmap), 7, 100, 220, wrong).is_err());
+            let mut p = fresh(bitmap);
+            resolve_minimums(&mut p, 7, 100, 220, minima).unwrap();
+            assert_eq!(p.minimum_outputs, minima);
+            assert_eq!(p.revision, 8);
+            assert_eq!(p.input_budgets, [40, 30, 30]);
+            assert_eq!(p.executed_bitmap, bitmap);
+            assert_eq!(p.actual_outputs, fresh(bitmap).actual_outputs);
+            assert_eq!(p.active_swap_authorization, [0; 32]);
+            assert!(resolve_minimums(&mut p, 7, 220, 300, minima).is_err());
+        }
+        let mut pending = fresh(1);
+        pending.active_swap_expires_at = 101;
+        assert!(resolve_minimums(&mut pending, 7, 100, 220, [100, 90, 100]).is_err());
+        assert!(resolve_minimums(&mut fresh(0), 7, 100, 220, [100; 3]).is_err());
+        assert!(resolve_minimums(&mut fresh(0), 7, 100, 220, [0, 100, 100]).is_err());
+    }
 }
 
 pub fn check_next_leg(
@@ -341,5 +399,35 @@ pub fn renew(
     plan.expires_at = expires_at;
     plan.active_swap_authorization = [0; 32];
     plan.active_swap_expires_at = 0;
+    Ok(())
+}
+
+/// Explicit owner economic amendment. Historical/executed legs are immutable;
+/// the signed preimage and revision exclude races and old swap envelopes.
+pub fn resolve_minimums(
+    plan: &mut SettlementPlan,
+    expected_revision: u64,
+    now: i64,
+    expires_at: i64,
+    minimum_outputs: [u64; 3],
+) -> Result<()> {
+    require!(
+        plan.active_swap_authorization == [0; 32] || plan.active_swap_expires_at <= now,
+        VaultError::Expired
+    );
+    let mut changed = false;
+    let next = plan.executed_bitmap.count_ones() as usize;
+    for (leg, minimum) in minimum_outputs.iter().enumerate() {
+        require!(*minimum > 0, VaultError::MinimumOutput);
+        if leg != next {
+            require_eq!(*minimum, plan.minimum_outputs[leg], VaultError::InvalidPlan);
+        } else {
+            changed |= *minimum != plan.minimum_outputs[leg];
+        }
+    }
+    require!(changed, VaultError::InvalidPlan);
+    // Validate the old inventory against the OLD minima before mutating them.
+    renew(plan, expected_revision, now, expires_at)?;
+    plan.minimum_outputs = minimum_outputs;
     Ok(())
 }

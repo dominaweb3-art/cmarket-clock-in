@@ -1,4 +1,4 @@
-# Restricted C3 one-USDC candidate — 4 October 2026
+# Restricted C3 one-USDC candidate — 5 October 2026
 
 Classification: SHARED. Product authorized implementation/testing in isolation,
 NOT Mainnet deployment, funding, policy admission or governance approval.
@@ -72,7 +72,32 @@ server-read committed plan floor), bounded by the fresh quoted output. This is
 strictly stronger protection, never permission to lower a plan's minimum. All
 compilers and durable signers use the same formula. If the committed floor exceeds
 fresh quoted output, execution fails closed; renewal cannot secretly lower it.
-Such a market-condition recovery must be reviewed before a live pilot is enabled.
+Explicit recovery is now implemented, but has not been approved for Mainnet.
+`resolve_settlement_minimums` is an owner-signed 120-byte instruction, bound to
+the full current plan hash, expected revision, reviewed quote/material hashes,
+next unexecuted leg and a maximum 30-second review deadline. The backend derives
+the proposal from a fresh validated Jupiter response; the client cannot supply
+the economic fields. The proposed floor cannot be below MAX(integer slippage
+floor, Jupiter threshold). No other leg's floor or budget may change. Applying
+it retires the old seal, increments the on-chain revision and appends a durable
+generation only after finalized message/postimage reconciliation. Inventory,
+executed outputs, signatures and history remain intact.
+
+Before any swap: the owner can wait for a route meeting the existing floor,
+explicitly review a fresh amendment, or use the existing authorized intact-funds
+refund path once non-execution is proved. After partial swaps: preserve the
+acquired assets and remaining reserves; wait or explicitly amend only the next
+unexecuted leg. The partial basket cannot be presented as fully issued shares,
+and refunding the entire original 1 USDC is not promised. During an uncertain
+operation: reconcile that signature first; no incompatible amendment, blind
+resend or replacement signature. Owner/renewal receipts and terminal outcomes
+are atomic, preserve signatures and advance database CAS revision. Historical
+exact receipt replay is idempotent, not permission to execute again.
+
+Normal renewal does not contact Jupiter. A separate explicit mobile button asks
+for economic review, shows old/new units, exact output mint and expiry, then
+requires explicit MWA approval. The release authentication wrapper preserves
+this flag; malformed scope is rejected before authentication.
 
 The same isolated six-leg runner uses PostgreSQL enrollment, append-only plan
 generations, isolated quote signer, real Jupiter CPI against cloned programs/pools,
@@ -117,37 +142,63 @@ in public policy, mobile variables, build output or this form.
 
 ## Reproducible package and complete budget framework
 
-Disabled ELF (unchanged, 692,864 bytes):
-`d4aca9adebad10179b51f9d03b40fe399b8619347586370123105c985171beb1`.
-IDL (unchanged):
-`7fdf9c352cd1f28f95f8d72b1280af857c0ee8cc0f9f1991fe78088cce7e5eeb`.
-Both remain under `artifacts/c3-pilot-candidate/2026-10-03-production-factory-disabled/`.
-No Rust instruction/layout changed in this task. An enabled final binary requires
-a separately reviewed build, new hash and fresh rent/fee evidence.
+Current disabled ELF (659,456 bytes):
+`bd531c7ced7f00c2929446906f627982c55f151f2fdb8e5f34a8d9d236a892d2`.
+Current IDL:
+`f127863f6c6966713a0fa2b0284f93d264159ce95a3ef4b74d9aa00e8a3f4138`.
+Both are under `artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/`.
+The new instruction does not change the 901-byte plan account layout. The prior
+692,864-byte ELF/IDL remain preserved in the 2026-10-03 artifact directory and
+Git provenance. An enabled final binary requires a separately reviewed build,
+new hash and fresh rent/fee evidence; this disabled ELF is not a working deployment.
+
+Backend tarball `cmarket-c3-mainnet-services-0.1.0.tgz` in the same directory:
+`6493cd34cfdb97d842fa1e99ee643e0aedd253cda661ffd14753b5290c62ec18`.
+The package contains compiled productive services, the exact IDL and pinned
+additive migrations, not `pilot-open-local` executable code or fixture keys.
+Only historical migration SQL retains the `pilot-open-local/migrations` path.
+The former incomplete tarball is preserved as `*-incomplete-resources.tgz`,
+NOT a deployable candidate. An explicit npm `files` entry and regression check
+ensure the IDL is included despite its generated-file Git ignore rule.
 
 Updated disabled APK:
-`artifacts/c3-pilot-candidate/2026-10-04-restricted-single-position-qa/c-market-c3-mainnet-candidate-0.1.0-disabled.apk`.
+`artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/c-market-c3-mainnet-candidate-0.1.0-disabled-delivery.apk`.
 The identical generated copy remains under
-`apps/c3-pilot/dist/restricted-single-position-candidate/`.
-SHA-256: `d189252e790a4056a04fbda2b076494f43aa07af9a4902baa429617c452f8795`.
+`apps/c3-pilot/dist/minimum-resolution-delivery-candidate/`.
+SHA-256: `7c5151de935184a72982e45ddeaa8933789a4cb2226300d513af85f843d04dc6`.
 Package: `com.dominaweb3.cmarket.c3candidate`; QA certificate SHA-256:
 `58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
 This certificate is NOT production signing/governance approval. Previous APKs,
 stable app and signing material are preserved. Mobile changes add four-language
-informational/fixed-position copy and display a claim only from reconciled effects.
+explicit four-language minimum review, preserve the review flag through owner
+authentication and display a claim only from reconciled effects.
 This build has no approved backend configuration and cannot perform monetary QA.
+Previous `d189252e…`, `aafe9fd0…` and `0cc7d648…` APKs remain preserved as earlier checkpoints;
+they do not prove the latest release wrapper correction. Actual Gradle release
+source map has 676 sources, including the new authenticated wrapper and MWA,
+excluding clone/local runner, bigint-buffer, node-forge and braces. The APK's
+embedded Hermes bundle equals the generated bundle (SHA-256
+`d80cb075da0af6d73ba53571fe536a09e765783e6ec8de9ec10f8cae2791910b`).
+The one-wallet/one-lifetime-position notice is now visible unconditionally before
+wallet controls, not only after a position read. No layout or logo was redesigned.
 
 Pinned public rent evidence, not a live deployment budget:
 
-- Persistent capital: **3.584366720 SOL**, including the existing program/accounts.
-- Recoverable temporary deployment buffer: **3.520587320 SOL**.
-- Measured peak: **7.104954040 SOL** (persistent + temporary).
+- Persistent capital: **3.414654080 SOL**, including the current program/accounts.
+- Recoverable temporary deployment buffer: **3.350874680 SOL**.
+- Measured peak: **6.765528760 SOL** (persistent + temporary).
 - Optional missing owner ATA: **0.001488440 SOL**.
 - Six-leg renewal-account allowance: **0.030540960 SOL**.
 - Operating reserve proposal: **0.05 SOL**, NOT an approved/consumed fee cap.
 - Squads app creation proposal: **0.1 SOL**, consumed fee, NOT refundable rent.
-- Known proposed peak including these allowances: **7.286983440 SOL + 1 USDC**.
+- Known proposed peak including these allowances: **6.947558160 SOL + 1 USDC**.
   This is NOT the complete amount to approve.
+
+Fresh official read-only rent observation: `2026-10-05T02:16:45.824Z`;
+report file SHA-256 `17b2bdcd9c73bd313fb30959073348fa8352629cf2bc6cda69339ff74844ad1e`.
+The estimator accepts only exact pinned binary/IDL/rent tuples and preserves the
+historical 3.584366720 / 3.520587320 / 7.286983440 SOL snapshot as historical,
+not the current spending budget. Its exit code 2 means incomplete/unapproved.
 
 Unknown/unapproved upfront amounts: final enabled-binary rent delta/upgrade
 headroom; governance account rent; exact deployment/base/priority fees; actual
@@ -177,7 +228,7 @@ chain/setup costs, the separate 1-USDC deposit and months multiplied by the chos
 published USD subtotal plus every recurring term. Do not add currencies without
 a dated conversion or count the same capital twice.
 
-Official price sources, inspected 4 October 2026:
+Official price sources, rechecked 5 October 2026 UTC:
 [VMs](https://www.digitalocean.com/pricing/droplets),
 [backups](https://docs.digitalocean.com/products/backups/details/pricing/),
 [PostgreSQL](https://docs.digitalocean.com/products/databases/postgresql/details/pricing/),
@@ -204,6 +255,42 @@ selection/Phantom return/cancel/restart. No Mainnet transaction or signature req
 Connection is NOT evidence of a physical monetary signature. That remains untested.
 
 ## Verification record
+
+CURRENT isolated run: `programs/c3-pilot-vault/results/jupiter-cycle-RhWWf1/report.json`
+returned `PASS_LOCAL_CLONED_JUPITER_CYCLE`, PostgreSQL intent
+`94e2054c-f392-4c65-9e85-12f94625eff1`. Six actual local Jupiter CPI legs finalized
+and reconciled; sells consumed exactly the same buys' 461 cbBTC, 10,965 Portal
+ETH and 2,470,799 WSOL units. Minted/burned 1,000,000 share units and claimed
+997,766 USDC units (0.997766 USDC); four synthetic donor units remained excluded.
+Packets were 753–846 bytes. After leg 0, the test owner deliberately installed an
+unreachable leg-1 floor as a labelled local fixture. Fresh Jupiter output 10,963,
+threshold 10,854, slippage 100 bps produced explicit reviewed minimum 10,854;
+owner authorization reconciled to generation 2 / revision 3. Restart before
+broadcast retained the signed receipt; no auto-send occurred. Concurrent owner
+preparation failed. The production renewal message/effect verifier passed on the
+actual validator transaction. This is NOT a physical MWA signature or Mainnet buy.
+
+CURRENT physical check on the delivery APK `7c5151de…`: Seeker was detected as
+`device`; installed and new certificates matched. Data-preserving `install -r`
+and cold launch without an 8081 listener passed. UI hierarchy and screenshot
+`device/delivery-home.*` prove the disabled gate and unconditional one-wallet,
+one-lifetime 1-USDC/full-redemption warning. Wallet remains “Not connected”.
+No wallet button was pressed or real signature requested. Return from Phantom,
+cancel/restart, physical signing and Mainnet acceptance remain UNVERIFIED.
+
+Focused current checks: Rust library 10/10; pure economic/mobile policy 10/10;
+PostgreSQL journal/generations 14/14 and owner protocol 6/6; mobile 34/34;
+budget snapshots 3/3; server package boundaries 5/5, program boundaries 2/2;
+TypeScript/lint/format and Expo Doctor 19/19 passed. Separate read-only agent
+review found no new actionable monetary bypass in the scoped delta and verified
+the atomic journal/CAS corrections; NOT an external audit or governance approval.
+The first attempts stopped safely on local validator/version, bounded finalized
+Clock lag, public clone-read 429 and confirmed-vs-finalized fixture timing. The
+corrected run used Agave 3.1.10, bounded reads and finalized expiry without
+weakening fresh quote deadlines or economic validation.
+
+Historical verification below remains point-in-time provenance, not current
+Mainnet acceptance or the current APK hash.
 
 COMPLETED in isolation: integrated runner
 `programs/c3-pilot-vault/results/jupiter-cycle-32GKSS/report.json` returned

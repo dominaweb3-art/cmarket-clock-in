@@ -81,3 +81,32 @@ test("changed binary/IDL, mixed snapshots, duplicate rows and unsafe arithmetic 
   assert.throws(() => inspectOpenPilotBudget(input(), binary.subarray(1), idl));
   assert.throws(() => inspectOpenPilotBudget(input(), binary, idl.subarray(1)));
 });
+
+test("minimum-resolution artifact has its own pinned costs; historical artifacts cannot mix", async () => {
+  const current = new URL(
+    "../../../artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled/",
+    import.meta.url,
+  );
+  const [rent, elf, currentIdl] = await Promise.all([
+    readFile(new URL("public-rent-estimate.json", current), "utf8"),
+    readFile(new URL("c3_pilot_vault-disabled.so", current)),
+    readFile(new URL("c3_pilot_vault-disabled.idl.json", current)),
+  ]);
+  const result = inspectOpenPilotBudget(JSON.parse(rent), elf, currentIdl);
+  assert.equal(result.historicalArtifact, false);
+  assert.equal(
+    inspectOpenPilotBudget(input(), binary, idl).historicalArtifact,
+    true,
+  );
+  assert.equal(result.capital.persistentSol, "3.414654080");
+  assert.equal(result.capital.recoverableBufferSol, "3.350874680");
+  assert.equal(result.capital.measuredPeakSol, "6.765528760");
+  assert.equal(result.capital.proposedKnownPeakSol, "6.947558160");
+  assert.ok(result.totalBudget.upfrontKnownPeak.startsWith("6.947558160 SOL"));
+  assert.equal(result.infrastructure.haPairPublishedSubtotalUsd, "155.80");
+  assert.equal(result.totalBudget.allInTotalUsd, null);
+  assert.throws(() =>
+    inspectOpenPilotBudget(JSON.parse(rent), binary, currentIdl),
+  );
+  assert.throws(() => inspectOpenPilotBudget(JSON.parse(rent), elf, idl));
+});

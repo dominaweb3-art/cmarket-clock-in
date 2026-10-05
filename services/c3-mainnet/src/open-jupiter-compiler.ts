@@ -134,6 +134,39 @@ export class JupiterLegCompiler implements OpenQuoteBuilder {
   async validateAndBuild(
     trusted: StoredQuoteContext,
   ): Promise<ValidatedQuoteMaterial> {
+    assert(
+      !(trusted as StoredQuoteContext & { economicReviewOnly?: boolean })
+        .economicReviewOnly,
+      "REVIEW_NOT_EXECUTABLE",
+    );
+    return this.buildValidated(trusted, false);
+  }
+  /** Full CPI/account/ALT/size checks; no retained packets, seal or signer. */
+  async reviewMinimum(
+    trusted: StoredQuoteContext,
+  ): Promise<ValidatedQuoteMaterial> {
+    assert(
+      (trusted as StoredQuoteContext & { economicReviewOnly?: boolean })
+        .economicReviewOnly === true,
+      "REVIEW_CONTEXT",
+    );
+    const {
+      economicReviewOnly: _review,
+      planMinimumOutput: _minimum,
+      ...reviewContext
+    } = trusted;
+    void _review;
+    void _minimum;
+    const ctx = {
+      ...reviewContext,
+      planExpiresAt: String(Math.floor(Date.now() / 1000) + 30),
+    };
+    return this.buildValidated(ctx, true);
+  }
+  private async buildValidated(
+    trusted: StoredQuoteContext,
+    reviewOnly: boolean,
+  ): Promise<ValidatedQuoteMaterial> {
     const ctx = trusted as ExecutionContext;
     assert(
       ctx.keeper &&
@@ -555,6 +588,7 @@ export class JupiterLegCompiler implements OpenQuoteBuilder {
           : BigInt(ctx.planMinimumOutput),
       ),
     });
+    if (reviewOnly) return material;
     this.retained.set(id.toString("hex"), {
       ctx,
       build,

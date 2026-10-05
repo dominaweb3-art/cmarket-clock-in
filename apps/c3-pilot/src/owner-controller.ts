@@ -11,6 +11,7 @@ import {
   type MoneyAction,
 } from "./owner-policy.ts";
 import { sha256 } from "@noble/hashes/sha2.js";
+import type { MinimumResolutionReview } from "./minimum-resolution.ts";
 export const ownerMessageHash = (bytes: Uint8Array) =>
   Array.from(sha256(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 export type OwnerReceipt = Readonly<{
@@ -39,12 +40,14 @@ export type PreparedOwnerOperation = Readonly<{
   packet: Uint8Array;
   chainRevision?: string;
   planDirection?: "buy" | "sell";
+  minimumResolution?: MinimumResolutionReview;
 }>;
 export type OwnerBackend = Readonly<{
   reauthenticate?: (requestId?: string) => Promise<void>;
   prepare: (
     intentId: string,
     action: MoneyAction,
+    reviewMinimum?: boolean,
   ) => Promise<PreparedOwnerOperation>;
   recordSignature: (
     requestId: string,
@@ -138,6 +141,11 @@ export class OwnerController {
   get snapshot() {
     return this.receipt;
   }
+  get economicReview() {
+    return this.receipt?.state === "review"
+      ? (this.prepared?.minimumResolution ?? null)
+      : null;
+  }
   /** User-selected sign-in; never called by restart, status or timeout recovery. */
   async reauthenticate() {
     this.deps.gate();
@@ -160,8 +168,10 @@ export class OwnerController {
     await this.deps.save(checked);
     this.receipt = checked;
   }
-  async prepare(intentId: string, action: MoneyAction) {
+  async prepare(intentId: string, action: MoneyAction, reviewMinimum = false) {
     this.deps.gate();
+    if (reviewMinimum && action !== "renew_plan")
+      throw Error("C3_OWNER_ECONOMIC_REVIEW_INVALID");
     if (
       this.busy ||
       (this.receipt &&
@@ -170,7 +180,11 @@ export class OwnerController {
       throw Error("C3_OPERATION_RECONCILE_REQUIRED");
     this.busy = true;
     try {
-      const p = await this.deps.backend.prepare(intentId, action);
+      const p = await this.deps.backend.prepare(
+        intentId,
+        action,
+        reviewMinimum,
+      );
       // Reject replay BEFORE persisting anything: old signature/evidence survives.
       if (
         this.receipt?.state === "closed_unexecuted" &&
@@ -180,7 +194,9 @@ export class OwnerController {
       if (
         p.intentId !== intentId ||
         p.action !== action ||
-        p.wallet !== this.deps.wallet
+        p.wallet !== this.deps.wallet ||
+        (p.minimumResolution !== undefined &&
+          (action !== "renew_plan" || !reviewMinimum))
       )
         throw Error("C3_OWNER_RESPONSE_BINDING");
       const templates = ownerTemplates(
@@ -189,7 +205,13 @@ export class OwnerController {
         p.expiry,
         this.deps.now(),
         p.chainRevision !== undefined && p.planDirection !== undefined
-          ? { chainRevision: p.chainRevision, planDirection: p.planDirection }
+          ? {
+              chainRevision: p.chainRevision,
+              planDirection: p.planDirection,
+              ...(p.minimumResolution
+                ? { minimumResolution: p.minimumResolution }
+                : {}),
+            }
           : undefined,
       );
       const frozen = freezeOwnerReview(
@@ -213,7 +235,18 @@ export class OwnerController {
         this.deps.wallet,
       );
       await this.store(receipt);
-      this.prepared = { ...p, packet: frozen.bytes };
+      this.prepared = {
+        ...p,
+        packet: frozen.bytes,
+        ...(p.minimumResolution
+          ? {
+              minimumResolution: Object.freeze({
+                ...p.minimumResolution,
+                minima: Object.freeze([...p.minimumResolution.minima]),
+              }),
+            }
+          : {}),
+      };
       return frozen.review;
     } finally {
       this.busy = false;
@@ -233,7 +266,13 @@ export class OwnerController {
           p.expiry,
           this.deps.now(),
           p.chainRevision !== undefined && p.planDirection !== undefined
-            ? { chainRevision: p.chainRevision, planDirection: p.planDirection }
+            ? {
+                chainRevision: p.chainRevision,
+                planDirection: p.planDirection,
+                ...(p.minimumResolution
+                  ? { minimumResolution: p.minimumResolution }
+                  : {}),
+              }
             : undefined,
         );
       const frozen = freezeOwnerReview(

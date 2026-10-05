@@ -17,7 +17,7 @@
   "files": [
     "dist",
     "migrations",
-    "resources",
+    "resources/c3_pilot_vault.json",
     "pilot-open-local/migrations"
   ],
   "scripts": {

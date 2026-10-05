@@ -182,6 +182,7 @@ export function deriveVerifiedLegContext(
     genesis: string;
     accounts: Readonly<Record<string, OpenAccount | null>>;
   }>,
+  economicReviewOnly = false,
 ): StoredQuoteContext {
   demand(Number.isInteger(ordinal) && ordinal >= 0 && ordinal < 6, "ORDINAL");
   const scope = approvedOwnerCompilerPolicy({
@@ -211,7 +212,7 @@ export function deriveVerifiedLegContext(
   const deadline =
     row.generation === "0" ? row.expires_at : row.generation_expiry;
   demand(
-    deadline instanceof Date && deadline > row.db_now,
+    deadline instanceof Date && (economicReviewOnly || deadline > row.db_now),
     "GENERATION_EXPIRY",
   );
   const accounts = snapshot.accounts;
@@ -228,9 +229,10 @@ export function deriveVerifiedLegContext(
   demand(
     Number.isSafeInteger(snapshot.slot) &&
       snapshot.slot > 0 &&
-      p.expiresAt > now &&
+      (economicReviewOnly ? p.expiresAt <= now : p.expiresAt > now) &&
       p.bitmap === (1 << leg) - 1 &&
-      !p.activeAuthorization.some((x) => x !== 0),
+      (!p.activeAuthorization.some((x) => x !== 0) ||
+        (economicReviewOnly && p.bytes.readBigInt64LE(892) <= now)),
     "PLAN_PROGRESS_OR_EXPIRY",
   );
   const intent = verifyOpenIntent(
@@ -291,6 +293,7 @@ export function deriveVerifiedLegContext(
     planExpiresAt: p.expiresAt.toString(),
     configurationHash: policy.configurationHash,
     planMinimumOutput: p.minima[leg]!.toString(),
+    ...(economicReviewOnly ? { economicReviewOnly: true } : {}),
   });
 }
 /** This internal factory is reached through either the immutable production
@@ -318,6 +321,7 @@ class VerifiedLegFactory {
     intentId: string,
     ordinal: number,
     revision: bigint,
+    economicReviewOnly = false,
   ): Promise<StoredQuoteContext> {
     demand(Number.isInteger(ordinal) && ordinal >= 0 && ordinal < 6, "ORDINAL");
     demand(
@@ -355,11 +359,17 @@ class VerifiedLegFactory {
     const accounts = Object.fromEntries(
         names.map((n, i) => [n, result.value[i]!]),
       ),
-      ctx = deriveVerifiedLegContext(this.policy, row!, ordinal, {
-        slot: result.context.slot,
-        genesis: this.genesis,
-        accounts,
-      });
+      ctx = deriveVerifiedLegContext(
+        this.policy,
+        row!,
+        ordinal,
+        {
+          slot: result.context.slot,
+          genesis: this.genesis,
+          accounts,
+        },
+        economicReviewOnly,
+      );
     const evidence = {
       slot: result.context.slot,
       genesis: this.genesis,
@@ -388,6 +398,15 @@ class VerifiedLegFactory {
         [intentId],
       );
       demand(!pending.rowCount, "OWNER_OR_RENEWAL_UNCERTAIN");
+      const unresolvedLeg = await client.query(
+        "SELECT 1 FROM c3_open.legs WHERE intent_id=$1 AND state IN ('signed','submitted','uncertain','manual_review','reconciliation_required') UNION ALL SELECT 1 FROM c3_open.signing_requests s JOIN c3_open.quote_authorizations q USING(quote_id) WHERE q.intent_id=$1 AND s.state<>'result' LIMIT 1",
+        [intentId],
+      );
+      demand(!unresolvedLeg.rowCount, "RECONCILE_FIRST");
+      if (economicReviewOnly) {
+        await client.query("COMMIT");
+        return ctx; // Never enroll executable or MAINNET_REVIEWED context.
+      }
       await client.query(
         `INSERT INTO c3_open.leg_context_verifications(verification_id,intent_id,ordinal,intent_revision,context_hash,policy_hash,evidence_hash,genesis_hash,scope,finalized_slot,context,evidence) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
         [
@@ -441,4 +460,22 @@ export async function captureProductionLeg(
     c.genesisHash,
     true,
   ).capture(intentId, ordinal, revision);
+}
+
+export async function captureProductionMinimumReview(
+  pool: Pool,
+  intentId: string,
+  ordinal: number,
+  revision: bigint,
+) {
+  const p = requireOpenProductionPolicy();
+  await assertProductionEnrollment(pool, p, intentId, "intent");
+  await verifyProductionVaultArtifact();
+  return new VerifiedLegFactory(
+    pool,
+    p,
+    productionOwnerRpc(),
+    c.genesisHash,
+    true,
+  ).capture(intentId, ordinal, revision, true);
 }

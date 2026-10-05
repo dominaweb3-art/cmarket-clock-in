@@ -16,6 +16,7 @@ import { decodeBase58, encodeBase58 } from "../src/solana.ts";
 import { C3_MAINNET } from "../src/constants.ts";
 import { VAULT_PROGRAM } from "./jupiter-vault-cpi-inspection.ts";
 import type { Scope } from "./orchestrator.ts";
+import { renewalPostimage } from "../src/open-minimum-resolution.ts";
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest();
 const check = (v: unknown, code: string): void => {
   if (!v) throw Error("C3_RENEWAL_" + code);
@@ -33,6 +34,7 @@ export function verifyRenewalImages(
   after: Buffer,
   revision: bigint,
   expiry: bigint,
+  instructionData?: Buffer,
 ): void {
   check(
     before.length === 901 &&
@@ -70,10 +72,16 @@ export function verifyRenewalImages(
     );
   }
   check(expiry > before.readBigInt64LE(706), "EXPIRY");
-  const expected = Buffer.from(before);
-  expected.writeBigInt64LE(expiry, 706);
-  expected.writeBigUInt64LE(revision + 1n, 716);
-  expected.fill(0, 860, 900);
+  const plain = Buffer.alloc(24);
+  discriminator.copy(plain);
+  plain.writeBigUInt64LE(revision, 8);
+  plain.writeBigInt64LE(expiry, 16);
+  const expected = renewalPostimage(
+    before,
+    instructionData ?? plain,
+    revision,
+    expiry,
+  );
   check(expected.equals(after), "PRESERVED_FIELDS");
 }
 async function local(rpc: Connection, idl: Idl) {
@@ -122,9 +130,11 @@ async function pending(pool: Pool, intentId: string, ownRequest?: string) {
       WHERE r.intent_id=$1 AND g.request_id IS NULL AND o.request_id IS NULL
         AND ($2::uuid IS NULL OR r.request_id<>$2::uuid)
     UNION ALL SELECT 1 FROM c3_open.owner_requests r
-      LEFT JOIN c3_open.owner_message_receipts m USING(request_id)
+      LEFT JOIN c3_open.owner_effect_receipts m USING(request_id)
       LEFT JOIN c3_open.owner_request_outcomes o USING(request_id)
-      WHERE r.intent_id=$1 AND m.request_id IS NULL AND o.request_id IS NULL LIMIT 1`,
+      LEFT JOIN c3_open.plan_generations g USING(request_id)
+      WHERE r.intent_id=$1 AND m.request_id IS NULL AND o.request_id IS NULL AND g.request_id IS NULL
+        AND ($2::uuid IS NULL OR r.request_id<>$2::uuid) LIMIT 1`,
     [intentId, ownRequest ?? null],
   );
   check(!r.rowCount, "RECONCILE_PENDING_FIRST");
@@ -210,7 +220,7 @@ export async function recordLocalRenewalSignature(
       );
     } else {
       await intent(client as unknown as Pool, scope);
-      await pending(client as unknown as Pool, scope.intentId);
+      await pending(client as unknown as Pool, scope.intentId, requestId);
       const latest = (
         await client.query(
           "SELECT request_id FROM c3_open.renewal_requests WHERE intent_id=$1 AND plan=$2 AND expected_chain_revision=$3 ORDER BY created_at DESC,request_id DESC LIMIT 1",
@@ -461,6 +471,9 @@ export async function prepareLocalRenewal(
   options: Readonly<{
     resumeRequestId?: string;
     replaceExpired?: boolean;
+    /** Deliberately unreachable owner floor for the isolated recovery fixture.
+     * Not a Jupiter quote, valuation, production option or executable swap. */
+    testMinimumOutputs?: readonly bigint[];
   }> = {},
 ) {
   await local(rpc, idl);
@@ -539,7 +552,7 @@ export async function prepareLocalRenewal(
     )
   ).rows[0];
   const now = clock!.data.readBigInt64LE(32);
-  let expiry = now + 120n;
+  let expiry = now + (options.testMinimumOutputs ? 30n : 120n);
   let blockhash: { blockhash: string; lastValidBlockHeight: number };
   let resume = false;
   if (latest) {
@@ -573,11 +586,38 @@ export async function prepareLocalRenewal(
     }
   } else blockhash = await rpc.getLatestBlockhash("finalized");
   check(now >= pre.readBigInt64LE(706), "NOT_EXPIRED");
-  const predicted = Buffer.from(pre);
-  predicted.writeBigInt64LE(expiry, 706);
-  predicted.writeBigUInt64LE(scope.expectedChainRevision + 1n, 716);
-  predicted.fill(0, 860, 900);
-  verifyRenewalImages(pre, predicted, scope.expectedChainRevision, expiry);
+  const data = Buffer.alloc(options.testMinimumOutputs ? 120 : 24);
+  (options.testMinimumOutputs
+    ? hash(Buffer.from("global:resolve_settlement_minimums")).subarray(0, 8)
+    : discriminator
+  ).copy(data);
+  data.writeBigUInt64LE(scope.expectedChainRevision, 8);
+  data.writeBigInt64LE(expiry, 16);
+  if (options.testMinimumOutputs) {
+    check(options.testMinimumOutputs.length === 3, "TEST_MINIMA");
+    hash(pre).copy(data, 24);
+    options.testMinimumOutputs.forEach((v, n) =>
+      data.writeBigUInt64LE(v, 56 + 8 * n),
+    );
+    hash(Buffer.from("ISOLATED_UNREACHABLE_FLOOR_FIXTURE_NOT_A_QUOTE")).copy(
+      data,
+      80,
+    );
+    data.writeBigInt64LE(now + 30n, 112);
+  }
+  const predicted = renewalPostimage(
+    pre,
+    data,
+    scope.expectedChainRevision,
+    expiry,
+  );
+  verifyRenewalImages(
+    pre,
+    predicted,
+    scope.expectedChainRevision,
+    expiry,
+    data,
+  );
   const legRows = (
     await pool.query(
       "SELECT ordinal,state FROM c3_open.legs WHERE intent_id=$1 ORDER BY ordinal",
@@ -599,10 +639,6 @@ export async function prepareLocalRenewal(
         ),
     "UNRECONCILED_PROGRESS",
   );
-  const data = Buffer.alloc(24);
-  discriminator.copy(data);
-  data.writeBigUInt64LE(scope.expectedChainRevision, 8);
-  data.writeBigInt64LE(expiry, 16);
   const ix = new TransactionInstruction({
     programId: VAULT_PROGRAM,
     keys: [
@@ -835,6 +871,7 @@ export async function reconcileLocalRenewal(
     post.value!.data,
     scope.expectedChainRevision,
     BigInt(request.expires_at),
+    Buffer.from(msg.compiledInstructions[0]!.data),
   );
   const evidenceHash = hash(
     Buffer.concat([

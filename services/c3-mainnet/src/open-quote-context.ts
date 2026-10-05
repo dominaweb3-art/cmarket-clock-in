@@ -35,8 +35,10 @@ export type StoredQuoteContext = Readonly<{
   configurationHash: string;
   /** Server-read committed plan floor, never client-selected. */
   planMinimumOutput?: string;
+  economicReviewOnly?: boolean;
 }>;
 export function openQuoteContext(value: StoredQuoteContext): QuoteContextV1 {
+  assert(!value.economicReviewOnly, "REVIEW_NOT_EXECUTABLE");
   const hex = (v: string) => {
     assert(/^[a-f0-9]{64}$/.test(v), "INVALID_HASH");
     return Buffer.from(v, "hex");

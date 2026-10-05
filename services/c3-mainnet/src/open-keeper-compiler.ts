@@ -218,7 +218,7 @@ export async function compileKeeperFromDurableState(
     // A finalized Clock can lag the fresh Jupiter timestamp. Wait boundedly
     // for that SAME immutable quote window; never rewrite creation/expiry or
     // widen policy to make an ahead-of-chain quote pass.
-    const deadline = performance.now() + 15000;
+    const deadline = performance.now() + 30000;
     let now: bigint;
     for (;;) {
       const fresh = (await rpc.read("getAccountInfo", [
@@ -236,7 +236,7 @@ export async function compileKeeperFromDurableState(
           materialEvidence.every(
             (e) => BigInt(String(e.expires)) * 1000n > BigInt(Date.now()),
           ),
-        "QUOTE_CLOCK_UNUSABLE",
+        `QUOTE_CLOCK_UNUSABLE:chain=${now}:created=${created}:host=${Math.floor(Date.now() / 1000)}:expires=${materialEvidence.map((e) => String(e.expires)).join(",")}`,
       );
       await new Promise((resolve) => setTimeout(resolve, 2500));
     }
