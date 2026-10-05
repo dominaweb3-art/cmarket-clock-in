@@ -36,3 +36,4 @@ credentials.json
 /services/c3-mainnet/results/oracle-source-discovery/
 /.c3fork-*/
 .c3cycle-*/
+/output/pdf/

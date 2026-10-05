@@ -1,0 +1,31 @@
+{
+  "schema": "c3-owner-inputs/v1",
+  "wallet": "8fFFdNEirMgDHmAdSP8RiKhgCWNqWJSTEmipnQsX8ULP",
+  "deploymentPayer": "Axo7iwAUwH2U42JPR65tKRQtvPtJQ1wVM74yHA3SpND5",
+  "programId": "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
+  "shareMint": "7ioBTSPVTgUdE2jBcEhjxUPBqQjRUsySvP1z28QyWvu3",
+  "upgradeAuthority": null,
+  "governance": {
+    "address": null,
+    "members": [],
+    "threshold": null,
+    "timelockSeconds": null
+  },
+  "pauseAuthority": "5qTPDyC98421EjTM64HJFEML6QLb4dV1cLdh5MYEvWVD",
+  "keeper": "5YCvGg9V2tJjBpy71giarUYAfMUE7U13cJTjgxwGTJf7",
+  "quoteAuthority": "AtcSkVGziM6YDGVc84RGfDkwo3qPVqmihVBDiGZFWQAX",
+  "operationalKeyGenerationAuthorized": true,
+  "infrastructure": {
+    "hostingProvider": "digitalocean",
+    "region": "nyc3",
+    "httpsOrigin": "https://c3-api.dominaweb3.com",
+    "databaseHa": true,
+    "rpcOperators": ["quicknode", "alchemy"],
+    "isolatedSignerOrigin": "https://c3-signer.dominaweb3.com"
+  },
+  "androidCertificateSha256": "58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016",
+  "initialSolCeiling": null,
+  "monthlyUsdCeiling": null,
+  "consumedNetworkFeeCeilingLamports": null,
+  "priorityFeeCeilingLamports": null
+}

@@ -50,6 +50,7 @@
     "c3:open:market-evidence": "node --experimental-strip-types research/oracle-nav/exact-market-evidence.ts",
     "c3:open:secondary-market-evidence": "node --experimental-strip-types research/oracle-nav/jupiter-market-collector.ts",
     "c3:open:budget-review": "node --experimental-strip-types scripts/open-pilot-budget.ts",
+    "c3:open:release-review": "node --experimental-strip-types scripts/open-release-review.ts",
     "c3:open:server-check": "node --experimental-strip-types src/open-owner-entry.ts check",
     "c3:mainnet:builder-readiness": "node --experimental-strip-types scripts/readiness.ts builder",
     "c3:mainnet:keeper-readiness": "node --experimental-strip-types scripts/readiness.ts keeper",

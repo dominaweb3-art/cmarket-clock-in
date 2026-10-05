@@ -1,0 +1,18 @@
+{
+  "schema": "c3-public-identities/v1",
+  "scope": "LOCAL_GENERATED_CANDIDATES_NOT_ENROLLED_OR_APPROVED",
+  "fundingRequested": false,
+  "domainSelectedByOwner": "dominaweb3.com",
+  "deploymentPayer": "Axo7iwAUwH2U42JPR65tKRQtvPtJQ1wVM74yHA3SpND5",
+  "pilotOwner": "8fFFdNEirMgDHmAdSP8RiKhgCWNqWJSTEmipnQsX8ULP",
+  "emergencyPause": "5qTPDyC98421EjTM64HJFEML6QLb4dV1cLdh5MYEvWVD",
+  "keeper": "5YCvGg9V2tJjBpy71giarUYAfMUE7U13cJTjgxwGTJf7",
+  "quoteAuthority": "AtcSkVGziM6YDGVc84RGfDkwo3qPVqmihVBDiGZFWQAX",
+  "programId": "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV",
+  "shareMint": "7ioBTSPVTgUdE2jBcEhjxUPBqQjRUsySvP1z28QyWvu3",
+  "governance": null,
+  "upgradeAuthority": null,
+  "mainnetDeployed": false,
+  "identitiesPhysicallySeparated": false,
+  "physicalPilotWalletMwa": "UNVERIFIED"
+}
