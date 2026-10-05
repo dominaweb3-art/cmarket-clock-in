@@ -3,6 +3,7 @@ import { Alert, Pressable, Text, View } from "react-native";
 import { MAINNET_MONETARY_CAPABILITY } from "./candidate-config";
 import {
   candidateOwnerController,
+  loadCandidateOwnerIntent,
   reviewedCandidateOwnerConfiguration,
   restoreCandidateOwner,
   readCandidateOwnerPosition,
@@ -66,6 +67,21 @@ export function OwnerLifecyclePanel({
       const config = reviewedCandidateOwnerConfiguration();
       if (!config || config.wallet !== wallet)
         throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
+      // Only explicit authentication/preparation may bootstrap owner control.
+      // Recovery, close, approval and read must never open a message-signing flow.
+      const preparing = [
+        "deposit",
+        "issue_shares",
+        "request_redemption",
+        "claim",
+        "renew_plan",
+        "reviewMinimum",
+      ].includes(action);
+      const intentId = await loadCandidateOwnerIntent(
+        wallet,
+        preparing,
+        preparing || action === "authenticate",
+      );
       if (!controller.current || controllerWallet.current !== wallet) {
         controller.current = candidateOwnerController(wallet);
         controllerWallet.current = wallet;
@@ -79,8 +95,8 @@ export function OwnerLifecyclePanel({
       else if (action === "renew")
         await controller.current.renewExpiredRequest();
       else if (action === "reviewMinimum")
-        await controller.current.prepare(config.intentId, "renew_plan", true);
-      else await controller.current.prepare(config.intentId, action);
+        await controller.current.prepare(intentId!, "renew_plan", true);
+      else await controller.current.prepare(intentId!, action);
     } catch {
       Alert.alert(t.activity, t.operationError);
     } finally {

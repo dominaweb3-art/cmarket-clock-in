@@ -14,7 +14,12 @@ import {
   authenticateCandidateOwner,
 } from "./candidate-wallet";
 import { createOwnerSession } from "./owner-session";
+import {
+  createOwnerEnrollment,
+  type OwnerEnrollmentScope,
+} from "./owner-enrollment";
 import { OwnerController } from "./owner-controller";
+import { resolveOwnerIntent } from "./owner-intent";
 import { ownerBackend, authenticatedOwnerPreparation } from "./owner-backend";
 import type { OwnerPolicy } from "./owner-policy";
 import { parseOwnerPosition, type OwnerPosition } from "./owner-position";
@@ -23,12 +28,23 @@ import { parseOwnerPosition, type OwnerPosition } from "./owner-position";
 export type CandidateOwnerConfiguration = Readonly<{
   backend: string;
   wallet: string;
-  intentId: string;
+  enrollment: OwnerEnrollmentScope;
   policy: OwnerPolicy;
 }>;
-const ownerSessions = new Map<string, ReturnType<typeof createOwnerSession>>();
+const enrollments = new Map<string, ReturnType<typeof createOwnerEnrollment>>();
+const intentIds = new Map<string, string>();
+const bootstrapping = new Set<string>();
+const ownerSessions = new Map<
+  string,
+  { session: ReturnType<typeof createOwnerSession>; intentId: string }
+>();
 export function reviewedCandidateOwnerConfiguration(): CandidateOwnerConfiguration | null {
   return null;
+}
+// Explicit void wrapper keeps future reviewed code type-checkable while the
+// current gate always throws. It does not introduce any approval/override.
+function requireOwnerRelease(): void {
+  requireCandidateMoneyGate();
 }
 function requiredOwnerConfiguration(
   wallet: string,
@@ -37,20 +53,78 @@ function requiredOwnerConfiguration(
   if (
     !c ||
     c.wallet !== wallet ||
+    c.enrollment.wallet !== wallet ||
     !candidateHttpsEndpoint(c.backend) ||
     c.policy.wallet.length !== 32 ||
     !base58ToUint8Array(wallet).every((b, i) => b === c.policy.wallet[i])
   )
     throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
+  const encoded = (bytes: Uint8Array) =>
+    base64ToBase58(base64FromUint8Array(bytes));
+  if (
+    !c.policy.accounts.config ||
+    c.enrollment.program !== encoded(c.policy.program) ||
+    c.enrollment.vault !== encoded(c.policy.accounts.config)
+  )
+    throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
   return c;
 }
+/** Explicit prepare/sign-in only. A restored request or read never invokes this.
+ * The server, not release config or the client, creates/reuses the durable intent. */
+export async function loadCandidateOwnerIntent(
+  wallet: string,
+  preparing: boolean,
+  allowEnrollment: boolean,
+): Promise<string> {
+  requireOwnerRelease();
+  const c = requiredOwnerConfiguration(wallet);
+  if (bootstrapping.has(wallet)) throw Error("C3_OPERATION_ALREADY_PENDING");
+  bootstrapping.add(wallet);
+  try {
+    const [locator, receipt] = await Promise.all([
+      AsyncStorage.getItem("c3-owner-intent/v1:" + wallet),
+      AsyncStorage.getItem("c3-owner/v1:" + wallet),
+    ]);
+    const intentId = await resolveOwnerIntent(
+      c.backend,
+      c.enrollment,
+      locator,
+      receipt,
+      preparing,
+      allowEnrollment,
+      async () => {
+        let enrollment = enrollments.get(wallet);
+        if (!enrollment) {
+          enrollment = createOwnerEnrollment(
+            c.backend,
+            c.enrollment,
+            (message) => authenticateCandidateOwner(wallet, message),
+            base64FromUint8Array,
+          );
+          enrollments.set(wallet, enrollment);
+        }
+        return enrollment.enroll();
+      },
+      (record) => AsyncStorage.setItem("c3-owner-intent/v1:" + wallet, record),
+    );
+    const prior = intentIds.get(wallet);
+    if (prior && prior !== intentId)
+      throw Error("C3_OWNER_INTENT_STORAGE_CONFLICT");
+    intentIds.set(wallet, intentId);
+    return intentId;
+  } finally {
+    bootstrapping.delete(wallet);
+  }
+}
 export function candidateOwnerController(wallet: string): OwnerController {
-  requireCandidateMoneyGate();
+  requireOwnerRelease();
   const configuration = requiredOwnerConfiguration(wallet);
+  const intentId = intentIds.get(wallet);
+  if (!intentId) throw Error("C3_OWNER_ENROLLMENT_REQUIRED");
   const session = createOwnerSession(
     configuration.backend,
     wallet,
-    configuration.intentId,
+    intentId,
     (message) => authenticateCandidateOwner(wallet, message),
     base64FromUint8Array,
   );
@@ -61,7 +135,7 @@ export function candidateOwnerController(wallet: string): OwnerController {
     session.fetch,
     true,
   );
-  ownerSessions.set(wallet, session);
+  ownerSessions.set(wallet, { session, intentId });
   return new OwnerController({
     gate: requireCandidateMoneyGate,
     wallet,
@@ -122,12 +196,12 @@ export async function readCandidateOwnerPosition(
   const mint = c.policy.accounts.share_mint;
   if (!mint || mint.length !== 32)
     throw Error("C3_OWNER_RELEASE_CONFIGURATION_MISSING");
-  const session = ownerSessions.get(wallet);
-  if (!session) throw Error("C3_OWNER_REAUTH_REQUIRED");
-  const r = await session.fetch(
+  const authenticated = ownerSessions.get(wallet);
+  if (!authenticated) throw Error("C3_OWNER_REAUTH_REQUIRED");
+  const r = await authenticated.session.fetch(
     c.backend +
       "/v1/c3/owner/position?intentId=" +
-      encodeURIComponent(c.intentId),
+      encodeURIComponent(authenticated.intentId),
     {
       method: "GET",
       redirect: "error",

@@ -1,17 +1,6 @@
 export const candidateLanguages = ["en", "es", "zh-CN", "pt-BR"] as const;
 export type CandidateLanguage = (typeof candidateLanguages)[number];
 const en = {
-  qaTitle: "Device QA · Devnet message only",
-  qaNotice:
-    "Optional supervised QA: sign a text message on Devnet, not a transaction. No funds, login, C3 position or Mainnet permission. Review and approve manually in the wallet.",
-  qaReview: "Review non-economic QA message",
-  qaCancel: "Cancel",
-  qaSign: "Request Devnet message signature",
-  qaSuccess:
-    "Message bytes and Ed25519 signature verified locally. This is NOT a C3 or Mainnet transaction test.",
-  qaError:
-    "Message cancelled, unsupported, changed or expired. No transaction was sent. A new review is required to try again.",
-  qaDigest: "QA message SHA-256 (not a transaction)",
   title: "C Market · C3 Candidate",
   home: "Home",
   indices: "Indices",
@@ -79,17 +68,6 @@ type Dictionary = Record<keyof typeof en, string>;
 export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
   en,
   es: {
-    qaTitle: "QA del dispositivo · solo mensaje Devnet",
-    qaNotice:
-      "QA supervisado opcional: firmar texto en Devnet, no una transacción. Sin fondos, sesión, posición C3 ni permiso Mainnet. Revisa y aprueba manualmente en la wallet.",
-    qaReview: "Revisar mensaje QA sin fondos",
-    qaCancel: "Cancelar",
-    qaSign: "Solicitar firma de mensaje Devnet",
-    qaSuccess:
-      "Texto y firma Ed25519 verificados localmente. NO es una prueba de transacción C3 ni Mainnet.",
-    qaError:
-      "Mensaje cancelado, no compatible, alterado o vencido. No se envió transacción. Para probar de nuevo debes revisar otro mensaje.",
-    qaDigest: "SHA-256 del mensaje QA (no es transacción)",
     title: "C Market · C3 Candidato",
     home: "Inicio",
     indices: "Índices",
@@ -157,17 +135,6 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     minimumResolutionExpiry: "Vencimiento de revisión (UTC)",
   },
   "zh-CN": {
-    qaTitle: "设备 QA · 仅 Devnet 消息",
-    qaNotice:
-      "可选的监督测试：在 Devnet 签署文本，而非交易。不转移资金、不登录、不创建 C3 仓位、不授权 Mainnet。请在钱包中手动审核批准。",
-    qaReview: "审核无资金 QA 消息",
-    qaCancel: "取消",
-    qaSign: "请求 Devnet 消息签名",
-    qaSuccess:
-      "文本及 Ed25519 签名已在本地验证。这不是 C3 或 Mainnet 交易测试。",
-    qaError:
-      "消息已取消、不支持、被更改或过期。未发送交易。重试必须重新审核消息。",
-    qaDigest: "QA 消息 SHA-256（不是交易）",
     title: "C Market · C3 候选版",
     home: "首页",
     indices: "指数",
@@ -226,17 +193,6 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     minimumResolutionExpiry: "报价审核到期时间（UTC）",
   },
   "pt-BR": {
-    qaTitle: "QA do dispositivo · apenas mensagem Devnet",
-    qaNotice:
-      "QA supervisionado opcional: assinar texto na Devnet, não uma transação. Sem fundos, login, posição C3 ou permissão Mainnet. Revise e aprove manualmente na carteira.",
-    qaReview: "Revisar mensagem QA sem fundos",
-    qaCancel: "Cancelar",
-    qaSign: "Solicitar assinatura de mensagem Devnet",
-    qaSuccess:
-      "Texto e assinatura Ed25519 verificados localmente. NÃO é um teste de transação C3 ou Mainnet.",
-    qaError:
-      "Mensagem cancelada, incompatível, alterada ou expirada. Nenhuma transação enviada. Uma nova revisão é necessária para tentar de novo.",
-    qaDigest: "SHA-256 da mensagem QA (não é transação)",
     title: "C Market · C3 Candidato",
     home: "Início",
     indices: "Índices",

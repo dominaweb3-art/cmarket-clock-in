@@ -5,12 +5,136 @@ The original CLOCK IN files/APKs/deck on `delivery/clock-in-verifiable` are
 preserved. This worksheet reuses their mobile/evidence approach, not their
 historical Devnet payment as basket ownership.
 
+## Current implementation delta and approval request
+
+Starting source: `7225c25040324982a916410c0d8d50da703bf6d8`. This execution
+connected mobile pre-intent enrollment to the existing HTTPS/PostgreSQL protocol.
+Two explicitly signed **text** messages prove owner control, locally verified
+with strict Ed25519, exact release policy/program/vault/revisions and expiry.
+They are not transactions, login sessions, deposits or Mainnet execution approval.
+An authenticated session is separately bound to the server-returned intent.
+
+Restart restores a policy-bound **public intent locator** or a validated prior
+receipt, never re-enrolls a funded vault. The server still verifies the consumed
+proof: storage cannot certify enrollment. Pending receipts block prepare before
+any wallet/HTTP enrollment callback; reads and recovery never sign automatically.
+No payload, message signature or bearer token is persisted by enrollment.
+The source approval remains null and the monetary capability false, so this
+connected code cannot invoke owner signatures on the current artifact.
+
+Independent scoped review found two restart/preflight issues, both corrected and
+rechecked. Its differential mobile/server message comparison passed; this is
+not an external professional audit or approval of the full vault protocol.
+24 affected unit/regression tests passed; fixtures sign text only, no economic
+simulation, wallet, RPC or transaction. No new Devnet/cloned/mock cycle ran.
+The React checklist kept actions in explicit handlers, with a synchronous UI
+lock and a separate bootstrap lock; no effect starts enrollment.
+
+The Mainnet candidate no longer imports or displays the Devnet device-message
+QA action; historical modules/APKs remain untouched. Four languages, monetary
+guards and 40/30/30 composition remain. New APK (rebuilt because code changed):
+`904ce657fcdcfdf0949798664004ba984c4796ca1b47eb04a484394d111c1bf2`.
+QA certificate: `58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+ELF/IDL/backend/rent artifacts were reused, not rebuilt or relabelled as enabled.
+
+The connected Seeker received this exact APK with `adb install -r` after matching
+the existing QA certificate; application data and stable packages were preserved.
+The pulled installed APK has the same SHA-256. A cold launch with Metro stopped
+displayed English, 40/30/30, the one-wallet/one-lifetime-position restriction,
+disabled Mainnet operations and no Devnet QA button. Screenshot is ignored at
+`apps/c3-pilot/dist/owner-enrollment-reviewed-candidate/seeker-cold-launch.png`.
+No Phantom action or wallet signature was requested. Full navigation/language
+switching and physical MWA return/signature are not certified by this check.
+TypeScript, lint, Android export and release build passed. Latest Expo Doctor
+was 18/19: the external React Native Directory metadata request was unavailable;
+do not report that remote check as passed.
+
+`InitializeVault` uses `init` with `[VAULT_SEED]` and a singleton
+`[AUTHORITY_SEED]`. There is one vault/config authority per program ID, **not**
+independent owner vaults. Judges can view genuinely accepted public receipts;
+another owner cannot create a second independent vault under this program.
+That needs a separate reviewed program change, not a frontend toggle or another
+intent. No multi-vault redesign is included here.
+
+### One consolidated owner decision block — no secrets in chat
+
+1. Numeric initial SOL ceiling and monthly USD ceiling. Suggested preparation
+   caps are 7.25 SOL plus a separate 1 USDC and 200 USD/month, **not** owner
+   approval, measured total, sufficient-funding claim or a transfer instruction.
+2. Actual governance public members and addresses, or state that only one owner
+   is available and request review of private 1/1 risks. Current policy requires
+   2-of-3 real independent members and at least 24-hour delay. Self-controlled
+   generated keys do not satisfy independence. Do not apply 1/1 automatically.
+3. Confirm provider accounts and controlled DNS for `dominaweb3.com`: proposed
+   DigitalOcean NYC3 separate API/signer VMs, managed PostgreSQL HA, Quicknode
+   and Alchemy. Grant scoped panel access for later approved provisioning, not
+   unrestricted tokens by chat. DB/RPC/Jupiter/TLS/signer credentials are entered
+   directly on isolated servers after approval, never committed or in the APK.
+4. Keep the public QA certificate above, or supply only the fingerprint of the
+   chosen delivery certificate. Confirm the proposed `Fnkz...BJhAZ` owner in
+   Phantom. Connect/return alone is not proof of a message/transaction signature.
+
+### Budget observed on 5 October — incomplete, do not fund yet
+
+Measured disabled package: 3.414654080 SOL persistent account capital,
+3.350874680 SOL temporary recoverable buffer, 6.765528760 SOL peak rent.
+The existing 6.947558160 SOL proposal additionally includes 0.001488440 SOL
+potential owner ATA, 0.030540960 SOL six-leg renewal account allowance,
+0.050000000 SOL proposed operating reserve and 0.100000000 SOL proposed Squads
+application fee. Rent is not consumed transaction spend; buffer recovery needs
+the authorized closing sequence. The 1 USDC economic deposit is separate and
+its eventual sale proceeds are not guaranteed to equal 1 USDC.
+
+Published monthly components: backend 24 USD, isolated signer VM 12 USD,
+daily VM backup proposal 10.80 USD, PostgreSQL primary/standby 60 USD,
+Quicknode Build monthly 49 USD, Alchemy Free quota 0 USD = **155.80 USD/month
+subtotal**, not all-in. Sources:
+[Droplets](https://www.digitalocean.com/pricing/droplets),
+[daily backups](https://docs.digitalocean.com/products/backups/details/pricing/),
+[PostgreSQL](https://docs.digitalocean.com/products/databases/postgresql/details/pricing/),
+[Quicknode](https://www.quicknode.com/pricing),
+[Alchemy](https://www.alchemy.com/pricing).
+DigitalOcean's current PostgreSQL notice changes new-account Standard HA options
+from 15 October 2026: confirm plan availability before procurement. Do not assume
+the 60 USD HA pair remains available to a future new account.
+
+Still unpriced: enabled ELF rent/upgrade headroom; exact deployment/owner/keeper
+base and priority fees; governance account rent; current swap route fees/loss;
+signer hardening/external adapter operation; restore rehearsal, extra storage,
+RPC overages, DNS renewal, tax/egress and operational/security-review labor.
+TLS certificates and existing domain access do not prove HTTPS provisioned.
+No all-in sum or sufficient budget is declared. The proposed payer is not yet
+an approved recipient; **do not send SOL now**. Final funding requires the
+enabled package hashes, real authority decisions, bounded fee estimates and
+the owner's signed-off action/budget list.
+
+### Production conditions that still block acceptance
+
+- Source-controlled approvals for restricted policy, wallet, authorities,
+  budget, exact enabled ELF/backend/APK are absent.
+- API/DB/keeper and isolated signing provider have not been provisioned; the
+  signer transport/journal interface is not evidence of a running authenticated
+  production signing service. Its concrete adapter must be configured/reviewed
+  against the selected isolated provider before activation.
+- Two production HTTPS RPC operators, least-privilege roles, restore, DNS/TLS
+  and service checks have not been enrolled/proven on hosted infrastructure.
+- Physical Phantom control/signature and Mainnet buy/shares/sale/USDC receipt
+  are UNVERIFIED/NOT_EXECUTED. No test key or previous cloned cycle fills this gap.
+- Official CLOCK IN portal returned HTTP 200 but exposed no date in initial
+  HTML; further public-script reading failed with ECONNRESET. Closing hour and
+  current submission availability are UNVERIFIED; no deadline is invented.
+
+Only after exact deployment/spending approval: provision pinned services,
+validate hosts/independence/restore, review the enabled artifacts, perform
+preventive Mainnet simulation, then supervised owner MWA authorization and
+real finalized acceptance. Simulation is neither acceptance nor acquisition.
+
 ## Exact current delivery state
 
 - Source: `feature/c3-open-pilot-vault`; use the commit containing the current
   [package manifest](c3-mainnet-pilot-candidate.json).
 - Signed APK, ELF, IDL, backend tarball and public rent report:
-  `artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled/`.
+  `artifacts/c3-pilot-candidate/2026-10-05-owner-enrollment-reviewed-disabled/`.
   Binaries are intentionally ignored; release hashes are in the manifest.
 - Mainnet acquisition, shares, redemption and receipt: NOT ACCEPTED. The current
   APK is disabled, QA-signed, has no approved HTTPS backend configuration and is
@@ -42,8 +166,9 @@ service. The separate migration, enrollment and start commands in the manifest
 require the reviewed source policy/configuration and owner approval first.
 No startup migration or blockchain retry is automatic.
 
-The current affected cycle has already passed; do not repeat it without relevant
-changes. Its reproducible command is:
+The following is preserved historical evidence, NOT the current acceptance
+procedure. The owner now requires Mainnet real-asset acceptance only. Do not run
+this command or a new Devnet/cloned/mock economic cycle in this execution:
 
 ```sh
 cd services/c3-mainnet
@@ -76,16 +201,16 @@ Record an exact release only after each gate is actually verified.
   show the warning and say so; do not fabricate a deposit or position.
 - 0:55–1:30: For a separately authorized, accepted Mainnet release only: owner
   approval, actual deposit signature and three finalized buys; show custody and
-  share-mint evidence. Otherwise label the separate terminal evidence “LOCAL
-  CLONED JUPITER — SYNTHETIC FUNDING”, verbally distinguish it from Mainnet, and
-  show the preserved report's six effects and reviewed-minimum recovery.
+  share-mint evidence. Until acceptance exists, say that acquisition is not
+  accepted. Historical local evidence is provenance only; do not run a new
+  demonstration or substitute it for the Mainnet acceptance video.
 - 1:30–2:05: Verified position after app restart; target vs actual holdings and
   informational value. No guaranteed principal/NAV parity. Do not use a local
   report as the wallet's real Mainnet position.
 - 2:05–2:40: Only after actual supervised Mainnet acceptance: sell acquired
   inventory, burn shares, claim exact realized USDC; show wallet and Explorer
-  receipts. If not accepted, disclose that this remains pending and show only
-  clearly labelled local burn/claim evidence.
+  receipts. If not accepted, disclose that this remains pending; do not substitute
+  a historical burn/claim report for a real sale.
 - 2:40–3:00: Restrictions, explicit recovery on changing prices, preserved
   uncertain signatures and next release gates. No multiuser/rebuy/return claim.
 
@@ -188,7 +313,7 @@ After these inputs, prepare ONE explicit approval request binding final enabled
 hashes, derived accounts/configuration, exact actions, full budget and stop rules.
 This worksheet does not authorize publishing, deployment or payment.
 
-### Current package and exact physical step
+### Preserved 7225c25 package evidence (superseded mobile artifact)
 
 The identity-only rebuild used `solana-cargo-build-sbf 2.1.0`, platform tools
 v1.43 / rustc 1.79.0, default features disabled, offline; Anchor 0.31.1 generated
@@ -210,22 +335,19 @@ allowances; it is not total consumed spend or a funding request. All-in costs,
 government/authorities and owner caps remain unconfirmed. Literal `[number]`
 placeholders are not spending limits. No affordability claim can be made.
 
-The APK was not rebuilt; its SHA-256 remains
+At that earlier checkpoint the APK was not rebuilt; its SHA-256 was
 `7c5151de935184a72982e45ddeaa8933789a4cb2226300d513af85f843d04dc6`.
 ADB detected the Seeker as `device`; its installed `base.apk` has that exact
 SHA-256. Local APK signature/certificate verification passed. The already-running
 candidate was foregrounded without installation or data deletion. Cold launch,
-visual QA and monetary tests were not repeated in this execution.
-For the next supervised Seeker QA: select the proposed wallet in Phantom,
-connect/return in Home, open the existing **DEVICE QA ONLY** message review,
-check `Network: solana:devnet` and its no-funds/no-login disclaimer, then the
-OWNER may explicitly approve that message if correct. It signs only a message,
-not a transaction/transfer/token approval/Mainnet authorization. Return the
-verified-message result/digest or exact error. Do not send seed phrases, keys
-or account screenshots. A cancelled request is not retried automatically.
-Production owner enrollment remains blocked separately even if this QA passes.
+visual QA and monetary tests were not repeated at that earlier checkpoint.
+Its proposed Devnet device-message QA is now withdrawn from the current
+Mainnet-only delivery. Do not execute that historical step. The current APK
+removes the button/module import; its exact hash and Mainnet connection-only
+physical step are in the manifest. Production enrollment remains separately
+blocked until the exact reviewed policy and hosted service are authorized.
 
-### Current focused implementation and review
+### Preserved 7225c25 server implementation and review
 
 The public owner proposal now participates in the offline review fingerprint;
 substituted wallets or false enrolled/control claims fail. Server enrollment
@@ -265,8 +387,9 @@ A six-page truthful review pitch is generated by
 `submission/build-c3-review-pitch.py` at
 `output/pdf/C-Market-C3-Review-Pitch.pdf`. It was rendered and visually checked;
 it labels Mainnet acceptance as pending and is NOT a final functional submission.
-No mobile behavior changed in this preparation, so the installed APK and its
-hash were preserved rather than rebuilt.
+At the earlier server-only preparation mobile behavior did not change. The new
+mobile enrollment/recovery implementation above did change code and therefore
+produced a separate APK while preserving that historical package.
 
 Project: C Market. Source candidate: public repository
 `https://github.com/dominaweb3-art/cmarket-clock-in` plus the actual published
@@ -314,8 +437,11 @@ publication, not permission to deliver unsafe/incomplete fund handling now.
   policy and spending ceilings before the explicit migrate/check/start commands.
   After approval, owner enrollment is a separate HTTPS message-only MWA flow:
   first explicitly sign the canonical non-monetary request produced by
-  `enrollmentRequestMessage` for the reviewed policy/HTTPS origin, a random
-  32-byte nonce encoded as 64 lowercase hex characters and current Unix seconds.
+  `enrollmentRequestMessage` for the reviewed policy/HTTPS origin, a public
+  request-uniqueness value encoded as 64 lowercase hex characters and current
+  Unix seconds. This value is not an authentication secret: request authentication
+  requires the owner signature, and the server generates its own unpredictable
+  control-proof challenge with a cryptographic random generator.
   Send `nonce`, `requestedAtUnix`, and canonical-base64 `signature` to
   `POST /v1/c3/owner/enrollment-challenge`. Anonymous requests cannot consume
   the wallet's budget. Then review the

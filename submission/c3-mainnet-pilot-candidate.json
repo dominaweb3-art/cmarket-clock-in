@@ -3,9 +3,10 @@
   "classification": "SHARED",
   "status": "LOCAL_INTEGRATION_PASSED_MAINNET_BLOCKED",
   "implementationCommit": null,
-  "startingCommit": "3b6a3df0637084b4da94dd897738c6dcebdd5f85",
-  "artifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled",
-  "preservedPreviousArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-explicit-minimum-recovery-disabled",
+  "startingCommit": "7225c25040324982a916410c0d8d50da703bf6d8",
+  "artifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-owner-enrollment-reviewed-disabled",
+  "preservedPreviousArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-05-program-identity-aligned-disabled",
+  "acceptanceScope": "MAINNET_REAL_ASSETS_ONLY_NO_NEW_DEVNET_CLONE_OR_MOCK_CYCLES",
   "preservedEarlierArtifactDirectory": "artifacts/c3-pilot-candidate/2026-10-04-restricted-single-position-qa",
   "ownerWalletProposalFile": "submission/c3-owner-wallet.proposed.json",
   "program": {
@@ -27,26 +28,37 @@
   },
   "apk": {
     "file": "c-market-c3-mainnet-candidate-0.1.0-disabled-delivery.apk",
-    "sha256": "7c5151de935184a72982e45ddeaa8933789a4cb2226300d513af85f843d04dc6",
+    "sha256": "904ce657fcdcfdf0949798664004ba984c4796ca1b47eb04a484394d111c1bf2",
     "package": "com.dominaweb3.cmarket.c3candidate",
     "versionName": "0.1.0",
     "versionCode": 1,
     "certificateSha256": "58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016",
     "certificateScope": "QA_ONLY_NOT_PRODUCTION_APPROVED",
     "signatureVerified": true,
-    "seekerVisualQa": "CURRENT_APK_COMPATIBLE_UPDATE_COLD_LAUNCH_NO_METRO_RESTRICTION_VISIBLE_PASS",
+    "seekerVisualQa": "EXACT_APK_COLD_LAUNCH_WITHOUT_METRO_ENGLISH_40_30_30_RESTRICTIONS_AND_NO_DEVNET_QA_ENTRY_VERIFIED_NOT_FULL_NAVIGATION_OR_MWA_QA",
     "currentValidation": "RELEASE_BUILD_V2_SIGNATURE_IDENTITY_AND_DIGEST_VERIFIED",
     "walletAuthorizationTested": false,
     "monetarySigningImplemented": true,
     "buySellEnabled": false,
     "cloneLauncherIncluded": false,
-    "hermesBundleSha256": "d80cb075da0af6d73ba53571fe536a09e765783e6ec8de9ec10f8cae2791910b",
+    "hermesBundleSha256": "8b7de3ea7e6208655983be77eb684dc9d56e3f3e4e250decffbd2c307dc3f83a",
+    "devnetQaEntryIncluded": false,
+    "productionExportForbiddenModules": [],
     "monetarySigningReachable": false,
     "httpsBackendConfiguration": null,
     "physicalMwaConnection": "UNVERIFIED",
     "physicalMwaSignature": "UNVERIFIED",
-    "currentDeviceVerification": "ADB_DEVICE_INSTALLED_APK_SHA256_MATCHES_PRESERVED_APK_NO_INSTALL_OR_DATA_CLEAR_CURRENT_EXECUTION",
-    "currentColdLaunchRepeated": false
+    "currentDeviceVerification": "ADB_DEVICE_SAME_CERTIFICATE_DATA_PRESERVING_UPDATE_SUCCEEDED_INSTALLED_APK_DIGEST_MATCHES_MANIFEST",
+    "currentColdLaunchRepeated": true,
+    "deviceEvidence": "apps/c3-pilot/dist/owner-enrollment-reviewed-candidate/seeker-cold-launch.png",
+    "focusedValidation": {
+      "affectedTestsPassed": 24,
+      "typecheck": "PASS",
+      "lint": "PASS",
+      "androidExport": "PASS",
+      "expoDoctor": "18_OF_19_REMOTE_REACT_NATIVE_DIRECTORY_METADATA_CHECK_UNAVAILABLE",
+      "walletInvokedDuringDeviceCheck": false
+    }
   },
   "policy": {
     "weightsBps": [4000, 3000, 3000],
@@ -116,7 +128,7 @@
   "gates": {
     "currentCycleValidatedOnCandidateId": false,
     "programIdentityRebuildScope": "DEFAULT_DISABLED_BINARY_IDL_BACKEND_ALIGNMENT_ONLY",
-    "independentSourceReview": "SCOPED_AGENT_REVIEW_NO_NEW_ACTIONABLE_FINDINGS_NOT_EXTERNAL_AUDIT",
+    "independentSourceReview": "MOBILE_ENROLLMENT_RESTART_PREFLIGHT_TWO_P2_FIXED_RECHECKED_NO_NEW_DELTA_FINDINGS_NOT_EXTERNAL_AUDIT",
     "professionalExternalAudit": "NOT_PERFORMED",
     "freshSchemaV2CloneCycle": "PASS_SIX_LEGS_AND_PARTIAL_MINIMUM_RESOLUTION_LOCAL_ONLY",
     "fundedExpiryRecovery": "OWNER_REVIEW_CAS_APPEND_ONLY_GENERATIONS_ATOMIC_RECEIPTS_AND_OUTCOMES_PASS_ISOLATED",
@@ -160,7 +172,7 @@
     }
   },
   "sourceCommitRule": "The commit containing this manifest identifies source; artifact hashes identify builds. No self-referential commit hash.",
-  "previousManifestCommit": "3b6a3df0637084b4da94dd897738c6dcebdd5f85",
+  "previousManifestCommit": "7225c25040324982a916410c0d8d50da703bf6d8",
   "backend": {
     "file": "cmarket-c3-mainnet-services-0.1.0.tgz",
     "sha256": "c7f129046eff65a6708e6036b7c7a1f47db0a0aba609fefb98009ffa7901e514",
@@ -191,6 +203,13 @@
       "maximumLifetimeChallengesPerPilotWallet": 60,
       "anonymousChallengeIssuance": false,
       "signedChallengeRequestReplayAccepted": false,
+      "mobileProtocolConnected": true,
+      "mobilePolicySourceApproved": false,
+      "mobileStrictSignatureVerification": true,
+      "mobileChallengeAndPolicyScopeValidation": true,
+      "mobilePublicIntentLocator": "POLICY_BOUND_LOCATOR_NOT_AUTHENTICATION_RESTART_RECOVERS_EXISTING_INTENT_NO_REENROLLMENT",
+      "mobilePendingReceiptPreflightBeforeWallet": true,
+      "mobilePayloadOrAuthTokenPersistence": false,
       "productionOwnerEnrolled": false
     }
   },
@@ -202,5 +221,6 @@
     "creationOfMissingAccountsAuthorized": false,
     "providerOrHostingPurchaseAuthorized": false
   },
-  "physicalNextAction": "Owner selects proposed FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ in Phantom, connects on the unchanged disabled APK, and explicitly reviews DEVICE QA ONLY Devnet message signing (no transaction/funds/login/enrollment); report verified-message result and digest or exact error. Production enrollment still requires fresh server-bound owner challenge."
+  "multiVaultScope": "SINGLETON_CONFIG_AND_AUTHORITY_PDAS_PER_PROGRAM_ID_NO_ADDITIONAL_INDEPENDENT_JUDGE_VAULT_SUPPORTED_WITHOUT_REVIEWED_PROGRAM_CHANGE",
+  "physicalNextAction": "On the exact new disabled APK, owner explicitly selects FnkzNN99YHhoR6Lu5kfnYj5X4ULLqoKTyi5P5xpBJhAZ through Connect wallet on solana:mainnet. Report Phantom return/cancellation/restart. NO transaction or message signature requested at this step; connection is NOT control-proof enrollment or a monetary acceptance."
 }

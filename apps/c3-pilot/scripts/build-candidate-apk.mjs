@@ -20,24 +20,30 @@ const project = join(root, "variants/mainnet"),
   signing = join(root, "release-signing"),
   dist = join(
     root,
-    process.argv.includes("--minimum-resolution-delivery")
-      ? "dist/minimum-resolution-delivery-candidate"
-      : process.argv.includes("--minimum-resolution-connected")
-        ? "dist/minimum-resolution-connected-candidate"
-        : process.argv.includes("--minimum-resolution-final")
-          ? "dist/minimum-resolution-final-candidate"
-          : process.argv.includes("--minimum-resolution")
-            ? "dist/minimum-resolution-candidate"
-            : process.argv.includes("--restricted-single-position")
-              ? "dist/restricted-single-position-candidate"
-              : process.argv.includes("--device-message-qa-monotonic")
-                ? "dist/device-message-qa-monotonic-candidate"
-                : process.argv.includes("--device-message-qa")
-                  ? "dist/device-message-qa-candidate"
-                  : "dist/mainnet-candidate",
+    process.argv.includes("--owner-enrollment-reviewed")
+      ? "dist/owner-enrollment-reviewed-candidate"
+      : process.argv.includes("--owner-enrollment")
+        ? "dist/owner-enrollment-candidate"
+        : process.argv.includes("--minimum-resolution-delivery")
+          ? "dist/minimum-resolution-delivery-candidate"
+          : process.argv.includes("--minimum-resolution-connected")
+            ? "dist/minimum-resolution-connected-candidate"
+            : process.argv.includes("--minimum-resolution-final")
+              ? "dist/minimum-resolution-final-candidate"
+              : process.argv.includes("--minimum-resolution")
+                ? "dist/minimum-resolution-candidate"
+                : process.argv.includes("--restricted-single-position")
+                  ? "dist/restricted-single-position-candidate"
+                  : process.argv.includes("--device-message-qa-monotonic")
+                    ? "dist/device-message-qa-monotonic-candidate"
+                    : process.argv.includes("--device-message-qa")
+                      ? "dist/device-message-qa-candidate"
+                      : "dist/mainnet-candidate",
   );
 if (
   (qaBuild ||
+    process.argv.includes("--owner-enrollment") ||
+    process.argv.includes("--owner-enrollment-reviewed") ||
     process.argv.includes("--restricted-single-position") ||
     process.argv.includes("--minimum-resolution") ||
     process.argv.includes("--minimum-resolution-final") ||
