@@ -192,6 +192,10 @@ function verifyOwnerProgramState(m: OwnerEffectManifest, values: unknown[]) {
 export function verifyOwnerSemanticState(
   m: OwnerEffectManifest,
   values: unknown[],
+  transactionBalances: ReadonlyMap<
+    string,
+    Readonly<{ pre: bigint; post: bigint }>
+  > = new Map(),
 ) {
   check(
     m.version === "c3-owner-effects/v2" && m.semanticScope && m.baseline,
@@ -223,6 +227,34 @@ export function verifyOwnerSemanticState(
       ][i]!,
     ),
   );
+  // Preparation is not the transaction's pre-state: anyone can donate to a
+  // custody ATA. Only its amount may change; mint/authority/delegate/native
+  // reserve and every other token byte remain exactly pinned. A later snapshot
+  // may contain further donations, never less than the proved transaction post.
+  a.vaultTokens.forEach((address, i) => {
+    const mint = [
+      C3_MAINNET.usdcMint,
+      C3_MAINNET.cbBtcMint,
+      C3_MAINNET.portalEthMint,
+      C3_MAINNET.wrappedSolMint,
+    ][i]!;
+    const before = m.baseline![address]!,
+      after = post.get(address)!;
+    const prepared = verifyOpenToken(before, a.authority, mint);
+    const beforeBytes = accountBytes(before, C3_MAINNET.tokenProgram, 165);
+    const afterBytes = accountBytes(after, C3_MAINNET.tokenProgram, 165);
+    check(
+      beforeBytes.subarray(0, 64).equals(afterBytes.subarray(0, 64)) &&
+        beforeBytes.subarray(72).equals(afterBytes.subarray(72)),
+      "CUSTODY_METADATA",
+    );
+    const transaction = transactionBalances.get(address);
+    if (transaction) check(transaction.pre >= prepared, "CUSTODY_PRE_BALANCE");
+    check(
+      reserves[i]! >= (transaction?.post ?? prepared),
+      "CUSTODY_POST_BALANCE",
+    );
+  });
   check(
     mint.supply === cfg.sharesIssued ||
       (m.action === "claim" &&
@@ -307,12 +339,9 @@ export function verifyOwnerSemanticState(
               deposit.readBigUInt64LE(162 + i * 8) &&
             reserves[i + 1]! >= intent.readBigUInt64LE(o),
         ) &&
+        transactionBalances.has(a.vaultTokens[0]!) &&
         intent.readBigUInt64LE(146) ===
-          verifyOpenToken(
-            m.baseline![a.vaultTokens[0]!]!,
-            a.authority,
-            C3_MAINNET.usdcMint,
-          ),
+          transactionBalances.get(a.vaultTokens[0]!)!.pre,
       "REDEMPTION_INVENTORY",
     );
   }
@@ -395,9 +424,14 @@ export function verifyOwnerSemanticState(
         a.authority,
         C3_MAINNET.usdcMint,
       );
+      const transaction = transactionBalances.get(a.vaultTokens[0]!);
+      const shares = transactionBalances.get(a.ownerShares);
       check(
         baselineReserve >= returned &&
-          reserves[0] === baselineReserve - returned,
+          transaction &&
+          transaction.pre - transaction.post === returned &&
+          shares?.pre === 1000000n &&
+          shares.post === 0n,
         "RESERVES",
       );
     }
@@ -855,7 +889,16 @@ export function verifyOwnerEconomicEffects(
   }
   verifyOwnerProgramState(manifest, snapshot.value as unknown[]);
   if (manifest.version === "c3-owner-effects/v2")
-    verifyOwnerSemanticState(manifest, snapshot.value as unknown[]);
+    verifyOwnerSemanticState(
+      manifest,
+      snapshot.value as unknown[],
+      new Map(
+        [...pre].map(([index, balance]) => [
+          balance.account,
+          { pre: balance.amount, post: post.get(index)!.amount },
+        ]),
+      ),
+    );
   return {
     slot: Number(tx.slot),
     evidenceHash: digest(
@@ -1086,6 +1129,21 @@ export async function reconcileOwnerEconomicsFromSource(
     await c.query(
       "INSERT INTO c3_open.owner_message_receipts(request_id,slot,evidence_hash) VALUES($1,$2,$3) ON CONFLICT(request_id) DO NOTHING",
       [requestId, proof.slot, Buffer.from(proof.evidenceHash, "hex")],
+    );
+    const messageReceipt = (
+      await c.query(
+        "SELECT slot,evidence_hash FROM c3_open.owner_message_receipts WHERE request_id=$1 FOR UPDATE",
+        [requestId],
+      )
+    ).rows[0];
+    check(
+      messageReceipt &&
+        String(messageReceipt.slot) === String(proof.slot) &&
+        Buffer.isBuffer(messageReceipt.evidence_hash) &&
+        messageReceipt.evidence_hash.equals(
+          Buffer.from(proof.evidenceHash, "hex"),
+        ),
+      "MESSAGE_RECEIPT_CONFLICT",
     );
     await c.query(
       "INSERT INTO c3_open.owner_effect_receipts(request_id,lifecycle_stage,evidence_hash) VALUES($1,$2,$3)",

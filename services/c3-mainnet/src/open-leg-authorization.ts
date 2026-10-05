@@ -63,6 +63,9 @@ export async function persistVerifiedLegQuote(
         material.quotedOutput,
         material.slippageBps,
         material.jupiterThreshold,
+        ctx.planMinimumOutput === undefined
+          ? undefined
+          : BigInt(ctx.planMinimumOutput),
       ),
     },
     bytes = encodeQuoteSealV1(seal);

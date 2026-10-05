@@ -117,9 +117,10 @@ export function inspectOpenPilotBudget(
       source: "https://www.digitalocean.com/pricing/droplets",
     },
     {
-      item: "DigitalOcean PostgreSQL single node published starting plan; checkout/storage confirmation required",
-      cents: 1515n,
-      source: "https://www.digitalocean.com/pricing/managed-databases",
+      item: "DigitalOcean PostgreSQL single node 1GiB; NOT HA; checkout/storage confirmation required",
+      cents: 1500n,
+      source:
+        "https://docs.digitalocean.com/products/databases/postgresql/details/pricing/",
     },
     {
       item: "Quicknode Build MONTHLY not annual",
@@ -178,7 +179,7 @@ export function inspectOpenPilotBudget(
       databaseHa: false,
       singleNodeDowntimeRiskMustBeAccepted: true,
       missingCosts: [
-        "Admissible exact-mint composite price-source entitlement and independent lineage/depth/TWAP evidence (not solved by a generic API key)",
+        "Optional informational pricing quota/availability; independent monetary NAV is NOT used by the restricted single-position candidate (pooled/later deposits still require separate reviewed pricing)",
         "isolated signer/HSM operation, security hardening and adapter review",
         "database additional storage/HA and backup restore verification",
         "RPC overage/support SLA",
@@ -197,19 +198,19 @@ export function inspectOpenPilotBudget(
         "one-time hardened signer adapter, restoration/security review and infrastructure setup",
       ],
       recurringFormulaUsd:
-        "110.95 + admitted pricing subscriptions + signer/HSM operation + additional PG storage/HA + RPC overage/SLA + DNS/tax/egress + operations/review",
+        "110.80 + optional informational pricing overage + signer/HSM operation + additional PG storage/HA + RPC overage/SLA + DNS/tax/egress + operations/review",
       allInTotalUsd: null,
       reason:
         "Missing supplier/workload quotes and final release messages; unknown terms are NOT zero. No SOL or USDC parity assumed.",
     },
     requiredOwnerDecisions: [
-      "Review isolated composite candidate; production remains blocked on authenticated independent market evidence. Separately reviewed first-only pilot with informational/no monetary USD NAV is an alternative, not enabled here",
+      "Review exactly-one-lifetime-position realized-USDC policy, Security/governance/budget and final binary separately; Product authorized isolated testing only, not Mainnet enablement",
       "Public wallet + distinct governance/upgrade/pause/keeper/quote-authority identities + 2-of-3 members/timelock decision",
       "Approve hosting/RPC/signer choice and a concrete complete budget after missing quotes; server-only credentials, never chat/APK",
     ],
     codeBlockers: [
-      "Portal ETH market mark exists but authenticated upstream/depth/window/manipulation proofs are absent",
-      "Composite source-specific admission and secondary market collector implemented only in isolation/research; no authenticated independent production sources enrolled",
+      "Restricted-pilot source approval remains null; no independent monetary NAV is needed for its fixed first-only units/full realized-USDC claim. Pooled valuation remains unavailable",
+      "Public identities/provider review, hardened production signer/HTTPS service and explicit physical MWA test are not production-admitted",
       "Current source approval remains null; disabled binary cannot be deployed as a working pilot",
     ],
   });

@@ -536,6 +536,7 @@ export class JupiterLegCompiler implements OpenQuoteBuilder {
             material.quotedOutput,
             material.slippageBps,
             material.jupiterThreshold,
+            BigInt(ctx.planMinimumOutput),
           ) >= BigInt(ctx.planMinimumOutput),
         "COMMITTED_PLAN_MINIMUM",
       );
@@ -549,6 +550,9 @@ export class JupiterLegCompiler implements OpenQuoteBuilder {
         material.quotedOutput,
         material.slippageBps,
         material.jupiterThreshold,
+        ctx.planMinimumOutput === undefined
+          ? undefined
+          : BigInt(ctx.planMinimumOutput),
       ),
     });
     this.retained.set(id.toString("hex"), {

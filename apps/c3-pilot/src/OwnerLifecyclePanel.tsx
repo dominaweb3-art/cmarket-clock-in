@@ -94,6 +94,26 @@ export function OwnerLifecyclePanel({
           {t.shares}: {position.shareUnits} {t.baseUnits} · slot {position.slot}
         </Text>
       ) : null}
+      {position?.restrictedPosition ? (
+        <>
+          <Text style={{ color: "#ffc96b" }}>{t.informationalValuation}</Text>
+          <Text style={{ color: "#e2ffee" }}>{t.singlePosition}</Text>
+          {position.restrictedPosition.claimableUsdcBaseUnits !== null ? (
+            <Text style={{ color: "#e2ffee" }}>
+              {t.realizedClaim}:{" "}
+              {position.restrictedPosition.claimableUsdcBaseUnits}{" "}
+              {t.usdcBaseUnits}
+            </Text>
+          ) : null}
+          {position.restrictedPosition.returnedUsdcBaseUnits !== null ? (
+            <Text style={{ color: "#e2ffee" }}>
+              {t.realizedReturned}:{" "}
+              {position.restrictedPosition.returnedUsdcBaseUnits}{" "}
+              {t.usdcBaseUnits}
+            </Text>
+          ) : null}
+        </>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         disabled={!wallet || busy}

@@ -1,8 +1,8 @@
 /** Read-only NAV/accounting join. No client price, balance-as-credit, signer,
  * wallet or owner-service mutation. PG receipts corroborate finalized raw state;
  * they are not a second ownership ledger. The isolated entrypoint can NEVER
- * mint production evidence. Production still needs approved policy, raw price
- * pins and the separately required independent economic oracle source.
+ * mint production evidence. Pooled USD NAV still needs approved price sources;
+ * the separately gated one-lifetime-position candidate uses realized USDC only.
  */
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
@@ -31,6 +31,10 @@ import {
   type OpenAccount,
 } from "./open-state-semantics.ts";
 import { calculateOpenNavMath, type OpenNavMathInput } from "./open-nav.ts";
+import {
+  restrictedPositionMath,
+  APPROVED_RESTRICTED_PILOT_POLICY,
+} from "./open-restricted-pilot.ts";
 import {
   evaluateIsolatedCompositePoint,
   type IsolatedCompositePoint,
@@ -230,6 +234,9 @@ function accounting(
     need(uint(r.slot) > 0n && uint(r.slot) <= BigInt(slot), "RECEIPT_SLOT");
     hash(r.messageEvidence);
     receiptHashes.push(hash(r.effectEvidence));
+    // This reader admits only the transactional economic writer, not the old
+    // local message-only receipt path. Both receipts must attest the same proof.
+    need(r.messageEvidence === r.effectEvidence, "RECEIPT_PROVENANCE");
     need(
       hash(r.requestHash) === r.submissionHash &&
         r.policyHash === digest(policy),
@@ -274,6 +281,80 @@ function accounting(
         econ.action === r.action,
       "MANIFEST_BINDING",
     );
+    if (r.action === "claim") {
+      const redemption = accountBytes(
+          raw[a.redemption],
+          policy.program,
+          234,
+          "RedemptionIntent",
+        ),
+        returned = redemption.readBigUInt64LE(162),
+        expected = [
+          {
+            account: a.ownerShares,
+            owner: policy.wallet,
+            mint: policy.shareMint,
+            program: SHARE_TOKEN_PROGRAM,
+            decimals: 6,
+            delta: "-1000000",
+          },
+          {
+            account: a.ownerUsdc,
+            owner: policy.wallet,
+            mint: c.usdcMint,
+            program: c.tokenProgram,
+            decimals: 6,
+            delta: returned.toString(),
+          },
+          {
+            account: a.vaultTokens[0],
+            owner: a.authority,
+            mint: c.usdcMint,
+            program: c.tokenProgram,
+            decimals: 6,
+            delta: (-returned).toString(),
+          },
+        ];
+      need(
+        returned > 0n && digest(econ.tokens) === digest(expected),
+        "CLAIM_TOKEN_EFFECTS",
+      );
+      const burn = Buffer.alloc(9),
+        transfer = Buffer.alloc(10);
+      burn[0] = 8;
+      burn.writeBigUInt64LE(1000000n, 1);
+      transfer[0] = 12;
+      transfer.writeBigUInt64LE(returned, 1);
+      transfer[9] = 6;
+      const dataHash = (b: Buffer) =>
+        createHash("sha256").update(b).digest("hex");
+      need(
+        digest(econ.inner) ===
+          digest([
+            {
+              index: 0,
+              instructions: [
+                {
+                  program: SHARE_TOKEN_PROGRAM,
+                  accounts: [a.ownerShares, policy.shareMint, policy.wallet],
+                  dataHash: dataHash(burn),
+                },
+                {
+                  program: c.tokenProgram,
+                  accounts: [
+                    a.vaultTokens[0],
+                    c.usdcMint,
+                    a.ownerUsdc,
+                    a.authority,
+                  ],
+                  dataHash: dataHash(transfer),
+                },
+              ],
+            },
+          ]),
+        "CLAIM_INNER_EFFECTS",
+      );
+    }
   }
   const owned = [
       "active",
@@ -425,6 +506,18 @@ function accounting(
         d.readBigUInt64LE(186) === (owned || closed ? 1000000n : 0n),
       "DEPOSIT_CREDITS",
     );
+  if (owned || closed || d[113] === 3)
+    need(
+      buy &&
+        !buy.bytes.subarray(724, 756).every((v) => v === 0) &&
+        d.subarray(224, 256).equals(buy.bytes.subarray(724, 756)) &&
+        credits.every(
+          (_, n) =>
+            d.readBigUInt64LE(200 + n * 8) ===
+            buy.bytes.readBigUInt64LE(756 + n * 8),
+        ),
+      "DEPOSIT_SETTLEMENT_BINDING",
+    );
   let claim: string | null = null;
   if (selling) {
     const r = verifyOpenIntent(
@@ -448,6 +541,12 @@ function accounting(
           r.readBigUInt64LE(154) === realized &&
           r.readBigUInt64LE(162) === (closed ? realized : 0n),
         "ACTUAL_CLAIM",
+      );
+      need(
+        sell &&
+          !sell.bytes.subarray(724, 756).every((v) => v === 0) &&
+          r.subarray(170, 202).equals(sell.bytes.subarray(724, 756)),
+        "REDEMPTION_SETTLEMENT_BINDING",
       );
       claim = realized.toString();
     } else
@@ -487,6 +586,85 @@ function accounting(
   };
 }
 
+/** Price-free finalized accounting, shared by NAV and the restricted pilot.
+ * No signer, broadcast, issuance, or mutable price admission. The durable
+ * fingerprint also covers signatures/journal rows, not just the CAS revision.
+ */
+async function readAccounting(
+  pool: Pool,
+  policy: OpenCompilerPolicy,
+  rpc: OwnerReadonlyRpc,
+  genesis: string,
+  id: string,
+  production: boolean,
+  minimumSlot: number,
+) {
+  need(policy.program === VAULT_PROGRAM.toBase58(), "PROGRAM_PIN");
+  const before = await durable(pool, id);
+  need(before.pending === false, "UNCERTAIN_SETTLEMENT");
+  need((await rpc.read("getGenesisHash", [])) === genesis, "GENESIS");
+  const a = openAddresses(policy),
+    names = [
+      policy.vault,
+      policy.shareMint,
+      a.ownerShares,
+      ...a.vaultTokens,
+      a.deposit,
+      a.redemption,
+      a.depositPlan,
+      a.redemptionPlan,
+      CLOCK,
+    ];
+  const s = obj(
+    await rpc.read("getMultipleAccounts", [
+      names,
+      {
+        commitment: "finalized",
+        encoding: "base64",
+        minContextSlot: minimumSlot,
+      },
+    ]),
+  );
+  const slot = obj(s.context).slot;
+  need(
+    typeof slot === "number" &&
+      Number.isSafeInteger(slot) &&
+      slot >= minimumSlot &&
+      Array.isArray(s.value) &&
+      s.value.length === names.length,
+    "FINALIZED_CONTEXT",
+  );
+  const values = s.value;
+  const raw = Object.fromEntries(names.map((n, j) => [n, values[j]])) as Record<
+    string,
+    OpenAccount | null
+  >;
+  const clock = accountBytes(
+    raw[CLOCK],
+    "Sysvar1111111111111111111111111111111111111",
+    40,
+  );
+  const now = clock.readBigInt64LE(32);
+  need(
+    clock.readBigUInt64LE(0) === BigInt(slot) &&
+      now > 0n &&
+      now <= BigInt(Number.MAX_SAFE_INTEGER),
+    "CHAIN_CLOCK",
+  );
+  const inventory = accounting(
+    policy,
+    id,
+    before,
+    raw,
+    slot,
+    genesis,
+    production,
+  );
+  const after = await durable(pool, id);
+  need(digest(before) === digest(after), "SNAPSHOT_CHANGED");
+  return { inventory, slot, now };
+}
+
 async function read(
   pool: Pool,
   policy: OpenCompilerPolicy,
@@ -514,68 +692,15 @@ async function read(
         (production ? "PRODUCTION_PRICE_EVIDENCE" : "ISOLATED_ONLY"),
       "PRICE_SCOPE",
     );
-    need(policy.program === VAULT_PROGRAM.toBase58(), "PROGRAM_PIN");
-    const before = await durable(pool, id);
-    need(before.pending === false, "UNCERTAIN_SETTLEMENT");
-    need((await rpc.read("getGenesisHash", [])) === genesis, "GENESIS");
-    const a = openAddresses(policy),
-      names = [
-        policy.vault,
-        policy.shareMint,
-        a.ownerShares,
-        ...a.vaultTokens,
-        a.deposit,
-        a.redemption,
-        a.depositPlan,
-        a.redemptionPlan,
-        CLOCK,
-      ];
-    const s = obj(
-      await rpc.read("getMultipleAccounts", [
-        names,
-        {
-          commitment: "finalized",
-          encoding: "base64",
-          minContextSlot: prices.contextSlot,
-        },
-      ]),
-    );
-    const slot = obj(s.context).slot;
-    need(
-      typeof slot === "number" &&
-        Number.isSafeInteger(slot) &&
-        slot >= prices.contextSlot &&
-        Array.isArray(s.value) &&
-        s.value.length === names.length,
-      "FINALIZED_CONTEXT",
-    );
-    const values = s.value;
-    const raw = Object.fromEntries(
-      names.map((n, j) => [n, values[j]]),
-    ) as Record<string, OpenAccount | null>;
-    const clock = accountBytes(
-      raw[CLOCK],
-      "Sysvar1111111111111111111111111111111111111",
-      40,
-    );
-    const now = clock.readBigInt64LE(32);
-    need(
-      clock.readBigUInt64LE(0) === BigInt(slot) &&
-        now > 0n &&
-        now <= BigInt(Number.MAX_SAFE_INTEGER),
-      "CHAIN_CLOCK",
-    );
-    const inventory = accounting(
+    const { inventory, slot, now } = await readAccounting(
+      pool,
       policy,
-      id,
-      before,
-      raw,
-      slot,
+      rpc,
       genesis,
+      id,
       production,
+      prices.contextSlot,
     );
-    const after = await durable(pool, id);
-    need(digest(before) === digest(after), "SNAPSHOT_CHANGED");
     const finalPrices = evaluate();
     if (finalPrices.status === "UNAVAILABLE") return finalPrices;
     for (const asset of ASSETS) {
@@ -634,6 +759,133 @@ async function read(
         ? e.message
         : "EVIDENCE_READ_OR_SCHEMA_UNAVAILABLE",
     );
+  }
+}
+
+async function readRestricted(
+  pool: Pool,
+  policy: OpenCompilerPolicy,
+  rpc: OwnerReadonlyRpc,
+  genesis: string,
+  id: string,
+  production: boolean,
+  wallNow: () => number = Date.now,
+) {
+  try {
+    const started = performance.now(),
+      wall = wallNow();
+    need(Number.isSafeInteger(wall) && wall > 0, "SERVER_CLOCK");
+    // Anchor custody to a newly observed finalized Clock. Freshness is required
+    // even though USD prices are not used for this single-position candidate.
+    const anchor = obj(
+        await rpc.read("getAccountInfo", [
+          CLOCK,
+          { commitment: "finalized", encoding: "base64" },
+        ]),
+      ),
+      minimumSlot = obj(anchor.context).slot;
+    need(
+      typeof minimumSlot === "number" &&
+        Number.isSafeInteger(minimumSlot) &&
+        minimumSlot > 0,
+      "FINALIZED_CONTEXT",
+    );
+    const anchorClock = accountBytes(
+      anchor.value as OpenAccount,
+      "Sysvar1111111111111111111111111111111111111",
+      40,
+    );
+    need(
+      anchorClock.readBigUInt64LE(0) === BigInt(minimumSlot) &&
+        Math.abs(Number(anchorClock.readBigInt64LE(32)) - wall / 1000) <= 60,
+      "CUSTODY_CONTEXT_EXPIRED",
+    );
+    const { inventory, slot, now } = await readAccounting(
+      pool,
+      policy,
+      rpc,
+      genesis,
+      id,
+      production,
+      minimumSlot,
+    );
+    const ended = wallNow();
+    need(
+      Number.isSafeInteger(ended) &&
+        ended >= wall &&
+        ended - wall <= 8000 &&
+        performance.now() - started <= 8000 &&
+        Math.abs(Number(now) - ended / 1000) <= 60,
+      "CUSTODY_CONTEXT_EXPIRED",
+    );
+    const math = restrictedPositionMath({
+      inventory: inventory.inventory,
+      supply: inventory.supply.toString(),
+      owned: inventory.owned,
+      closed: inventory.closed,
+      realizedClaim: inventory.claim,
+    });
+    return Object.freeze({
+      evidenceScope: production
+        ? ("MAINNET_REVIEWED" as const)
+        : ("ISOLATED_ONLY" as const),
+      contextSlot: slot,
+      dbRevision: inventory.revision,
+      inventory: inventory.inventory,
+      effectReceiptHashes: inventory.receiptHashes,
+      ...math,
+      status: "RECONCILED_SINGLE_POSITION" as const,
+    });
+  } catch (e) {
+    return missing(
+      e instanceof Error &&
+        /^C3_(NAV_POSITION|OPEN_STATE|RESTRICTED)_/.test(e.message)
+        ? e.message
+        : "EVIDENCE_READ_OR_SCHEMA_UNAVAILABLE",
+    );
+  }
+}
+
+/** A caller cannot turn isolated account evidence into production approval. */
+export function createIsolatedRestrictedPositionReader(
+  pool: Pool,
+  policy: OpenCompilerPolicy,
+  rpc: OwnerReadonlyRpc,
+  genesis: string,
+  wallNow: () => number = Date.now,
+) {
+  need(genesis !== c.genesisHash, "ISOLATED_MAINNET_FORBIDDEN");
+  publicKeyBytes(genesis);
+  const copied = Object.freeze(
+    JSON.parse(canonicalize(policy)),
+  ) as OpenCompilerPolicy;
+  const port = Object.freeze({ read: rpc.read.bind(rpc) });
+  return Object.freeze({
+    read: (id: string) =>
+      readRestricted(pool, copied, port, genesis, id, false, wallNow),
+  });
+}
+
+export async function readProductionRestrictedPosition(
+  pool: Pool,
+  intentId: string,
+) {
+  try {
+    const approved = requireOpenProductionPolicy();
+    if (!APPROVED_RESTRICTED_PILOT_POLICY)
+      return missing("RESTRICTED_POLICY_NOT_APPROVED");
+    await verifyOpenOwnerSchema(pool);
+    await verifyProductionVaultArtifact();
+    return readRestricted(
+      pool,
+      approvedOwnerCompilerPolicy(approved),
+      productionOwnerRpc(),
+      c.genesisHash,
+      intentId,
+      true,
+    );
+  } catch {
+    return missing("PRODUCTION_NOT_APPROVED");
   }
 }
 

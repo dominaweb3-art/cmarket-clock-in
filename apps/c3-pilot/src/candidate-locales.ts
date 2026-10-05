@@ -30,6 +30,13 @@ const en = {
     "cbBTC · Wormhole Portal ETH · SOL exposure held as WSOL inside the vault",
   position: "No independently reconciled on-chain C3 position is configured.",
   nav: "NAV is unavailable; targets and test results are not holdings or prices.",
+  informationalValuation:
+    "Any valuation estimate is informational only, not a redemption price or guaranteed return.",
+  singlePosition:
+    "Restricted candidate: one wallet, one lifetime 1 USDC deposit, full redemption only. Public execution disabled.",
+  realizedClaim: "Finalized liquidation: claimable USDC",
+  realizedReturned: "Finalized USDC actually returned",
+  usdcBaseUnits: "USDC base units (6 decimals)",
   empty:
     "No verified Mainnet C3 activity. No local test launcher is included in this APK.",
   buy: "Buy 1 USDC · blocked",
@@ -96,6 +103,13 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     position:
       "No hay una posición C3 on-chain configurada y conciliada independientemente.",
     nav: "NAV no disponible; objetivos y pruebas no son tenencias ni precios.",
+    informationalValuation:
+      "Toda valoración estimada es solo informativa, no un precio de rescate ni devolución garantizada.",
+    singlePosition:
+      "Candidato restringido: una wallet, un único depósito de 1 USDC y rescate total. Ejecución pública deshabilitada.",
+    realizedClaim: "Liquidación finalizada: USDC reclamable",
+    realizedReturned: "USDC efectivamente devuelto y finalizado",
+    usdcBaseUnits: "unidades base USDC (6 decimales)",
     empty:
       "Sin actividad C3 Mainnet verificada. Este APK no incluye el lanzador de pruebas locales.",
     buy: "Comprar 1 USDC · bloqueado",
@@ -157,6 +171,12 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     assets: "cbBTC · Wormhole Portal ETH · 金库内以 WSOL 持有 SOL 敞口",
     position: "尚未配置经独立核对的链上 C3 持仓。",
     nav: "NAV 不可用；目标和测试结果不是持仓或价格。",
+    informationalValuation: "估值仅供参考，不是赎回价格，也不保证回报。",
+    singlePosition:
+      "受限候选：一个钱包、终身仅一次 1 USDC 存款、仅支持全部赎回。公开执行已禁用。",
+    realizedClaim: "已最终确认的清算：可领取 USDC",
+    realizedReturned: "已最终确认的实际返还 USDC",
+    usdcBaseUnits: "USDC 基础单位（6 位小数）",
     empty: "暂无经核实的 Mainnet C3 活动。此 APK 不含本地测试启动器。",
     buy: "购买 1 USDC · 已阻止",
     sell: "全额赎回 · 已阻止",
@@ -217,6 +237,13 @@ export const candidateTranslations: Record<CandidateLanguage, Dictionary> = {
     position:
       "Nenhuma posição C3 on-chain configurada e reconciliada independentemente.",
     nav: "NAV indisponível; metas e testes não são posições nem preços.",
+    informationalValuation:
+      "Qualquer avaliação estimada é apenas informativa, não é preço de resgate nem retorno garantido.",
+    singlePosition:
+      "Candidato restrito: uma carteira, um único depósito de 1 USDC e resgate total. Execução pública desativada.",
+    realizedClaim: "Liquidação finalizada: USDC disponível para resgate",
+    realizedReturned: "USDC efetivamente devolvido e finalizado",
+    usdcBaseUnits: "unidades base USDC (6 decimais)",
     empty:
       "Sem atividade C3 Mainnet verificada. Este APK não inclui o iniciador de testes locais.",
     buy: "Comprar 1 USDC · bloqueado",

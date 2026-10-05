@@ -30,6 +30,8 @@ import {
 import {
   createIsolatedOpenNavPositionReader,
   readProductionOpenNavPosition,
+  createIsolatedRestrictedPositionReader,
+  readProductionRestrictedPosition,
 } from "../src/open-nav-position.ts";
 const NOW = 1800000000,
   SLOT = 100,
@@ -49,6 +51,149 @@ const raw = (b: Buffer, owner: string, executable = false): OpenAccount => ({
   executable,
   data: [b.toString("base64"), "base64"],
   lamports: 1,
+});
+test("restricted single-position accounting needs no price and preserves reservations/donations and realized claim", async () => {
+  for (const stage of [
+    "funded",
+    "buying",
+    "active",
+    "selling",
+    "claimable",
+    "redeemed",
+  ] as const) {
+    const f = fixture(stage);
+    const reader = createIsolatedRestrictedPositionReader(
+      f.pool,
+      f.policy,
+      f.rpc,
+      f.genesis,
+      () => NOW * 1000,
+    );
+    const before = canonicalize(f.snapshot);
+    const r = await reader.read(ID);
+    assert.equal(
+      r.status,
+      "RECONCILED_SINGLE_POSITION",
+      stage + JSON.stringify(r),
+    );
+    assert.equal(canonicalize(f.snapshot), before);
+    if (r.status !== "RECONCILED_SINGLE_POSITION") continue;
+    assert.equal(r.monetaryNav, null);
+    assert.equal(r.valuation, "INFORMATIONAL_ONLY");
+    assert.equal(
+      r.shareUnits,
+      ["active", "selling", "claimable"].includes(stage) ? "1000000" : "0",
+    );
+    for (const asset of ASSETS) assert.equal(r.donations[asset], "1");
+    assert.equal(
+      r.claimableUsdcBaseUnits,
+      stage === "claimable" ? "990000" : null,
+    );
+    assert.equal(
+      r.returnedUsdcBaseUnits,
+      stage === "redeemed" ? "990000" : null,
+    );
+    f.snapshot.pending = true;
+    assert.equal((await reader.read(ID)).status, "UNAVAILABLE");
+  }
+  const f = fixture();
+  assert.throws(
+    () =>
+      createIsolatedRestrictedPositionReader(
+        f.pool,
+        f.policy,
+        f.rpc,
+        c.genesisHash,
+      ),
+    /MAINNET_FORBIDDEN/,
+  );
+  assert.deepEqual(await readProductionRestrictedPosition(f.pool, ID), {
+    status: "UNAVAILABLE",
+    reason: "PRODUCTION_NOT_APPROVED",
+  });
+});
+test("restricted accounting rejects wrong owner, mismatched finalized effects and concurrent journal changes", async () => {
+  for (const mode of ["owner", "effects", "counter", "race"]) {
+    const f = fixture();
+    const reader = createIsolatedRestrictedPositionReader(
+      f.pool,
+      f.policy,
+      f.rpc,
+      f.genesis,
+      () => NOW * 1000,
+    );
+    if (mode === "owner") f.snapshot.intent.wallet = key(70);
+    if (mode === "effects") f.snapshot.legs[0]!.effects!.outputAmount = "1";
+    if (mode === "counter") {
+      const a = f.accounts[f.policy.vault]!;
+      const b = Buffer.from(a.data[0]!, "base64");
+      b.writeBigUInt64LE(0n, 456);
+      f.accounts[f.policy.vault] = raw(b, a.owner);
+    }
+    if (mode === "race")
+      f.setRead(() => {
+        f.snapshot.pending = true;
+      });
+    assert.equal((await reader.read(ID)).status, "UNAVAILABLE", mode);
+  }
+});
+test("restricted position rejects stale custody, settlement substitution and false payout/burn receipts", async () => {
+  for (const mode of [
+    "stale-clock",
+    "future-clock",
+    "read-expired",
+    "receipt-provenance",
+    "deposit-settlement",
+    "deposit-input",
+    "redemption-settlement",
+    "payout",
+    "burn",
+    "inner",
+    "extra-token",
+  ]) {
+    const f = fixture("redeemed");
+    const mutateRaw = (address: string, alter: (b: Buffer) => void) => {
+      const account = f.accounts[address]!;
+      const b = Buffer.from(account.data[0]!, "base64");
+      alter(b);
+      f.accounts[address] = raw(b, account.owner);
+    };
+    if (mode === "stale-clock" || mode === "future-clock")
+      mutateRaw(CLOCK, (b) =>
+        b.writeBigInt64LE(
+          BigInt(NOW + (mode === "stale-clock" ? -61 : 61)),
+          32,
+        ),
+      );
+    if (mode === "receipt-provenance")
+      f.snapshot.receipts[0]!.messageEvidence = "d".repeat(64);
+    if (mode === "deposit-settlement")
+      mutateRaw(f.a.deposit, (b) => b.fill(0, 224, 256));
+    if (mode === "deposit-input")
+      mutateRaw(f.a.deposit, (b) => b.writeBigUInt64LE(1n, 200));
+    if (mode === "redemption-settlement")
+      mutateRaw(f.a.redemption, (b) => (b[170] = 2));
+    const receipt = f.snapshot.receipts.find((r) => r.action === "claim")!;
+    if (mode === "payout") receipt.economic.tokens![1]!.delta = "1";
+    if (mode === "burn") receipt.economic.tokens![0]!.delta = "0";
+    if (mode === "inner") receipt.economic.inner = [];
+    if (mode === "extra-token")
+      receipt.economic.tokens!.push({
+        ...receipt.economic.tokens![1]!,
+        mint: c.cbBtcMint,
+        delta: "-1",
+      });
+    receipt.economicHash = dh(receipt.economic);
+    let reads = 0;
+    const reader = createIsolatedRestrictedPositionReader(
+      f.pool,
+      f.policy,
+      f.rpc,
+      f.genesis,
+      () => NOW * 1000 + (mode === "read-expired" && reads++ > 0 ? 8001 : 0),
+    );
+    assert.equal((await reader.read(ID)).status, "UNAVAILABLE", mode);
+  }
 });
 const anchor = (n: number, name: string) => {
   const b = Buffer.alloc(n);
@@ -236,10 +381,17 @@ function fixture(
   if (owned || closed) {
     bought.forEach((n, j) => deposit.writeBigUInt64LE(n, 162 + j * 8));
     deposit.writeBigUInt64LE(1000000n, 186);
+    deposit[224] = 1;
+    [400000n, 300000n, 300000n].forEach((n, j) =>
+      deposit.writeBigUInt64LE(n, 200 + j * 8),
+    );
   }
   redemption[113] = closed ? 6 : stage === "claimable" ? 4 : 2;
   bought.forEach((n, j) => redemption.writeBigUInt64LE(n, 122 + j * 8));
-  if (sellCount === 3) redemption.writeBigUInt64LE(990000n, 154);
+  if (sellCount === 3) {
+    redemption.writeBigUInt64LE(990000n, 154);
+    redemption[170] = 1;
+  }
   if (closed) redemption.writeBigUInt64LE(990000n, 162);
   accounts[a.deposit] = raw(deposit, program);
   accounts[a.redemption] = selling ? raw(redemption, program) : null;
@@ -352,6 +504,62 @@ function fixture(
             : a.depositPlan,
         messageHash: "c".repeat(64),
         action,
+        ...(action === "claim"
+          ? {
+              tokens: [
+                {
+                  account: a.ownerShares,
+                  owner: policy.wallet,
+                  mint: policy.shareMint,
+                  program: SHARE_TOKEN_PROGRAM,
+                  decimals: 6,
+                  delta: "-1000000",
+                },
+                {
+                  account: a.ownerUsdc,
+                  owner: policy.wallet,
+                  mint: c.usdcMint,
+                  program: c.tokenProgram,
+                  decimals: 6,
+                  delta: "990000",
+                },
+                {
+                  account: a.vaultTokens[0]!,
+                  owner: a.authority,
+                  mint: c.usdcMint,
+                  program: c.tokenProgram,
+                  decimals: 6,
+                  delta: "-990000",
+                },
+              ],
+              inner: [
+                {
+                  index: 0,
+                  instructions: [
+                    {
+                      program: SHARE_TOKEN_PROGRAM,
+                      accounts: [
+                        a.ownerShares,
+                        policy.shareMint,
+                        policy.wallet,
+                      ],
+                      dataHash: sha(Buffer.from("0840420f0000000000", "hex")),
+                    },
+                    {
+                      program: c.tokenProgram,
+                      accounts: [
+                        a.vaultTokens[0],
+                        c.usdcMint,
+                        a.ownerUsdc,
+                        a.authority,
+                      ],
+                      dataHash: sha(Buffer.from("0c301b0f000000000006", "hex")),
+                    },
+                  ],
+                },
+              ],
+            }
+          : {}),
       },
       economic = {
         version: "c3-owner-effects/v2",
@@ -367,6 +575,9 @@ function fixture(
             : a.deposit,
         messageHash: auth.messageHash,
         action,
+        ...(action === "claim"
+          ? { tokens: auth.tokens, inner: auth.inner }
+          : {}),
       };
     return {
       action,
@@ -380,7 +591,7 @@ function fixture(
       submissionHash: auth.messageHash,
       signature: "2".repeat(88),
       slot: "99",
-      messageEvidence: "d".repeat(64),
+      messageEvidence: "e".repeat(64),
       effectEvidence: "e".repeat(64),
       authorization: auth,
       authorizationHash: dh(auth),
@@ -450,6 +661,11 @@ function fixture(
   const rpc = {
     read: async (method: string, params: unknown[]) => {
       if (method === "getGenesisHash") return genesis;
+      if (method === "getAccountInfo")
+        return {
+          context: { slot: SLOT },
+          value: structuredClone(accounts[params[0] as string]),
+        };
       onRead();
       const names = params[0] as string[];
       return {

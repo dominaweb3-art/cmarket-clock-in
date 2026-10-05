@@ -35,7 +35,10 @@ import {
   findProgramAddress,
   publicKeyBytes,
 } from "../src/solana.ts";
-import type { OpenAccount } from "../src/open-state-semantics.ts";
+import {
+  openAddresses,
+  type OpenAccount,
+} from "../src/open-state-semantics.ts";
 const hash = (v: string | Uint8Array) =>
   createHash("sha256").update(v).digest();
 const CLOCK = "SysvarC1ock11111111111111111111111111111111";
@@ -615,3 +618,250 @@ test("source approval and isolated genesis reject before database/network", asyn
     KEEPER_JOURNAL_SCHEMA.trim(),
   );
 });
+
+const donationActions = [
+  "create_buy_plan",
+  "create_sell_plan",
+  "record_buy",
+  "record_sell",
+] as const;
+const donationMints = [
+  c.usdcMint,
+  c.cbBtcMint,
+  c.portalEthMint,
+  c.wrappedSolMint,
+];
+type KeeperFixture = Awaited<ReturnType<typeof keeperFixture>>;
+function keeperCustody(f: KeeperFixture) {
+  return openAddresses({ ...f.policy, program: f.policy.programId })
+    .vaultTokens;
+}
+function changeKeeperSnapshot(
+  f: KeeperFixture,
+  address: string,
+  change: (b: Buffer) => void,
+) {
+  const index = f.manifest.snapshotAccounts.indexOf(address);
+  assert.ok(index >= 0);
+  const raw = f.evidence.snapshots.primary.value[index]!;
+  const b = Buffer.from(raw.data[0]!, "base64");
+  change(b);
+  f.evidence.snapshots.primary.value[index] = {
+    ...raw,
+    data: [b.toString("base64"), "base64"],
+  };
+}
+function synchronizeKeeperEvidence(f: KeeperFixture) {
+  f.evidence.transaction.secondary = structuredClone(
+    f.evidence.transaction.primary,
+  );
+  f.evidence.wire.primary.meta = structuredClone(
+    f.evidence.transaction.primary.meta,
+  );
+  f.evidence.wire.secondary = structuredClone(f.evidence.wire.primary);
+  f.evidence.snapshots.secondary = structuredClone(
+    f.evidence.snapshots.primary,
+  );
+}
+function keeperDonation(
+  f: KeeperFixture,
+  mintIndex: number,
+  window: "prepare/execution" | "execution/snapshot",
+) {
+  const address = keeperCustody(f)[mintIndex]!;
+  changeKeeperSnapshot(f, address, (b) =>
+    b.writeBigUInt64LE(b.readBigUInt64LE(64) + 1n, 64),
+  );
+  if (
+    window === "prepare/execution" &&
+    f.manifest.action.startsWith("record")
+  ) {
+    for (const balances of [
+      f.evidence.transaction.primary.meta.preTokenBalances,
+      f.evidence.transaction.primary.meta.postTokenBalances,
+    ]) {
+      const entry = balances.find(
+        (t) => t.accountIndex === f.keys.indexOf(address),
+      )!;
+      entry.uiTokenAmount.amount = (
+        BigInt(entry.uiTokenAmount.amount) + 1n
+      ).toString();
+    }
+  }
+  synchronizeKeeperEvidence(f);
+}
+function verifyKeeperFixture(f: KeeperFixture) {
+  return verifyKeeperEffects(
+    f.policy,
+    f.manifest,
+    f.unsigned,
+    f.packet,
+    f.evidence,
+  );
+}
+
+for (const action of donationActions)
+  for (const [mintIndex, mint] of donationMints.entries())
+    for (const window of ["prepare/execution", "execution/snapshot"] as const)
+      test(`keeper ${action}: +1 ${mint} donation at ${window}, no transaction token movement`, async () => {
+        const f = await keeperFixture(action);
+        const pinned = JSON.stringify(f.manifest);
+        keeperDonation(f, mintIndex, window);
+        const meta = f.evidence.transaction.primary.meta;
+        assert.deepEqual(meta.preTokenBalances, meta.postTokenBalances);
+        if (action.startsWith("create"))
+          assert.deepEqual(meta.preTokenBalances, []);
+        assert.equal(verifyKeeperFixture(f).signature, f.signature);
+        assert.equal(JSON.stringify(f.manifest), pinned);
+        const address = keeperCustody(f)[mintIndex]!;
+        const prepared = Buffer.from(
+          f.manifest.preAccounts[address]!.data[0]!,
+          "base64",
+        );
+        const observed = Buffer.from(
+          f.evidence.snapshots.primary.value[
+            f.manifest.snapshotAccounts.indexOf(address)
+          ]!.data[0]!,
+          "base64",
+        );
+        assert.equal(
+          observed.readBigUInt64LE(64),
+          prepared.readBigUInt64LE(64) + 1n,
+        );
+        assert.deepEqual(observed.subarray(0, 64), prepared.subarray(0, 64));
+        assert.deepEqual(observed.subarray(72), prepared.subarray(72));
+      });
+
+for (const action of donationActions)
+  test(`keeper ${action}: donations preserve custody metadata and reject removals, movement and inner effects`, async () => {
+    const original = await keeperFixture(action);
+    for (const [mintIndex] of donationMints.entries()) {
+      const donated = {
+        ...original,
+        evidence: structuredClone(original.evidence),
+      };
+      keeperDonation(donated, mintIndex, "execution/snapshot");
+      assert.equal(verifyKeeperFixture(donated).signature, original.signature);
+      const address = keeperCustody(donated)[mintIndex]!;
+      for (const defect of [
+        "snapshot-removal",
+        "missing-account",
+        "mint",
+        "authority",
+        "delegate",
+        "delegate-bytes",
+        "native-reserve",
+        "close-authority",
+        "owner-program",
+        "executable",
+        "lamport-removal",
+        "negative-lamports",
+        "tx-movement",
+        "negative-token",
+        "pre-removal",
+        "inner",
+      ] as const) {
+        const f = { ...donated, evidence: structuredClone(donated.evidence) };
+        const meta = f.evidence.transaction.primary.meta;
+        const prepared = Buffer.from(
+          f.manifest.preAccounts[address]!.data[0]!,
+          "base64",
+        ).readBigUInt64LE(64);
+        if (defect === "snapshot-removal") {
+          // Unsigned amounts cannot be smaller than zero; positive fixtures
+          // prove removals, while zero fixtures are covered by missing-account.
+          if (prepared === 0n) continue;
+          changeKeeperSnapshot(f, address, (b) =>
+            b.writeBigUInt64LE(prepared - 1n, 64),
+          );
+        } else if (
+          [
+            "missing-account",
+            "owner-program",
+            "executable",
+            "lamport-removal",
+            "negative-lamports",
+          ].includes(defect)
+        ) {
+          const index = f.manifest.snapshotAccounts.indexOf(address);
+          const raw = f.evidence.snapshots.primary.value[index]!;
+          f.evidence.snapshots.primary.value[index] =
+            defect === "missing-account"
+              ? (null as unknown as OpenAccount)
+              : {
+                  ...raw,
+                  ...(defect === "owner-program"
+                    ? { owner: c.systemProgram }
+                    : defect === "executable"
+                      ? { executable: true }
+                      : {
+                          lamports:
+                            defect === "negative-lamports"
+                              ? -1
+                              : raw.lamports! - 1,
+                        }),
+                };
+        } else if (
+          defect === "tx-movement" ||
+          defect === "negative-token" ||
+          defect === "pre-removal"
+        ) {
+          const before = meta.preTokenBalances.find(
+            (t) => t.accountIndex === f.keys.indexOf(address),
+          );
+          const after = meta.postTokenBalances.find(
+            (t) => t.accountIndex === f.keys.indexOf(address),
+          );
+          if (!before || !after) {
+            meta.preTokenBalances.push({
+              accountIndex: 0,
+              mint: donationMints[mintIndex],
+              owner: f.policy.keeper,
+              programId: c.tokenProgram,
+              uiTokenAmount: {
+                amount: "-1",
+                decimals: [6, 8, 8, 9][mintIndex],
+              },
+            });
+          } else if (defect === "tx-movement")
+            after.uiTokenAmount.amount = (
+              BigInt(after.uiTokenAmount.amount) + 1n
+            ).toString();
+          else if (defect === "negative-token")
+            before.uiTokenAmount.amount = after.uiTokenAmount.amount = "-1";
+          else {
+            if (prepared === 0n) continue;
+            before.uiTokenAmount.amount = after.uiTokenAmount.amount = (
+              prepared - 1n
+            ).toString();
+          }
+        } else if (defect === "inner") {
+          meta.innerInstructions.push({
+            index: 0,
+            instructions: [
+              {
+                programIdIndex: f.keys.indexOf(c.tokenProgram),
+                accounts: [],
+                data: encodeBase58(Buffer.from([8])),
+                stackHeight: 2,
+              },
+            ],
+          });
+        } else
+          changeKeeperSnapshot(f, address, (b) => {
+            if (defect === "mint") b[0] = b[0]! ^ 1;
+            if (defect === "authority") b[32] = b[32]! ^ 1;
+            if (defect === "delegate") b.writeUInt32LE(1, 72);
+            if (defect === "delegate-bytes") b[76] = 1;
+            if (defect === "native-reserve") b[113] = 1;
+            if (defect === "close-authority") b.writeUInt32LE(1, 129);
+          });
+        synchronizeKeeperEvidence(f);
+        assert.throws(
+          () => verifyKeeperFixture(f),
+          /C3_(KEEPER|OPEN_STATE)_/,
+          `${mintIndex}/${defect}`,
+        );
+      }
+    }
+  });

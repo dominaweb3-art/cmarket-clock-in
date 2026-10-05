@@ -236,6 +236,8 @@ export function compileTrustedOwnerPacket(
       ownerUsdc >= 1000000n &&
         mint.supply === 0n &&
         config.lifecycle === 0 &&
+        config.bytes.readBigUInt64LE(456) === 0n &&
+        config.bytes.readBigUInt64LE(464) === 0n &&
         vacant(context.accounts[a.deposit]),
       "DEPOSIT_LIMIT",
     );
@@ -243,6 +245,8 @@ export function compileTrustedOwnerPacket(
     requireValue(
       ownerShares === 1000000n &&
         config.lifecycle === 2 &&
+        config.bytes.readBigUInt64LE(456) === 1n &&
+        config.bytes.readBigUInt64LE(464) === 0n &&
         vacant(context.accounts[a.redemption]),
       "REDEMPTION_LIMIT",
     );

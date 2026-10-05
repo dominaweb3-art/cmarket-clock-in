@@ -20,14 +20,16 @@ const project = join(root, "variants/mainnet"),
   signing = join(root, "release-signing"),
   dist = join(
     root,
-    process.argv.includes("--device-message-qa-monotonic")
-      ? "dist/device-message-qa-monotonic-candidate"
-      : process.argv.includes("--device-message-qa")
-        ? "dist/device-message-qa-candidate"
-        : "dist/mainnet-candidate",
+    process.argv.includes("--restricted-single-position")
+      ? "dist/restricted-single-position-candidate"
+      : process.argv.includes("--device-message-qa-monotonic")
+        ? "dist/device-message-qa-monotonic-candidate"
+        : process.argv.includes("--device-message-qa")
+          ? "dist/device-message-qa-candidate"
+          : "dist/mainnet-candidate",
   );
 if (
-  qaBuild &&
+  (qaBuild || process.argv.includes("--restricted-single-position")) &&
   existsSync(join(dist, "c-market-c3-mainnet-candidate-0.1.0-disabled.apk"))
 )
   throw new Error("QA_ARTIFACT_ALREADY_EXISTS_PRESERVE_IT");

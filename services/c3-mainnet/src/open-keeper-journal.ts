@@ -117,7 +117,7 @@ type RpcToken = {
   owner: string;
   mint: string;
   programId: string;
-  uiTokenAmount: { amount: string };
+  uiTokenAmount: { amount: string; decimals: number };
 };
 type RpcMeta = {
   err: unknown;
@@ -585,12 +585,50 @@ export function verifyKeeperEffects(
   }
   demand(afterIntent.equals(expectedIntent), "EXACT_INTENT_TRANSITION");
   for (const n of names.filter(
-    (n) => ![CLOCK, m.onchainIntent, ...(create ? [m.plan] : [])].includes(n),
+    (n) =>
+      ![
+        CLOCK,
+        m.onchainIntent,
+        ...a.vaultTokens,
+        ...(create ? [m.plan] : []),
+      ].includes(n),
   ))
     demand(
       canonicalize(m.preAccounts[n]) === canonicalize(post[n]),
       "UNRELATED_STATE_CHANGE",
     );
+  a.vaultTokens.forEach((n, i) => {
+    const mint = [c.usdcMint, c.cbBtcMint, c.portalEthMint, c.wrappedSolMint][
+      i
+    ]!;
+    const prepared = verifyOpenToken(m.preAccounts[n]!, a.authority, mint);
+    const current = verifyOpenToken(post[n]!, a.authority, mint);
+    const beforeBytes = accountBytes(m.preAccounts[n], c.tokenProgram, 165);
+    const afterBytes = accountBytes(post[n], c.tokenProgram, 165);
+    // External donations may advance balances, never custody metadata. Do not
+    // treat donated units as plan outputs or inputs: those remain plan/receipt-bound.
+    const normalized = (raw: OpenAccount, bytes: Buffer) => {
+      const b = Buffer.from(bytes);
+      b.fill(0, 64, 72);
+      return { ...raw, lamports: 0, data: [b.toString("base64"), "base64"] };
+    };
+    demand(
+      current >= prepared &&
+        canonicalize(normalized(m.preAccounts[n]!, beforeBytes)) ===
+          canonicalize(normalized(post[n]!, afterBytes)),
+      "CUSTODY_MUTATION",
+    );
+    const beforeLamports = m.preAccounts[n]!.lamports,
+      afterLamports = post[n]!.lamports;
+    demand(
+      (beforeLamports === undefined && afterLamports === undefined) ||
+        (Number.isSafeInteger(beforeLamports) &&
+          beforeLamports! >= 0 &&
+          Number.isSafeInteger(afterLamports) &&
+          afterLamports! >= beforeLamports!),
+      "CUSTODY_LAMPORTS",
+    );
+  });
   demand(
     post[m.onchainIntent]!.lamports ===
       m.preAccounts[m.onchainIntent]!.lamports,
@@ -705,12 +743,18 @@ export function verifyKeeperEffects(
           entry.mint ===
             [c.usdcMint, c.cbBtcMint, c.portalEthMint, c.wrappedSolMint][i] &&
           entry.programId === c.tokenProgram &&
-          entry.uiTokenAmount?.amount ===
+          entry.uiTokenAmount?.decimals === [6, 8, 8, 9][i] &&
+          typeof entry.uiTokenAmount.amount === "string" &&
+          /^(0|[1-9][0-9]{0,19})$/.test(entry.uiTokenAmount.amount) &&
+          BigInt(entry.uiTokenAmount.amount) < 1n << 64n &&
+          BigInt(entry.uiTokenAmount.amount) >=
             verifyOpenToken(
               m.preAccounts[a.vaultTokens[i]!]!,
               a.authority,
               entry.mint,
-            ).toString(),
+            ) &&
+          verifyOpenToken(post[a.vaultTokens[i]!]!, a.authority, entry.mint) >=
+            BigInt(entry.uiTokenAmount.amount),
         "TOKEN_EVIDENCE",
       );
     }

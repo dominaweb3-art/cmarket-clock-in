@@ -6,6 +6,12 @@ import {
   type ReviewedRpcProvider,
 } from "./pilot-rpc-evidence.ts";
 import { publicKeyBytes } from "./solana.ts";
+import { createHash } from "node:crypto";
+import { canonicalize } from "./manifest.ts";
+import {
+  APPROVED_RESTRICTED_PILOT_POLICY,
+  RESTRICTED_PILOT_CANDIDATE,
+} from "./open-restricted-pilot.ts";
 
 export type OpenProductionPolicy = Readonly<{
   version: "c3-open-production/v1";
@@ -84,6 +90,21 @@ export function requireOpenProductionPolicy(): OpenProductionPolicy {
   if (!C3_MAINNET_EXECUTION_CAPABILITY || !APPROVED_OPEN_PRODUCTION_POLICY)
     throw new Error("C3_OPEN_PRODUCTION_NOT_APPROVED");
   validateOpenProductionPolicy(APPROVED_OPEN_PRODUCTION_POLICY);
+  const restricted = APPROVED_RESTRICTED_PILOT_POLICY;
+  if (
+    !restricted ||
+    restricted.version !== RESTRICTED_PILOT_CANDIDATE.version ||
+    restricted.policyHash !==
+      createHash("sha256")
+        .update(canonicalize(RESTRICTED_PILOT_CANDIDATE))
+        .digest("hex") ||
+    restricted.binaryHash !== APPROVED_OPEN_PRODUCTION_POLICY.binaryHash ||
+    restricted.securityApprovalHash !==
+      APPROVED_OPEN_PRODUCTION_POLICY.securityApprovalHash ||
+    restricted.governanceApprovalHash !==
+      APPROVED_OPEN_PRODUCTION_POLICY.governanceApprovalHash
+  )
+    throw Error("C3_OPEN_RESTRICTED_POLICY_NOT_APPROVED");
   return APPROVED_OPEN_PRODUCTION_POLICY;
 }
 export const OPEN_PRODUCTION_ASSETS = Object.freeze({

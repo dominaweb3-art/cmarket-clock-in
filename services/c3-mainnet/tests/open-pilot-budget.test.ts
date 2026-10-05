@@ -20,7 +20,7 @@ test("public artifact budget is reproducible, itemized and never approval", () =
   assert.equal(r.capital.recoverableBufferSol, "3.520587320");
   assert.equal(r.capital.measuredPeakSol, "7.104954040");
   assert.equal(r.capital.proposedKnownPeakSol, "7.286983440");
-  assert.equal(r.infrastructure.monthlyPublishedSubtotalUsd, "110.95");
+  assert.equal(r.infrastructure.monthlyPublishedSubtotalUsd, "110.80");
   assert.equal(r.budgetApproved, false);
   assert.ok(r.infrastructure.missingCosts.length > 0);
   assert.equal(r.totalBudget.allInTotalUsd, null);
@@ -28,7 +28,7 @@ test("public artifact budget is reproducible, itemized and never approval", () =
     r.totalBudget.status,
     "UNPRICED_COMPONENTS_BLOCK_FINAL_APPROVAL",
   );
-  assert.ok(r.totalBudget.recurringFormulaUsd.includes("110.95 +"));
+  assert.ok(r.totalBudget.recurringFormulaUsd.includes("110.80 +"));
 });
 test("changed binary/IDL, mixed snapshots, duplicate rows and unsafe arithmetic reject", () => {
   for (const change of [

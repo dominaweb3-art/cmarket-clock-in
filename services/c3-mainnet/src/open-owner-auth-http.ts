@@ -15,7 +15,10 @@ import {
 } from "./open-owner-service.ts";
 import { reconcileProductionOwnerEconomics } from "./open-owner-effects.ts";
 import { reconcileProductionOwnerRenewal } from "./open-owner-renewal.ts";
-import { readProductionOpenNavPosition } from "./open-nav-position.ts";
+import {
+  readProductionOpenNavPosition,
+  readProductionRestrictedPosition,
+} from "./open-nav-position.ts";
 import { verifyOpenOwnerSchema } from "./open-owner-schema.ts";
 import type {
   OpenCompilerPolicy,
@@ -168,6 +171,10 @@ export async function handleProductionOwnerProtocol(
       productionOwnerRpc(fetcher),
     );
     const nav = await readProductionOpenNavPosition(pool, intentId);
+    const restrictedPosition = await readProductionRestrictedPosition(
+      pool,
+      intentId,
+    );
     return {
       ...position,
       scope: "MAINNET_INDEPENDENT_RPC",
@@ -183,6 +190,20 @@ export async function handleProductionOwnerProtocol(
             }
           : null,
       navStatus: nav.status === "UNAVAILABLE" ? nav.reason : nav.status,
+      restrictedPosition:
+        restrictedPosition.status === "RECONCILED_SINGLE_POSITION"
+          ? {
+              status: restrictedPosition.status,
+              policyVersion: restrictedPosition.policyVersion,
+              contextSlot: restrictedPosition.contextSlot,
+              shareUnits: restrictedPosition.shareUnits,
+              ownershipBps: restrictedPosition.ownershipBps,
+              claimableUsdcBaseUnits: restrictedPosition.claimableUsdcBaseUnits,
+              returnedUsdcBaseUnits: restrictedPosition.returnedUsdcBaseUnits,
+              monetaryNav: null,
+              valuation: restrictedPosition.valuation,
+            }
+          : null,
     };
   }
   if (

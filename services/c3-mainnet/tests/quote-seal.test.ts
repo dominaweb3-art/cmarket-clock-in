@@ -56,6 +56,14 @@ test("minimum output uses checked integer floor, never caller value", () => {
   assert.throws(() => encodeQuoteSealV1({ ...validSeal(), minimumOutput: 1n }));
   assert.equal(deriveQuoteMinimum(478n, 100, 474n), 474n);
   assert.equal(deriveQuoteMinimum(478n, 100, 1n), 473n);
+  assert.equal(deriveQuoteMinimum(478n, 100, 474n, 475n), 475n);
+  assert.equal(deriveQuoteMinimum(478n, 100, 474n, 470n), 474n);
+  assert.equal(deriveQuoteMinimum(478n, 100, 474n, 478n), 478n);
+  for (const committed of [0n, -1n, 479n, 1n << 64n])
+    assert.throws(
+      () => deriveQuoteMinimum(478n, 100, 474n, committed),
+      /COMMITTED_MINIMUM/,
+    );
   assert.throws(() => deriveQuoteMinimum(478n, 100, 479n));
   const stronger = { ...validSeal(), quotedOutput: 478n, minimumOutput: 474n };
   assert.equal(encodeQuoteSealV1(stronger).length, 300);

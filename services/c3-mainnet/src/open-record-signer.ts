@@ -193,6 +193,9 @@ export class VerifiedOpenRecordSigner {
               bytes.readBigUInt64LE(121),
               bytes.readUInt16LE(129),
               BigInt(r.evidence.jupiterThreshold),
+              ctx.planMinimumOutput === undefined
+                ? undefined
+                : BigInt(String(ctx.planMinimumOutput)),
             ) &&
           bytes.readBigInt64LE(284) * 1000n ===
             BigInt(r.expires_at.getTime()) &&

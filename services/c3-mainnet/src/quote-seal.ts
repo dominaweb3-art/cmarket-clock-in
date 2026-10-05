@@ -99,6 +99,7 @@ export function deriveQuoteMinimum(
   output: bigint,
   slippageBps: number,
   validatedJupiterThreshold?: bigint,
+  committedPlanMinimum?: bigint,
 ): bigint {
   if (
     output <= 0n ||
@@ -108,15 +109,20 @@ export function deriveQuoteMinimum(
     slippageBps > 100
   )
     throw new Error("C3_QUOTE_INVALID_MINIMUM_INPUT");
-  const result = (output * BigInt(10_000 - slippageBps)) / 10_000n;
+  let result = (output * BigInt(10_000 - slippageBps)) / 10_000n;
   if (result <= 0n || result > U64_MAX)
     throw new Error("C3_QUOTE_INVALID_MINIMUM_OUTPUT");
   if (validatedJupiterThreshold !== undefined) {
     if (validatedJupiterThreshold <= 0n || validatedJupiterThreshold > output)
       throw new Error("C3_QUOTE_INVALID_JUPITER_THRESHOLD");
-    return validatedJupiterThreshold > result
-      ? validatedJupiterThreshold
-      : result;
+    if (validatedJupiterThreshold > result) result = validatedJupiterThreshold;
+  }
+  // A fresh quote may tolerate a STRICTER floor than its own slippage threshold.
+  // Never lower the owner-committed plan floor or authorize above quoted output.
+  if (committedPlanMinimum !== undefined) {
+    if (committedPlanMinimum <= 0n || committedPlanMinimum > output)
+      throw new Error("C3_QUOTE_COMMITTED_MINIMUM_UNATTAINABLE");
+    if (committedPlanMinimum > result) result = committedPlanMinimum;
   }
   return result;
 }

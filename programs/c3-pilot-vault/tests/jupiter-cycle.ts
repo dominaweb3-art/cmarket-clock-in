@@ -24,6 +24,7 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   getAccount,
+  createTransferCheckedInstruction,
 } from "@solana/spl-token";
 import {
   Keypair,
@@ -66,7 +67,11 @@ import {
 } from "../../../services/c3-mainnet/src/open-keeper-journal.ts";
 import type { KeeperAction } from "../../../services/c3-mainnet/src/open-keeper-compiler.ts";
 import { JupiterLegCompiler } from "../../../services/c3-mainnet/src/open-jupiter-compiler.ts";
-import { applyReviewedOpenSchema } from "../../../services/c3-mainnet/src/open-owner-schema.ts";
+import {
+  applyReviewedOpenSchema,
+  enrollOpenOwner,
+} from "../../../services/c3-mainnet/src/open-owner-schema.ts";
+import type { OpenCompilerPolicy } from "../../../services/c3-mainnet/src/open-owner-compiler.ts";
 import { reconcileOwnerEconomicsFromSource } from "../../../services/c3-mainnet/src/open-owner-effects.ts";
 import type { collectFinalizedOpenEconomicEvidence } from "../../../services/c3-mainnet/src/open-economic-quorum.ts";
 import { encodeBase58 } from "../../../services/c3-mainnet/src/solana.ts";
@@ -82,6 +87,9 @@ import {
 import { createIsolatedOwnerServer } from "../../../services/c3-mainnet/pilot-open-local/owner-server.ts";
 import { ownerBackend } from "../../../apps/c3-pilot/src/owner-backend.ts";
 import { OwnerController } from "../../../apps/c3-pilot/src/owner-controller.ts";
+import { createIsolatedRestrictedPositionReader } from "../../../services/c3-mainnet/src/open-nav-position.ts";
+import { approvedOwnerCompilerPolicy } from "../../../services/c3-mainnet/src/open-owner-trust.ts";
+import type { OpenProductionPolicy } from "../../../services/c3-mainnet/src/open-production-policy.ts";
 import type {
   MoneyAction,
   OwnerPolicy,
@@ -239,6 +247,14 @@ try {
   });
   for (const mint of [c.usdcMint, ...assets])
     tokenFixture(new PublicKey(vaultAta(mint)), mint, VAULT_AUTHORITY, 0n);
+  // Explicit synthetic DONOR fixtures only. Each transfers one unit on-chain;
+  // these units must survive the six-leg cycle outside the user's position.
+  const donorTokens = [c.usdcMint, ...assets].map((mint) =>
+    getAssociatedTokenAddressSync(new PublicKey(mint), emergency.publicKey),
+  );
+  [c.usdcMint, ...assets].forEach((mint, index) =>
+    tokenFixture(donorTokens[index]!, mint, emergency.publicKey, 1n),
+  );
   // Warm all directions, but NEVER execute these quotes or pre-fund sell assets.
   const warmFresh = async (r: RouterRequest): Promise<RouterBuild> => {
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -424,6 +440,24 @@ try {
       systemProgram: SystemProgram.programId,
     },
   );
+  const donation = await provider.sendAndConfirm(
+    new Transaction().add(
+      ...[c.usdcMint, ...assets].map((mint, index) =>
+        createTransferCheckedInstruction(
+          donorTokens[index]!,
+          new PublicKey(mint),
+          new PublicKey(vaultAta(mint)),
+          emergency.publicKey,
+          1n,
+          [6, 8, 8, 9][index]!,
+        ),
+      ),
+    ),
+    [emergency],
+  );
+  await finalized(donation);
+  report.donationFixture =
+    "four synthetic donor units transferred locally; excluded from shares, sell budgets and claim";
   await instruction("initializeRouteRegistry", [], {
     governance: governance.publicKey,
     config,
@@ -507,20 +541,51 @@ try {
   const depositIntent = intent("deposit"),
     depositPlan = derive("c3-plan-v1", depositIntent),
     redemptionIntent = intent("redemption");
-  const id = randomUUID();
   await applyReviewedOpenSchema(journal.pool);
   // Explicit disposable-DB migration only; source services never auto-migrate.
   let db = new VerifiedSettlementJournal(journal.pool);
-  let state: OpenSnapshot = await journal.db.createDraft({
-    intentId: id,
+  const enrollmentPolicy: OpenCompilerPolicy = {
+    version: "c3-owner-compiler/v1",
+    program: VAULT_PROGRAM.toBase58(),
     wallet: owner.publicKey.toBase58(),
     vault: config.toBase58(),
     shareMint: share.publicKey.toBase58(),
-    depositPlan: depositPlan.toBase58(),
+    governance: governance.publicKey.toBase58(),
+    keeper: keeper.publicKey.toBase58(),
+    maxSlippageBps: 100,
+    idlHash: cycleHash(Buffer.from(JSON.stringify(idl))),
     configurationHash: cycleHash(Buffer.from("c3-real-local-cycle-v1")),
-    expiresAt: new Date(Date.now() + 3_600_000),
-    idempotencyHash: cycleHash(Buffer.from(randomUUID())),
-  });
+    registryRevision: "1",
+    quotePolicyRevision: "1",
+  };
+  const initial = await local.getMultipleAccountsInfo(
+    [config, share.publicKey],
+    "finalized",
+  );
+  const enrolledAccounts = Object.fromEntries(
+    [config, share.publicKey].map((k, index) => {
+      const a = initial[index]!;
+      assert.ok(a);
+      return [
+        k.toBase58(),
+        {
+          owner: a.owner.toBase58(),
+          executable: a.executable,
+          data: [a.data.toString("base64"), "base64"],
+        },
+      ];
+    }),
+  );
+  const id = await enrollOpenOwner(
+    journal.pool,
+    enrollmentPolicy,
+    enrolledAccounts,
+  );
+  assert.equal(
+    await enrollOpenOwner(journal.pool, enrollmentPolicy, enrolledAccounts),
+    id,
+  );
+  let state: OpenSnapshot = (await db.read(id))!;
   const scope = (): Scope => ({
     intentId: id,
     wallet: state.wallet,
@@ -535,6 +600,33 @@ try {
     idl,
     id,
   );
+  const positionReader = createIsolatedRestrictedPositionReader(
+    journal.pool,
+    approvedOwnerCompilerPolicy({
+      ...serverContext.policy,
+      version: "c3-open-production/v1",
+    } as OpenProductionPolicy),
+    serverContext.rpc,
+    serverContext.genesis,
+  );
+  const positionEvidence: unknown[] = [];
+  const readRestricted = async () => {
+    const p = await positionReader.read(id);
+    assert.equal(p.status, "RECONCILED_SINGLE_POSITION", JSON.stringify(p));
+    if (p.status !== "RECONCILED_SINGLE_POSITION")
+      throw Error("C3_CYCLE_POSITION_UNAVAILABLE");
+    assert.equal(p.monetaryNav, null);
+    for (const mint of ["USDC", "cbBTC", "PortalETH", "WSOL"] as const)
+      assert.equal(p.donations[mint], "1");
+    positionEvidence.push({
+      stage: state.state,
+      slot: p.contextSlot,
+      shares: p.shareUnits,
+      claimable: p.claimableUsdcBaseUnits,
+      returned: p.returnedUsdcBaseUnits,
+    });
+    return p;
+  };
   const pairRead = async (method: string, params: unknown[]) => {
     const [primary, secondary] = await Promise.all([
       serverContext.rpc.read(method, params),
@@ -837,6 +929,9 @@ try {
   await keeperOperation("create_buy_plan");
   stage = "durable-funding";
   assert.equal(state.state, "funded");
+  await readRestricted();
+  await assert.rejects(backend.prepare(id, "deposit"));
+  report.secondDeposit = "same backend refuses second deposit";
   if (process.argv.includes("--renew-plan")) {
     stage = "owner-durable-renewal";
     const old = await local.getAccountInfo(depositPlan, "finalized");
@@ -915,6 +1010,8 @@ try {
         1_000_000n,
       );
       report.sharesIssued = "1000000";
+      const p = await readRestricted();
+      assert.equal(p.ownershipBps, 10000);
       await ownerOperation("request_redemption");
       await keeperOperation("create_sell_plan");
       assert.equal(state.state, "redemption_requested");
@@ -925,12 +1022,10 @@ try {
         ? ordinal === 0
           ? 400_000n
           : 300_000n
-        : (
-            await getAccount(
-              local,
-              new PublicKey(vaultAta(assets[ordinal % 3]!)),
-            )
-          ).amount;
+        : (await local.getAccountInfo(
+            redemptionIntent,
+            "finalized",
+          ))!.data.readBigUInt64LE(122 + (ordinal % 3) * 8);
     if (ordinal >= 3)
       assert.equal(
         amount,
@@ -1066,6 +1161,7 @@ try {
       db = new VerifiedSettlementJournal(journal.pool);
       state = (await db.read(id))!;
       assert.equal((await db.readLeg(id, ordinal)).signature, signature);
+      assert.equal((await positionReader.read(id)).status, "UNAVAILABLE");
       state = await db.beginReconciliation(scope(), ordinal);
       report.uncertainRecovery =
         "retained signature; read-only reconciliation, no resend";
@@ -1153,13 +1249,19 @@ try {
     const output = (
       await getAccount(local, new PublicKey(vaultAta(req.outputMint)))
     ).amount;
-    if (ordinal < 3) buys.push(output);
+    if (ordinal < 3) buys.push(output - 1n);
     steps.push({
       ordinal,
       signature,
       authorizationPersisted: true,
       input: amount.toString(),
       quotedOutput: build.outAmount,
+      realizedOutput: (await local.getAccountInfo(
+        new PublicKey(ordinal < 3 ? state.depositPlan : state.redemptionPlan!),
+        "finalized",
+      ))!.data
+        .readBigUInt64LE(804 + (ordinal % 3) * 8)
+        .toString(),
       threshold: build.otherAmountThreshold,
       minimum: seal.readBigUInt64LE(131).toString(),
       bytes: execBytes.length,
@@ -1170,10 +1272,16 @@ try {
     // Reconstruct the service between legs; do not reconstruct or resend packets.
     db = new VerifiedSettlementJournal(journal.pool);
     state = (await db.read(id))!;
+    await readRestricted();
   }
   stage = "redemption-and-claim";
   await keeperOperation("record_sell");
   assert.equal(state.state, "claimable");
+  const claimPosition = await readRestricted();
+  const realized = steps
+    .slice(3)
+    .reduce((total, leg) => total + BigInt(String(leg.realizedOutput)), 0n);
+  assert.equal(claimPosition.claimableUsdcBaseUnits, realized.toString());
   const claimAccounts = {
     owner: owner.publicKey,
     config,
@@ -1194,12 +1302,22 @@ try {
     0n,
   );
   assert.equal(state.state, "redeemed");
+  const closedPosition = await readRestricted();
+  assert.equal(closedPosition.returnedUsdcBaseUnits, realized.toString());
   await assert.rejects(instruction("claimUsdc", [], claimAccounts, [owner]));
   report.duplicateClaim = "rejected on-chain";
   report.sharesBurned = "1000000";
   report.usdcReturned = (
     await getAccount(local, ownerUsdc, "finalized")
   ).amount.toString();
+  assert.equal(report.usdcReturned, realized.toString());
+  for (const mint of [c.usdcMint, ...assets])
+    assert.equal(
+      (await getAccount(local, new PublicKey(vaultAta(mint)), "finalized"))
+        .amount,
+      1n,
+    );
+  report.restrictedPositionEvidence = positionEvidence;
   report.result = "PASS_LOCAL_CLONED_JUPITER_CYCLE";
   report.intentId = id;
   // Read-only handset view of the SAME durable intent; never a Mainnet position.

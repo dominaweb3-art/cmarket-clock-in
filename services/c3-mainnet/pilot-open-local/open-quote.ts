@@ -47,6 +47,7 @@ export type StoredQuoteContext = Readonly<{
   maxQuoteAgeSeconds: number;
   planExpiresAt: string;
   configurationHash: string;
+  planMinimumOutput?: string;
 }>;
 export function openQuoteContext(value: StoredQuoteContext): QuoteContextV1 {
   const hex = (v: string) => {
@@ -271,6 +272,9 @@ export async function loadOpenSignerRecord(
           p.readBigUInt64LE(121),
           p.readUInt16LE(129),
           BigInt(row!.evidence.jupiterThreshold!),
+          trusted.context.planMinimumOutput === undefined
+            ? undefined
+            : BigInt(trusted.context.planMinimumOutput),
         ) &&
       p.readBigInt64LE(268) <= BigInt(Math.floor(Date.now() / 1000)) &&
       p.readBigInt64LE(284) - p.readBigInt64LE(268) <=
@@ -348,6 +352,9 @@ export class OpenQuoteAuthority {
         material.quotedOutput,
         material.slippageBps,
         material.jupiterThreshold,
+        row.context.planMinimumOutput === undefined
+          ? undefined
+          : BigInt(row.context.planMinimumOutput),
       ),
     };
     const payload = encodeQuoteSealV1(seal);
