@@ -44,9 +44,11 @@ const forbidden = [
   "pilot-open-local",
   "bigint-buffer",
   "@solana/spl-token",
-  "BEGIN PRIVATE KEY",
 ];
-if (forbidden.some((value) => bundle.includes(value)))
+if (
+  forbidden.some((value) => bundle.includes(value)) ||
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(bundle)
+)
   throw Error("EVAL_BUNDLE_ISOLATION_FAILED");
 const reports = fileURLToPath(
   new URL("../../../artifacts/c3-devnet-evaluation/", import.meta.url),
