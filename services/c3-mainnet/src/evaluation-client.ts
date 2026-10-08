@@ -121,6 +121,15 @@ export class EvaluationClient {
   ) {
     const definition = this.idl.instructions.find((i) => i.name === name);
     if (!definition) throw Error("EVAL_INSTRUCTION_UNAVAILABLE");
+    // Borsh fixed arrays may otherwise encode an absent field as zero bytes.
+    // Require the exact IDL argument names before any unsigned packet is built.
+    if (
+      Object.keys(args).length !== definition.args.length ||
+      definition.args.some(
+        (a) => !Object.hasOwn(args, a.name) || args[a.name] == null,
+      )
+    )
+      throw Error("EVAL_INSTRUCTION_ARGUMENTS");
     const keys = definition.accounts.map((item) => {
       if ("accounts" in item) throw Error("EVAL_NESTED_ACCOUNT_UNREVIEWED");
       const pubkey = accounts[item.name];

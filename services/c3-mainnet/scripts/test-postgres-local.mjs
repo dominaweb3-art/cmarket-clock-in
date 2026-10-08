@@ -18,23 +18,25 @@ const role = `c3_test_${suffix}`;
 const database = `c3_test_${suffix}`;
 const password = randomBytes(32).toString("hex");
 let started = false;
-const testFile = process.argv.includes("--open-owner-enrollment")
-  ? "pilot-open-local/owner-enrollment.integration.ts"
-  : process.argv.includes("--open-owner-compiler")
-    ? "pilot-open-local/owner-compiler.integration.ts"
-    : process.argv.includes("--open-owner-protocol")
-      ? "pilot-open-local/owner-protocol.integration.ts"
-      : process.argv.includes("--open-owner")
-        ? "pilot-open-local/owner-journal.integration.ts"
-        : process.argv.includes("--open-generations")
-          ? "pilot-open-local/plan-generations.integration.ts"
-          : process.argv.includes("--open-jupiter-recovery")
-            ? "pilot-open-local/open-jupiter-recovery.integration.ts"
-            : process.argv.includes("--open-quote")
-              ? "pilot-open-local/open-quote.integration.ts"
-              : process.argv.includes("--open-local")
-                ? "pilot-open-local/orchestrator.integration.ts"
-                : "tests/postgres-live.integration.ts";
+const testFile = process.argv.includes("--evaluation-quote")
+  ? "tests/evaluation-quote-postgres.integration.ts"
+  : process.argv.includes("--open-owner-enrollment")
+    ? "pilot-open-local/owner-enrollment.integration.ts"
+    : process.argv.includes("--open-owner-compiler")
+      ? "pilot-open-local/owner-compiler.integration.ts"
+      : process.argv.includes("--open-owner-protocol")
+        ? "pilot-open-local/owner-protocol.integration.ts"
+        : process.argv.includes("--open-owner")
+          ? "pilot-open-local/owner-journal.integration.ts"
+          : process.argv.includes("--open-generations")
+            ? "pilot-open-local/plan-generations.integration.ts"
+            : process.argv.includes("--open-jupiter-recovery")
+              ? "pilot-open-local/open-jupiter-recovery.integration.ts"
+              : process.argv.includes("--open-quote")
+                ? "pilot-open-local/open-quote.integration.ts"
+                : process.argv.includes("--open-local")
+                  ? "pilot-open-local/orchestrator.integration.ts"
+                  : "tests/postgres-live.integration.ts";
 const withVault = process.argv.includes("--open-local-cpi");
 const withReadServer = process.argv.includes("--open-read-server");
 const withJupiterCycle = process.argv.includes("--open-jupiter-cycle");
@@ -89,6 +91,12 @@ try {
   });
   await admin.connect();
   try {
+    if (process.argv.includes("--evaluation-quote")) {
+      // Disposable cluster only; names used by the evaluation RLS projection.
+      await admin.query(
+        "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN",
+      );
+    }
     // role/database identifiers are generated from hex, not external input.
     await admin.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}'`);
     await admin.query(`CREATE DATABASE ${database} OWNER ${role}`);

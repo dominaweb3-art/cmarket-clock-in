@@ -28,6 +28,7 @@
     "format:check": "prettier --check .",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:postgres": "node scripts/test-postgres-local.mjs",
+    "test:evaluation-quote-postgres": "node scripts/test-postgres-local.mjs --evaluation-quote",
     "test:open-local-postgres": "node scripts/test-postgres-local.mjs --open-local",
     "test:open-owner-postgres": "node scripts/test-postgres-local.mjs --open-owner",
     "test:open-owner-protocol": "node scripts/test-postgres-local.mjs --open-owner-protocol",
