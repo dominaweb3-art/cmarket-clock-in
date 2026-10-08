@@ -11,6 +11,7 @@ import {
 
 export const SHARE_TOKEN_PROGRAM =
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 export type OpenAccount = Readonly<{
   owner: string;
   executable: boolean;
@@ -166,12 +167,20 @@ export function verifyOpenShareMint(
   scope: OpenSemanticScope,
   raw: OpenAccount,
 ) {
-  const b = accountBytes(raw, SHARE_TOKEN_PROGRAM),
-    a = openAddresses(scope);
+  return verifyShareMintForAuthority(openAddresses(scope).authority, raw);
+}
+/** Same strict SPL-2022 layout validation, independent of network/PDA derivation.
+ * Does not grant a production capability or relax the production scope. */
+export function verifyShareMintForAuthority(
+  authority: string,
+  raw: OpenAccount,
+) {
+  publicKeyBytes(authority);
+  const b = accountBytes(raw, SHARE_TOKEN_PROGRAM);
   demand(
     b.length >= 170 &&
       b.readUInt32LE(0) === 1 &&
-      key(b, 4) === a.authority &&
+      key(b, 4) === authority &&
       b[44] === 6 &&
       b[45] === 1 &&
       b.readBigUInt64LE(36) <= 1000000n,
@@ -180,7 +189,7 @@ export function verifyOpenShareMint(
   const freeze = b.readUInt32LE(46);
   demand(
     (freeze === 0 && b.subarray(50, 82).every((v) => v === 0)) ||
-      (freeze === 1 && key(b, 50) === a.authority),
+      (freeze === 1 && key(b, 50) === authority),
     "FREEZE_AUTHORITY",
   );
   demand(
@@ -210,11 +219,11 @@ export function verifyOpenToken(
   raw: OpenAccount,
   owner: string,
   mint: string,
-  program: string = c.tokenProgram,
+  program: string = TOKEN_PROGRAM,
 ) {
   const b = accountBytes(raw, program);
   demand(
-    (program === c.tokenProgram ? b.length === 165 : b.length >= 165) &&
+    (program === TOKEN_PROGRAM ? b.length === 165 : b.length >= 165) &&
       key(b, 0) === mint &&
       key(b, 32) === owner &&
       b[108] === 1 &&

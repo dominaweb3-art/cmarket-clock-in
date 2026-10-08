@@ -132,7 +132,20 @@ mod router_binding_tests {
                 crate::swap_leg::reviewed_router().unwrap()
             );
             assert_ne!(initial_router_program().unwrap(), crate::ID);
+            #[cfg(not(any(feature = "devnet-evaluation", feature = "local-jupiter-cycle")))]
             assert!(!ROUTER_EXECUTION_ENABLED);
+            #[cfg(feature = "devnet-evaluation")]
+            {
+                assert!(ROUTER_EXECUTION_ENABLED);
+                assert_eq!(
+                    initial_router_program().unwrap().to_string(),
+                    "F9yXLAA7tvWSCmXnAT8xRqTMHDuwFsgMbDThrde6uHs7"
+                );
+                assert_ne!(
+                    crate::ID.to_string(),
+                    "HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV"
+                );
+            }
         }
         #[cfg(feature = "local-mock")]
         assert_eq!(initial_router_program().unwrap(), crate::ID);

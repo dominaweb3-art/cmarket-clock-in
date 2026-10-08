@@ -1,5 +1,26 @@
 # C Market workspace guidance
 
+## Active delivery override — Devnet evaluation (5 October 2026)
+
+On `delivery/c3-devnet-evaluation` only, the owner authorizes a functional
+Devnet evaluation with explicitly simulated test assets and settlement. This
+overrides the older Mainnet-only delivery restrictions below, not their custody,
+signature, expiry, reconciliation, replay or durable-state safeguards.
+
+- Preserve `feature/c3-open-pilot-vault` at its reviewed candidate and all prior APKs.
+- Mainnet execution, real funds, paid infrastructure and automatic uncertain
+  resubmission are prohibited. Evaluation identities never reuse Mainnet keys.
+- Display “Evaluación Devnet · tokens sin valor monetario” permanently.
+- Use the existing vault/share-token/router lifecycle, separating evaluation
+  vaults by wallet. Do not call test assets cbBTC, Portal ETH or Jupiter liquidity.
+- PostgreSQL and HTTP services must be hosted durably; acceptance cannot depend
+  on the Mac, Metro, USB, loopback or a local validator.
+- Delivery requires the complete physical Phantom/Seeker deposit, simulated
+  allocation, shares, redemption, claim and restart recovery, not a disabled APK.
+- Publication is authorized in existing free resources after secret checks;
+  submitting the competition form still requires the owner's approval.
+
+
 ## Active C3 open-vault pilot rule (2026-09-28; supersedes older Symmetry execution guidance below)
 
 The active controlled-pilot execution path is the source-reviewed C3 open vault in `programs/c3-pilot-vault/`. The older Symmetry V3 builder, evidence, PostgreSQL work, and documents remain preserved for provenance and a possible future adapter; Symmetry is frozen and non-executable for this pilot. The older sections below describe historical decisions and must not override this active rule.

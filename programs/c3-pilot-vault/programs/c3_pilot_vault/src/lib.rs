@@ -33,7 +33,10 @@ use state::*;
 use token_validation::*;
 use transitions::*;
 
+#[cfg(not(feature = "devnet-evaluation"))]
 declare_id!("HTc3na8WFnsExbV1oxutKhTxyWE9PEsVRhjjkXAhajwV");
+#[cfg(feature = "devnet-evaluation")]
+declare_id!("2rZgxofn8kTsahAHPiaLTw7FZcw4MxzLK9cKowZ5HPcg");
 
 #[program]
 pub mod c3_pilot_vault {
@@ -716,7 +719,8 @@ pub mod c3_pilot_vault {
         )?;
         share_mint(&ctx.accounts.share_mint, ctx.accounts.vault_authority.key())?;
         let bump = [c.authority_bump];
-        let signer: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+        let owner_scope = authority_seed(c.allowlisted_owner);
+        let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         token_2022::mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.share_token_program.to_account_info(),
@@ -956,7 +960,8 @@ pub mod c3_pilot_vault {
             anchor_spl::token::ID,
         )?;
         let bump = [c.authority_bump];
-        let signer: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+        let owner_scope = authority_seed(c.allowlisted_owner);
+        let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         // Burn and USDC transfer are atomic: if either fails, neither effect survives.
         token_2022::burn(
             CpiContext::new(
@@ -1155,7 +1160,8 @@ pub mod c3_pilot_vault {
             add(d.usdc_before, d.deposited)?,
         )?;
         let bump = [c.authority_bump];
-        let signer: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+        let owner_scope = authority_seed(c.allowlisted_owner);
+        let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         token::transfer_checked(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),

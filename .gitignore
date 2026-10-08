@@ -37,3 +37,7 @@ credentials.json
 /.c3fork-*/
 .c3cycle-*/
 /output/pdf/
+/artifacts/c3-devnet-evaluation/
+/apps/c3-evaluation-web/.vercel/
+/apps/c3-evaluation-web/api/evaluation.mjs
+/apps/c3-evaluation-web/resources/

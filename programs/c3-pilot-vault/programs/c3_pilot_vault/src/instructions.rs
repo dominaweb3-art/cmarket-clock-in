@@ -17,9 +17,9 @@ pub struct InitializeVault<'info> {
     /// CHECK: Stored as the allowlisted pilot wallet.
     pub owner: UncheckedAccount<'info>,
     /// CHECK: PDA signer; no data account is required.
-    #[account(seeds = [AUTHORITY_SEED], bump)]
+    #[account(seeds = [&authority_seed(owner.key())[..]], bump)]
     pub vault_authority: UncheckedAccount<'info>,
-    #[account(init, payer = payer, seeds = [VAULT_SEED], bump, space = 8 + VaultConfig::INIT_SPACE)]
+    #[account(init, payer = payer, seeds = [&vault_seed(owner.key())[..]], bump, space = 8 + VaultConfig::INIT_SPACE)]
     pub config: Box<Account<'info, VaultConfig>>,
     pub usdc_mint: Box<Account<'info, Mint>>,
     pub btc_mint: Box<Account<'info, Mint>>,
@@ -38,7 +38,7 @@ pub struct InitializeVault<'info> {
 #[derive(Accounts)]
 pub struct Govern<'info> {
     pub authority: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
 }
 
@@ -46,7 +46,7 @@ pub struct Govern<'info> {
 pub struct InitializeRouteRegistry<'info> {
     #[account(mut, address = config.governance)]
     pub governance: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(init, payer = governance, seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump,
         space = 8 + RouteProgramRegistry::INIT_SPACE)]
@@ -58,7 +58,7 @@ pub struct InitializeRouteRegistry<'info> {
 pub struct GovernRouteRegistry<'info> {
     #[account(address = config.governance)]
     pub governance: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
         constraint = registry.vault == config.key(), constraint = registry.governance == config.governance)]
@@ -69,7 +69,7 @@ pub struct GovernRouteRegistry<'info> {
 pub struct InitializeQuotePolicy<'info> {
     #[account(mut, address = config.governance)]
     pub governance: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(init, payer = governance, seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump,
         space = 8 + QuoteAuthorityPolicy::INIT_SPACE)]
@@ -81,7 +81,7 @@ pub struct InitializeQuotePolicy<'info> {
 pub struct GovernQuotePolicy<'info> {
     #[account(address = config.governance)]
     pub governance: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [QUOTE_POLICY_SEED, config.key().as_ref()], bump = policy.bump,
         constraint = policy.vault == config.key(), constraint = policy.governance == config.governance)]
@@ -93,7 +93,7 @@ pub struct GovernQuotePolicy<'info> {
 pub struct CreateDepositIntent<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(init, payer = owner, seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), nonce.to_le_bytes().as_ref()], bump, space = 8 + DepositIntent::INIT_SPACE)]
     pub intent: Box<Account<'info, DepositIntent>>,
@@ -104,7 +104,7 @@ pub struct CreateDepositIntent<'info> {
 pub struct DepositUsdc<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
     pub intent: Box<Account<'info, DepositIntent>>,
@@ -126,7 +126,7 @@ pub struct DepositUsdc<'info> {
 #[derive(Accounts)]
 pub struct RecordDepositSettlement<'info> {
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Box<Account<'info, DepositIntent>>,
@@ -146,7 +146,7 @@ pub struct RecordDepositSettlement<'info> {
 pub struct CreateDepositPlan<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Box<Account<'info, DepositIntent>>,
@@ -159,12 +159,12 @@ pub struct CreateDepositPlan<'info> {
 pub struct IssueShares<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
     pub intent: Box<Account<'info, DepositIntent>>,
     /// CHECK: PDA signer, checked by seeds and bump.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(mut, address = config.share_mint)]
     pub share_mint: Box<InterfaceAccount<'info, ShareMint>>,
@@ -186,7 +186,7 @@ pub struct IssueShares<'info> {
 pub struct CreateRedemptionIntent<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), deposit.nonce.to_le_bytes().as_ref()], bump, constraint = deposit.vault == config.key(), constraint = deposit.wallet == owner.key())]
     pub deposit: Box<Account<'info, DepositIntent>>,
@@ -209,7 +209,7 @@ pub struct CreateRedemptionIntent<'info> {
 pub struct BurnShares<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [b"redemption", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
     pub intent: Box<Account<'info, RedemptionIntent>>,
@@ -223,7 +223,7 @@ pub struct BurnShares<'info> {
 #[derive(Accounts)]
 pub struct RecordRedemptionSettlement<'info> {
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Box<Account<'info, RedemptionIntent>>,
@@ -243,7 +243,7 @@ pub struct RecordRedemptionSettlement<'info> {
 pub struct CreateRedemptionPlan<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, constraint = intent.vault == config.key())]
     pub intent: Box<Account<'info, RedemptionIntent>>,
@@ -257,7 +257,7 @@ pub struct CreateRedemptionPlan<'info> {
 pub struct AuthorizeSwapLeg<'info> {
     #[account(mut, address = config.governance)]
     pub governance: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
         constraint = registry.vault == config.key())]
@@ -269,7 +269,7 @@ pub struct AuthorizeSwapLeg<'info> {
         constraint = plan.vault == config.key())]
     pub plan: Box<Account<'info, SettlementPlan>>,
     /// CHECK: Only the seed-derived PDA can sign an inner token operation.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     pub source: Box<Account<'info, TokenAccount>>,
     pub destination: Box<Account<'info, TokenAccount>>,
@@ -292,7 +292,7 @@ pub struct AuthorizeSwapLeg<'info> {
 #[derive(Accounts)]
 pub struct ExecuteSwapLeg<'info> {
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(seeds = [ROUTE_REGISTRY_SEED, config.key().as_ref()], bump = registry.bump,
         constraint = registry.vault == config.key())]
@@ -310,7 +310,7 @@ pub struct ExecuteSwapLeg<'info> {
         constraint = quote_receipt.authorization == authorization.key())]
     pub quote_receipt: Box<Account<'info, QuoteReceipt>>,
     /// CHECK: Only the seed-derived PDA can sign an inner token operation.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(mut, address = authorization.source)]
     pub source: Box<Account<'info, TokenAccount>>,
@@ -326,12 +326,12 @@ pub struct ExecuteSwapLeg<'info> {
 pub struct ClaimUsdc<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [b"redemption", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
     pub intent: Box<Account<'info, RedemptionIntent>>,
     /// CHECK: PDA signer, checked by seeds and bump.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(mut, address = config.vault_usdc)]
     pub vault_usdc: Box<Account<'info, TokenAccount>>,
@@ -350,7 +350,7 @@ pub struct ClaimUsdc<'info> {
 #[derive(Accounts)]
 pub struct ExpireIntent<'info> {
     pub caller: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, constraint = deposit.vault == config.key())]
     pub deposit: Box<Account<'info, DepositIntent>>,
@@ -360,7 +360,7 @@ pub struct ExpireIntent<'info> {
 pub struct CloseCompletedIntent<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, close = owner, constraint = redemption.vault == config.key(), constraint = redemption.wallet == owner.key())]
     pub redemption: Box<Account<'info, RedemptionIntent>>,
@@ -369,7 +369,7 @@ pub struct CloseCompletedIntent<'info> {
 #[derive(Accounts)]
 pub struct RenewSettlementPlan<'info> {
     pub owner: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [PLAN_SEED, plan.intent.as_ref()], bump = plan.bump,
       constraint = plan.vault == config.key(), constraint = plan.wallet == owner.key())]
@@ -380,7 +380,7 @@ pub struct RenewSettlementPlan<'info> {
 #[derive(Accounts)]
 pub struct RefundUnswappedDeposit<'info> {
     pub owner: Signer<'info>,
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    #[account(mut, seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     #[account(mut, seeds = [b"deposit", config.key().as_ref(), owner.key().as_ref(), intent.nonce.to_le_bytes().as_ref()], bump)]
     pub intent: Box<Account<'info, DepositIntent>>,
@@ -388,7 +388,7 @@ pub struct RefundUnswappedDeposit<'info> {
     #[account(mut, seeds = [PLAN_SEED, intent.key().as_ref()], bump)]
     pub plan: UncheckedAccount<'info>,
     /// CHECK: PDA transfer signer checked by seeds/bump.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(mut, address = config.vault_usdc)]
     pub vault_usdc: Box<Account<'info, TokenAccount>>,
@@ -403,10 +403,10 @@ pub struct RefundUnswappedDeposit<'info> {
 #[derive(Accounts)]
 pub struct MockSettle<'info> {
     pub keeper: Signer<'info>,
-    #[account(seeds = [VAULT_SEED], bump)]
+    #[account(seeds = [&vault_seed(config.allowlisted_owner)[..]], bump)]
     pub config: Box<Account<'info, VaultConfig>>,
     /// CHECK: PDA signer, checked by seeds and bump.
-    #[account(seeds = [AUTHORITY_SEED], bump = config.authority_bump)]
+    #[account(seeds = [&authority_seed(config.allowlisted_owner)[..]], bump = config.authority_bump)]
     pub vault_authority: UncheckedAccount<'info>,
     #[account(mut, address = config.vault_usdc)]
     pub vault_usdc: Box<Account<'info, TokenAccount>>,

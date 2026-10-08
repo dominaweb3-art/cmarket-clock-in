@@ -551,13 +551,13 @@ pub(crate) fn account_metas_hash<'info>(
                     parsed.delegate.is_none() && parsed.close_authority.is_none(),
                     VaultError::SwapAccount
                 );
-                #[cfg(feature = "local-mock")]
+                #[cfg(any(feature = "local-mock", feature = "devnet-evaluation"))]
                 {
                     let (pool_authority, _) =
                         Pubkey::find_program_address(&[b"liquidity"], &router);
                     require_keys_eq!(parsed.owner, pool_authority, VaultError::SwapAccount);
                 }
-                #[cfg(not(feature = "local-mock"))]
+                #[cfg(not(any(feature = "local-mock", feature = "devnet-evaluation")))]
                 {
                     require!(
                         registry.programs[..usize::from(registry.program_count)]
@@ -807,7 +807,8 @@ pub fn execute<'info>(
         data: instruction_data,
     };
     let bump = [ctx.accounts.config.authority_bump];
-    let seeds: &[&[u8]] = &[AUTHORITY_SEED, &bump];
+    let owner_scope = crate::constants::authority_seed(ctx.accounts.config.allowlisted_owner);
+    let seeds: &[&[u8]] = &[owner_scope.as_ref(), &bump];
     let mut infos = router_accounts.to_vec();
     infos.push(ctx.accounts.router_program.to_account_info());
     invoke_signed(&ix, &infos, &[seeds])?;

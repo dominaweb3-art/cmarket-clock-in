@@ -2,7 +2,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
+#[cfg(not(feature = "devnet-evaluation"))]
 declare_id!("7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ");
+#[cfg(feature = "devnet-evaluation")]
+declare_id!("F9yXLAA7tvWSCmXnAT8xRqTMHDuwFsgMbDThrde6uHs7");
 
 #[program]
 pub mod c3_local_router {

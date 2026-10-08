@@ -1,13 +1,13 @@
 export const C3_MAINNET_EXECUTION_CAPABILITY = false as const;
 
-export const C3_ALLOCATION = Object.freeze({
+export const C3_ALLOCATION = /* @__PURE__ */ Object.freeze({
   btcBps: 4_000,
   ethBps: 3_000,
   solBps: 3_000,
   totalBps: 10_000,
 });
 
-export const C3_AMOUNTS = Object.freeze({
+export const C3_AMOUNTS = /* @__PURE__ */ Object.freeze({
   usdcDecimals: 6,
   shareDecimals: 6,
   minimumPurchaseUsdcBaseUnits: 1_000_000n,
@@ -15,7 +15,7 @@ export const C3_AMOUNTS = Object.freeze({
   u64Max: 18_446_744_073_709_551_615n,
 });
 
-export const C3_FEES = Object.freeze({
+export const C3_FEES = /* @__PURE__ */ Object.freeze({
   denominator: 100_000n,
   buyRateUnits: 150n,
   sellRateUnits: 150n,
@@ -26,7 +26,7 @@ export const C3_FEES = Object.freeze({
   governanceApproved: false,
 });
 
-export const C3_MAINNET = Object.freeze({
+export const C3_MAINNET = /* @__PURE__ */ Object.freeze({
   cluster: "mainnet-beta" as const,
   genesisHash: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
   usdcMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -44,7 +44,7 @@ export const C3_MAINNET = Object.freeze({
   symmetryGlobalConfig: "BV49JWNeVnRjvMg4BHVoRFXNXHMFqgZFsfHg2QUekynd",
 });
 
-export const SERVER_CREDENTIAL_NAMES = Object.freeze({
+export const SERVER_CREDENTIAL_NAMES = /* @__PURE__ */ Object.freeze({
   jupiter: "C3_JUPITER_API_KEY",
   pyth: "C3_PYTH_API_KEY",
   rpcPrimaryUrl: "C3_MAINNET_RPC_PRIMARY_URL",

@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { C3_MAINNET } from "./constants.ts";
+// Solana/SPL program identities are cluster-neutral, not production asset policy.
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+const ALT_PROGRAM = "AddressLookupTab1e1111111111111111111111111";
 
 const BASE58_ALPHABET =
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -136,10 +139,10 @@ export function deriveAssociatedTokenAddress(
   return findProgramAddress(
     [
       publicKeyBytes(owner),
-      publicKeyBytes(C3_MAINNET.tokenProgram),
+      publicKeyBytes(TOKEN_PROGRAM),
       publicKeyBytes(mint),
     ],
-    C3_MAINNET.associatedTokenProgram,
+    ATA_PROGRAM,
   ).address;
 }
 
@@ -308,7 +311,7 @@ export function decodeVersionedMessage(
       const table = evidence.get(address);
       if (
         !table ||
-        table.ownerProgram !== C3_MAINNET.addressLookupTableProgram ||
+        table.ownerProgram !== ALT_PROGRAM ||
         !table.active ||
         !Number.isSafeInteger(table.observedSlot) ||
         table.observedSlot <= 0

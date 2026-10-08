@@ -18,9 +18,19 @@ pub fn backed(balance: u64, accounted: u64) -> Result<()> {
 
 pub fn bootstrap_authorized(payer: Pubkey, governance: Pubkey) -> Result<()> {
     require_keys_eq!(payer, governance, VaultError::Unauthorized);
-    #[cfg(not(any(feature = "local-mock", feature = "local-jupiter-cycle")))]
+    #[cfg(not(any(
+        feature = "local-mock",
+        feature = "local-jupiter-cycle",
+        feature = "devnet-evaluation"
+    )))]
     require!(
         crate::constants::PRODUCTION_BOOTSTRAP_AUTHORITY == Some(governance),
+        VaultError::Unauthorized
+    );
+    #[cfg(feature = "devnet-evaluation")]
+    require_keys_eq!(
+        governance,
+        crate::constants::EVALUATION_BOOTSTRAP_AUTHORITY,
         VaultError::Unauthorized
     );
     Ok(())
@@ -58,5 +68,13 @@ mod tests {
         #[cfg(not(any(feature = "local-mock", feature = "local-jupiter-cycle")))]
         assert!(bootstrap_authorized(caller, caller).is_err());
         assert!(bootstrap_authorized(caller, Pubkey::new_unique()).is_err());
+    }
+    #[cfg(feature = "devnet-evaluation")]
+    #[test]
+    fn evaluation_bootstrap_is_pinned_not_first_caller() {
+        let pinned = crate::constants::EVALUATION_BOOTSTRAP_AUTHORITY;
+        assert!(bootstrap_authorized(pinned, pinned).is_ok());
+        assert!(bootstrap_authorized(Pubkey::new_unique(), pinned).is_err());
+        assert!(bootstrap_authorized(pinned, Pubkey::new_unique()).is_err());
     }
 }

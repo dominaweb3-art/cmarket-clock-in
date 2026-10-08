@@ -27,16 +27,86 @@ pub const PRODUCTION_BOOTSTRAP_AUTHORITY: Option<anchor_lang::prelude::Pubkey> =
 
 // The production binary contains the boundary but cannot execute it before a
 // separately reviewed configuration/release. Environment variables cannot flip it.
-#[cfg(not(any(feature = "local-mock", feature = "local-jupiter-cycle")))]
+#[cfg(not(any(
+    feature = "local-mock",
+    feature = "local-jupiter-cycle",
+    feature = "devnet-evaluation"
+)))]
 pub const ROUTER_EXECUTION_ENABLED: bool = false;
-// Separate local-validator artifact only. Never enable this feature in a deployment build.
-#[cfg(any(feature = "local-mock", feature = "local-jupiter-cycle"))]
+// Separate local-validator or explicitly simulated Devnet evaluation artifact.
+// The default Mainnet candidate remains disabled.
+#[cfg(any(
+    feature = "local-mock",
+    feature = "local-jupiter-cycle",
+    feature = "devnet-evaluation"
+))]
 pub const ROUTER_EXECUTION_ENABLED: bool = true;
 
 #[cfg(all(feature = "local-mock", feature = "local-jupiter-cycle"))]
 compile_error!("local Jupiter and mock execution are mutually exclusive");
 
-#[cfg(not(feature = "local-mock"))]
+#[cfg(not(any(feature = "local-mock", feature = "devnet-evaluation")))]
 pub const REVIEWED_ROUTER_ID: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
 #[cfg(feature = "local-mock")]
 pub const REVIEWED_ROUTER_ID: &str = "7dfvugVLSaDFrXF6i2SbNji5vJmCvKP9grj4Nh8EysfZ";
+
+#[cfg(feature = "devnet-evaluation")]
+pub const REVIEWED_ROUTER_ID: &str = "F9yXLAA7tvWSCmXnAT8xRqTMHDuwFsgMbDThrde6uHs7";
+#[cfg(feature = "devnet-evaluation")]
+pub const EVALUATION_BOOTSTRAP_AUTHORITY: anchor_lang::prelude::Pubkey =
+    anchor_lang::prelude::pubkey!("6zjEHckd2nM4bMYwnisS2quE1Zw8VYZTqhwWjM6mtQC");
+
+#[cfg(all(
+    feature = "devnet-evaluation",
+    any(
+        feature = "local-mock",
+        feature = "local-jupiter-cycle",
+        feature = "local-jupiter-probe"
+    )
+))]
+compile_error!("Devnet evaluation cannot include local experiment features");
+
+/// Preserve the default candidate PDA bytes. Only the separate evaluation
+/// artifact partitions accounts by owner; its public bootstrap remains pinned.
+pub fn vault_seed(owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
+    scoped_seed(VAULT_SEED, owner)
+}
+pub fn authority_seed(owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
+    scoped_seed(AUTHORITY_SEED, owner)
+}
+fn scoped_seed(prefix: &[u8], _owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
+    #[cfg(feature = "devnet-evaluation")]
+    {
+        anchor_lang::solana_program::hash::hashv(&[prefix, _owner.as_ref()])
+            .to_bytes()
+            .to_vec()
+    }
+    #[cfg(not(feature = "devnet-evaluation"))]
+    {
+        prefix.to_vec()
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+    use anchor_lang::prelude::Pubkey;
+    #[test]
+    fn evaluation_wallet_isolation_or_default_byte_equivalence() {
+        let a = Pubkey::new_unique();
+        let b = Pubkey::new_unique();
+        #[cfg(feature = "devnet-evaluation")]
+        {
+            assert_ne!(vault_seed(a), vault_seed(b));
+            assert_ne!(authority_seed(a), authority_seed(b));
+            assert_ne!(vault_seed(a), authority_seed(a));
+            assert_eq!(vault_seed(a).len(), 32);
+        }
+        #[cfg(not(feature = "devnet-evaluation"))]
+        {
+            assert_eq!(vault_seed(a), VAULT_SEED);
+            assert_eq!(vault_seed(b), VAULT_SEED);
+            assert_eq!(authority_seed(a), AUTHORITY_SEED);
+        }
+    }
+}
