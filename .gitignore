@@ -41,3 +41,5 @@ credentials.json
 /apps/c3-evaluation-web/.vercel/
 /apps/c3-evaluation-web/api/evaluation.mjs
 /apps/c3-evaluation-web/resources/
+/apps/c3-pilot/variants/evaluation/android/
+/apps/c3-pilot/variants/evaluation/ios/

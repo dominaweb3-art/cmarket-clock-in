@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "C Market Devnet",
+    "slug": "c-market-c3-devnet-evaluation",
+    "version": "0.1.1",
+    "icon": "../../../mobile/assets/images/icon.png",
+    "orientation": "portrait",
+    "scheme": "cmarketc3evaluation",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.dominaweb3.cmarket.c3evaluation",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "../../../mobile/assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": ["android.permission.INTERNET"],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "extra": {
+      "releaseScope": "DEVNET_EVALUATION_AUTH_QA_INCOMPLETE",
+      "mainnetMonetaryCapability": false,
+      "simulatedAssets": true
+    }
+  }
+}
