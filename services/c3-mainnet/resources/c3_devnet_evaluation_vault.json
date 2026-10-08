@@ -1,0 +1,3604 @@
+{
+  "address": "2rZgxofn8kTsahAHPiaLTw7FZcw4MxzLK9cKowZ5HPcg",
+  "metadata": {
+    "name": "c3_pilot_vault",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "authorize_swap_leg",
+      "docs": [
+        "A governance-signed, single-use authorization bound to a plan revision.",
+        "The default build deliberately rejects it until a reviewed release exists."
+      ],
+      "discriminator": [
+        216,
+        8,
+        248,
+        244,
+        192,
+        10,
+        161,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  114,
+                  111,
+                  117,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  103,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan.intent",
+                "account": "SettlementPlan"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "source"
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "router_program"
+        },
+        {
+          "name": "authorization",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  115,
+                  119,
+                  97,
+                  112,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "arg",
+                "path": "args.idempotency"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quote_receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "args.quote_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions_sysvar",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "AuthorizeSwapArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "claim_usdc",
+      "discriminator": [
+        43,
+        131,
+        9,
+        102,
+        229,
+        140,
+        91,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "intent.nonce",
+                "account": "RedemptionIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "vault_usdc",
+          "writable": true
+        },
+        {
+          "name": "owner_usdc",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "share_mint",
+          "writable": true
+        },
+        {
+          "name": "owner_shares",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "share_token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_completed_intent",
+      "discriminator": [
+        149,
+        229,
+        17,
+        141,
+        24,
+        175,
+        20,
+        169
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "redemption",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "configure_quote_policy",
+      "discriminator": [
+        158,
+        7,
+        66,
+        112,
+        60,
+        68,
+        165,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "genesis_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "max_age_seconds",
+          "type": "i64"
+        },
+        {
+          "name": "max_slippage_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "create_deposit_intent",
+      "discriminator": [
+        172,
+        123,
+        241,
+        167,
+        192,
+        199,
+        8,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "config_version",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_deposit_settlement_plan",
+      "discriminator": [
+        234,
+        1,
+        191,
+        24,
+        228,
+        57,
+        127,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "route_hashes",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              3
+            ]
+          }
+        },
+        {
+          "name": "minimum_outputs",
+          "type": {
+            "array": [
+              "u64",
+              3
+            ]
+          }
+        },
+        {
+          "name": "quote_created_at",
+          "type": "i64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        },
+        {
+          "name": "max_slippage_bps",
+          "type": "u16"
+        },
+        {
+          "name": "idempotency",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_redemption_intent",
+      "discriminator": [
+        40,
+        189,
+        78,
+        203,
+        20,
+        104,
+        143,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "deposit",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "deposit.nonce",
+                "account": "DepositIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_shares"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        },
+        {
+          "name": "vault_usdc"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "shares",
+          "type": "u64"
+        },
+        {
+          "name": "config_version",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "create_redemption_settlement_plan",
+      "discriminator": [
+        54,
+        222,
+        150,
+        142,
+        149,
+        241,
+        51,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "route_hashes",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              3
+            ]
+          }
+        },
+        {
+          "name": "minimum_outputs",
+          "type": {
+            "array": [
+              "u64",
+              3
+            ]
+          }
+        },
+        {
+          "name": "quote_created_at",
+          "type": "i64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        },
+        {
+          "name": "max_slippage_bps",
+          "type": "u16"
+        },
+        {
+          "name": "idempotency",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "deposit_usdc",
+      "discriminator": [
+        184,
+        148,
+        250,
+        169,
+        224,
+        213,
+        34,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "intent.nonce",
+                "account": "DepositIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_usdc",
+          "writable": true
+        },
+        {
+          "name": "vault_usdc",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "disable_quote_policy",
+      "discriminator": [
+        99,
+        242,
+        205,
+        212,
+        179,
+        8,
+        53,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "disable_route_registry",
+      "discriminator": [
+        57,
+        5,
+        69,
+        132,
+        98,
+        181,
+        64,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  114,
+                  111,
+                  117,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  103,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "execute_swap_leg",
+      "docs": [
+        "The keeper can only pay fees and execute the exact approved CPI envelope."
+      ],
+      "discriminator": [
+        173,
+        41,
+        151,
+        218,
+        224,
+        199,
+        186,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  114,
+                  111,
+                  117,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  103,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan.intent",
+                "account": "SettlementPlan"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authorization",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  115,
+                  119,
+                  97,
+                  112,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan"
+              },
+              {
+                "kind": "account",
+                "path": "authorization.idempotency",
+                "account": "SwapLegAuthorization"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quote_receipt",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  99,
+                  101,
+                  105,
+                  112,
+                  116,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quote_receipt.quote_id",
+                "account": "QuoteReceipt"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "router_program"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "instruction_data",
+          "type": "bytes"
+        },
+        {
+          "name": "flags",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "expire_intent",
+      "discriminator": [
+        45,
+        84,
+        232,
+        199,
+        147,
+        164,
+        53,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "deposit",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_quote_policy",
+      "discriminator": [
+        210,
+        167,
+        89,
+        214,
+        64,
+        140,
+        123,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  113,
+                  117,
+                  111,
+                  116,
+                  101,
+                  45,
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_route_registry",
+      "discriminator": [
+        104,
+        228,
+        88,
+        96,
+        180,
+        211,
+        248,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  114,
+                  111,
+                  117,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  103,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_vault",
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "emergency"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "btc_mint"
+        },
+        {
+          "name": "eth_mint"
+        },
+        {
+          "name": "wsol_mint"
+        },
+        {
+          "name": "share_mint"
+        },
+        {
+          "name": "vault_usdc"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "share_token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        },
+        {
+          "name": "config_version",
+          "type": "u64"
+        },
+        {
+          "name": "weights",
+          "type": {
+            "array": [
+              "u16",
+              3
+            ]
+          }
+        },
+        {
+          "name": "max_tvl",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "issue_initial_shares",
+      "discriminator": [
+        58,
+        167,
+        56,
+        125,
+        211,
+        251,
+        94,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "intent.nonce",
+                "account": "DepositIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "share_mint",
+          "writable": true
+        },
+        {
+          "name": "vault_usdc"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        },
+        {
+          "name": "owner_shares",
+          "writable": true
+        },
+        {
+          "name": "share_token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "lock_shares_for_redemption",
+      "discriminator": [
+        254,
+        55,
+        118,
+        85,
+        48,
+        134,
+        116,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  100,
+                  101,
+                  109,
+                  112,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "intent.nonce",
+                "account": "RedemptionIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_shares",
+          "writable": true
+        },
+        {
+          "name": "share_mint",
+          "writable": true
+        },
+        {
+          "name": "share_token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause",
+      "discriminator": [
+        211,
+        22,
+        221,
+        251,
+        74,
+        121,
+        193,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "record_deposit_settlement",
+      "discriminator": [
+        54,
+        181,
+        153,
+        22,
+        20,
+        178,
+        42,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_usdc"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        }
+      ],
+      "args": [
+        {
+          "name": "settlement_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "record_redemption_settlement",
+      "discriminator": [
+        201,
+        151,
+        60,
+        164,
+        135,
+        103,
+        153,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "intent",
+          "writable": true
+        },
+        {
+          "name": "plan",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_usdc"
+        },
+        {
+          "name": "vault_btc"
+        },
+        {
+          "name": "vault_eth"
+        },
+        {
+          "name": "vault_wsol"
+        }
+      ],
+      "args": [
+        {
+          "name": "settlement_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "refund_unswapped_deposit",
+      "docs": [
+        "Partial positions never enter this branch. Late old envelopes fail their",
+        "plan lifecycle/revision atomically. Refund remains available under pause."
+      ],
+      "discriminator": [
+        184,
+        90,
+        168,
+        118,
+        11,
+        39,
+        50,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "intent",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "intent.nonce",
+                "account": "DepositIntent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "intent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "vault_usdc",
+          "writable": true
+        },
+        {
+          "name": "owner_usdc",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "renew_settlement_plan",
+      "docs": [
+        "Explicit owner extension: no cancellation, inventory release or progress reset."
+      ],
+      "discriminator": [
+        184,
+        149,
+        8,
+        59,
+        254,
+        68,
+        86,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan.intent",
+                "account": "SettlementPlan"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "replace_route_registry",
+      "discriminator": [
+        250,
+        206,
+        123,
+        239,
+        103,
+        252,
+        128,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "governance",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  114,
+                  111,
+                  117,
+                  116,
+                  101,
+                  45,
+                  114,
+                  101,
+                  103,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "config"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "programs",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "activation_slot",
+          "type": "u64"
+        },
+        {
+          "name": "expiry_slot",
+          "type": "u64"
+        },
+        {
+          "name": "config_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "resolve_settlement_minimums",
+      "docs": [
+        "Owner-signed economic resolution, never an automatic quote fallback."
+      ],
+      "discriminator": [
+        113,
+        229,
+        173,
+        91,
+        8,
+        189,
+        58,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "plan",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  51,
+                  45,
+                  112,
+                  108,
+                  97,
+                  110,
+                  45,
+                  118,
+                  49
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "plan.intent",
+                "account": "SettlementPlan"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        },
+        {
+          "name": "expected_plan_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "minimum_outputs",
+          "type": {
+            "array": [
+              "u64",
+              3
+            ]
+          }
+        },
+        {
+          "name": "economic_evidence_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "review_expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "set_keeper",
+      "discriminator": [
+        102,
+        94,
+        23,
+        78,
+        157,
+        222,
+        243,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "next",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "discriminator": [
+        169,
+        144,
+        4,
+        38,
+        10,
+        141,
+        188,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DepositIntent",
+      "discriminator": [
+        28,
+        219,
+        83,
+        172,
+        114,
+        167,
+        136,
+        182
+      ]
+    },
+    {
+      "name": "QuoteAuthorityPolicy",
+      "discriminator": [
+        60,
+        21,
+        107,
+        23,
+        189,
+        146,
+        60,
+        104
+      ]
+    },
+    {
+      "name": "QuoteReceipt",
+      "discriminator": [
+        131,
+        93,
+        25,
+        39,
+        142,
+        247,
+        217,
+        68
+      ]
+    },
+    {
+      "name": "RedemptionIntent",
+      "discriminator": [
+        195,
+        63,
+        70,
+        35,
+        162,
+        71,
+        180,
+        58
+      ]
+    },
+    {
+      "name": "RouteProgramRegistry",
+      "discriminator": [
+        3,
+        176,
+        5,
+        193,
+        187,
+        190,
+        133,
+        185
+      ]
+    },
+    {
+      "name": "SettlementPlan",
+      "discriminator": [
+        151,
+        144,
+        230,
+        157,
+        151,
+        103,
+        175,
+        207
+      ]
+    },
+    {
+      "name": "SwapLegAuthorization",
+      "discriminator": [
+        109,
+        106,
+        37,
+        178,
+        211,
+        66,
+        63,
+        115
+      ]
+    },
+    {
+      "name": "VaultConfig",
+      "discriminator": [
+        99,
+        86,
+        43,
+        216,
+        184,
+        102,
+        119,
+        77
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "QuotePolicyEvent",
+      "discriminator": [
+        27,
+        192,
+        90,
+        193,
+        12,
+        133,
+        236,
+        213
+      ]
+    },
+    {
+      "name": "RouteRegistryEvent",
+      "discriminator": [
+        197,
+        242,
+        223,
+        217,
+        85,
+        141,
+        54,
+        99
+      ]
+    },
+    {
+      "name": "SettlementLegEvent",
+      "discriminator": [
+        93,
+        63,
+        229,
+        213,
+        46,
+        155,
+        172,
+        198
+      ]
+    },
+    {
+      "name": "VaultEvent",
+      "discriminator": [
+        232,
+        91,
+        155,
+        38,
+        189,
+        170,
+        216,
+        161
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Paused",
+      "msg": "Vault is paused"
+    },
+    {
+      "code": 6001,
+      "name": "Unauthorized",
+      "msg": "Unauthorized authority"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidConfig",
+      "msg": "Invalid configuration or version"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidAmount",
+      "msg": "Exactly one USDC is required"
+    },
+    {
+      "code": 6004,
+      "name": "PilotLimit",
+      "msg": "The pilot already has a position or intent"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidState",
+      "msg": "Invalid or duplicate lifecycle transition"
+    },
+    {
+      "code": 6006,
+      "name": "Expired",
+      "msg": "Intent is expired or expiry is invalid"
+    },
+    {
+      "code": 6007,
+      "name": "Math",
+      "msg": "Arithmetic overflow or underflow"
+    },
+    {
+      "code": 6008,
+      "name": "TokenMismatch",
+      "msg": "Token account, mint, or owner mismatch"
+    },
+    {
+      "code": 6009,
+      "name": "Settlement",
+      "msg": "Settlement balance evidence is insufficient"
+    },
+    {
+      "code": 6010,
+      "name": "TransferableShares",
+      "msg": "Share mint must be non-transferable Token-2022"
+    },
+    {
+      "code": 6011,
+      "name": "Destination",
+      "msg": "Wrong owner or destination"
+    },
+    {
+      "code": 6012,
+      "name": "MockOnly",
+      "msg": "This instruction exists only in local mock builds"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidPlan",
+      "msg": "Settlement plan is invalid or stale"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidLeg",
+      "msg": "Settlement leg is out of order or already executed"
+    },
+    {
+      "code": 6015,
+      "name": "MinimumOutput",
+      "msg": "Settlement output is below the approved minimum"
+    },
+    {
+      "code": 6016,
+      "name": "SwapDisabled",
+      "msg": "Swap execution is disabled in this build"
+    },
+    {
+      "code": 6017,
+      "name": "SwapAuthorization",
+      "msg": "Swap authorization does not match the trusted plan"
+    },
+    {
+      "code": 6018,
+      "name": "SwapAccount",
+      "msg": "Swap account or instruction is not allowed"
+    },
+    {
+      "code": 6019,
+      "name": "SwapEffects",
+      "msg": "Swap token effects do not match the authorization"
+    },
+    {
+      "code": 6020,
+      "name": "RouteRegistry",
+      "msg": "Route program registry is disabled, stale, or invalid"
+    },
+    {
+      "code": 6021,
+      "name": "QuotePolicy",
+      "msg": "Quote signing policy is disabled, stale or invalid"
+    },
+    {
+      "code": 6022,
+      "name": "QuoteSignature",
+      "msg": "Quote signature or canonical message does not match"
+    },
+    {
+      "code": 6023,
+      "name": "QuoteReplay",
+      "msg": "Quote identity has already been used"
+    }
+  ],
+  "types": [
+    {
+      "name": "AuthorizeSwapArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "idempotency",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "quote_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositIntent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "deposited",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_before",
+            "type": "u64"
+          },
+          {
+            "name": "btc_before",
+            "type": "u64"
+          },
+          {
+            "name": "eth_before",
+            "type": "u64"
+          },
+          {
+            "name": "wsol_before",
+            "type": "u64"
+          },
+          {
+            "name": "btc_after",
+            "type": "u64"
+          },
+          {
+            "name": "eth_after",
+            "type": "u64"
+          },
+          {
+            "name": "wsol_after",
+            "type": "u64"
+          },
+          {
+            "name": "shares_issued",
+            "type": "u64"
+          },
+          {
+            "name": "btc_bps",
+            "type": "u16"
+          },
+          {
+            "name": "eth_bps",
+            "type": "u16"
+          },
+          {
+            "name": "sol_bps",
+            "type": "u16"
+          },
+          {
+            "name": "btc_input_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "eth_input_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "wsol_input_usdc",
+            "type": "u64"
+          },
+          {
+            "name": "settlement_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fingerprint",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuoteAuthorityPolicy",
+      "docs": [
+        "Governance-controlled signing policy. An initialized policy is still disabled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "max_age_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "max_slippage_bps",
+            "type": "u16"
+          },
+          {
+            "name": "genesis_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "domain",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuotePolicyEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "action",
+            "type": "u8"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuoteReceipt",
+      "docs": [
+        "Globally unique quote identity. It remains allocated after execution."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quote_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nonce",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "payload_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "authorization",
+            "type": "pubkey"
+          },
+          {
+            "name": "consumed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionIntent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "created_slot",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "share_amount",
+            "type": "u64"
+          },
+          {
+            "name": "btc_before",
+            "type": "u64"
+          },
+          {
+            "name": "eth_before",
+            "type": "u64"
+          },
+          {
+            "name": "wsol_before",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_before",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_claimable",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_returned",
+            "type": "u64"
+          },
+          {
+            "name": "settlement_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "fingerprint",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RouteProgramRegistry",
+      "docs": [
+        "Governance-owned route policy. An uninitialized registry cannot authorize a swap.",
+        "Production execution remains separately disabled by an immutable build constant."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "config_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "activation_slot",
+            "type": "u64"
+          },
+          {
+            "name": "expiry_slot",
+            "type": "u64"
+          },
+          {
+            "name": "program_count",
+            "type": "u8"
+          },
+          {
+            "name": "programs",
+            "type": {
+              "array": [
+                "pubkey",
+                16
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RouteRegistryEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "config_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "type": "u8"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementLegEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "direction",
+            "type": "u8"
+          },
+          {
+            "name": "leg",
+            "type": "u8"
+          },
+          {
+            "name": "input",
+            "type": "u64"
+          },
+          {
+            "name": "output",
+            "type": "u64"
+          },
+          {
+            "name": "executed_bitmap",
+            "type": "u8"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementPlan",
+      "docs": [
+        "One immutable three-leg intent. Signatures and finality evidence live in the durable indexer,",
+        "since a Solana program cannot know its enclosing transaction signature at execution time."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "direction",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "weights",
+            "type": {
+              "array": [
+                "u16",
+                3
+              ]
+            }
+          },
+          {
+            "name": "input_mints",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "output_mints",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "source_accounts",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "destination_accounts",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "router_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "route_hashes",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                3
+              ]
+            }
+          },
+          {
+            "name": "minimum_outputs",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "max_slippage_bps",
+            "type": "u16"
+          },
+          {
+            "name": "quote_created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "executed_bitmap",
+            "type": "u8"
+          },
+          {
+            "name": "lifecycle",
+            "type": "u8"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "idempotency",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "actual_inputs",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "input_budgets",
+            "docs": [
+              "Immutable accounted budget, never the total balance of a public ATA."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "actual_outputs",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "failure_evidence",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "active_swap_authorization",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "active_swap_expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwapLegAuthorization",
+      "docs": [
+        "A governance-approved, single-use swap envelope for exactly one plan revision.",
+        "The plan separately stores this account's commitment, preventing a self-hashed",
+        "instruction from authorizing itself. It stores no private key or signature."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "plan",
+            "type": "pubkey"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "direction",
+            "type": "u8"
+          },
+          {
+            "name": "leg",
+            "type": "u8"
+          },
+          {
+            "name": "expected_revision",
+            "type": "u64"
+          },
+          {
+            "name": "router_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "route_registry_version",
+            "type": "u64"
+          },
+          {
+            "name": "route_registry_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "quote_policy_revision",
+            "type": "u64"
+          },
+          {
+            "name": "quote_payload_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "quote_receipt",
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_expires_slot",
+            "type": "u64"
+          },
+          {
+            "name": "source",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "input_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "output_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "input_amount",
+            "type": "u64"
+          },
+          {
+            "name": "quoted_output",
+            "type": "u64"
+          },
+          {
+            "name": "minimum_output",
+            "type": "u64"
+          },
+          {
+            "name": "max_slippage_bps",
+            "type": "u16"
+          },
+          {
+            "name": "quote_created_at",
+            "type": "i64"
+          },
+          {
+            "name": "quote_fingerprint",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "route_fingerprint",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "instruction_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "account_metas_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "alt_count",
+            "type": "u8"
+          },
+          {
+            "name": "alt_contents_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "idempotency",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "consumed",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "schema_version",
+            "type": "u8"
+          },
+          {
+            "name": "config_version",
+            "type": "u64"
+          },
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "emergency",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowlisted_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "btc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "eth_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "wsol_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "share_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_usdc",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_btc",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_eth",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault_wsol",
+            "type": "pubkey"
+          },
+          {
+            "name": "btc_bps",
+            "type": "u16"
+          },
+          {
+            "name": "eth_bps",
+            "type": "u16"
+          },
+          {
+            "name": "sol_bps",
+            "type": "u16"
+          },
+          {
+            "name": "max_tvl",
+            "type": "u64"
+          },
+          {
+            "name": "max_deposit",
+            "type": "u64"
+          },
+          {
+            "name": "deposit_counter",
+            "type": "u64"
+          },
+          {
+            "name": "redemption_counter",
+            "type": "u64"
+          },
+          {
+            "name": "total_shares_issued",
+            "type": "u64"
+          },
+          {
+            "name": "lifecycle",
+            "type": "u8"
+          },
+          {
+            "name": "authority_bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VaultEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "intent",
+            "type": "pubkey"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "kind",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const idl = fileURLToPath(
   new URL(
-    "../../../artifacts/c3-devnet-evaluation/c3_pilot_vault.json",
+    "../../../services/c3-mainnet/resources/c3_devnet_evaluation_vault.json",
     import.meta.url,
   ),
 );

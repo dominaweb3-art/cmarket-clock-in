@@ -19,10 +19,7 @@ import { verifyShareMintForAuthority } from "../src/open-state-semantics.ts";
 // Interface built from the exact Devnet Rust feature, not an invented IDL fixture.
 const idl = JSON.parse(
   readFileSync(
-    new URL(
-      "../../../artifacts/c3-devnet-evaluation/c3_pilot_vault.json",
-      import.meta.url,
-    ),
+    new URL("../resources/c3_devnet_evaluation_vault.json", import.meta.url),
     "utf8",
   ),
 ) as Idl;

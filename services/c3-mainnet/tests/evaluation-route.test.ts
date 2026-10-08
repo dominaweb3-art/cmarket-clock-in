@@ -11,10 +11,7 @@ import {
 const key = () => Keypair.generate().publicKey.toBase58();
 const idl = JSON.parse(
   readFileSync(
-    new URL(
-      "../../../artifacts/c3-devnet-evaluation/c3_pilot_vault.json",
-      import.meta.url,
-    ),
+    new URL("../resources/c3_devnet_evaluation_vault.json", import.meta.url),
     "utf8",
   ),
 ) as Idl;
