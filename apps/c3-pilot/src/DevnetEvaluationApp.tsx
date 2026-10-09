@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -21,7 +22,9 @@ import {
 import {
   connectEvaluationWallet,
   signEvaluationProof,
+  signEvaluationTransaction,
 } from "./evaluation-wallet";
+import type { EvaluationMoneyAction } from "./evaluation-owner-review";
 import { base64FromUint8Array } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
 
 const STORAGE = "c3-evaluation-language/v1";
@@ -164,6 +167,138 @@ export default function DevnetEvaluationApp() {
         clearTimeout(timer);
       }
     });
+  const updatePosition = async () => {
+    if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
+    const value = await evaluationRequest(
+      { operation: "position" },
+      session.current,
+    );
+    if (
+      value.wallet !== wallet ||
+      value.cluster !== "solana:devnet" ||
+      value.simulatedAssets !== true ||
+      value.monetaryValue !== false
+    )
+      throw Error("EVAL_POSITION_SCOPE");
+    setPosition(value);
+    return value;
+  };
+  const prepareWalletAction = (action: EvaluationMoneyAction) => {
+    if (!wallet || !verified || busy) return;
+    Alert.alert(
+      t("transactionTitle"),
+      `${t(action)}\n\n${t(action === "renew_plan" ? "renewalNotice" : "transactionNotice")}`,
+      [
+        { text: t("cancel"), style: "cancel" },
+        {
+          text: t("continue"),
+          onPress: () => {
+            void run(async () => {
+              const prepared = await evaluationRequest(
+                { operation: "prepare", action },
+                session.current,
+              );
+              const signed = await signEvaluationTransaction(
+                prepared,
+                wallet,
+                action,
+              );
+              // No automatic retry. The request already exists durably BEFORE MWA.
+              await evaluationRequest(
+                {
+                  operation: "submit",
+                  requestId: prepared.requestId,
+                  packet: base64FromUint8Array(signed),
+                },
+                session.current,
+              );
+              const result = await evaluationRequest(
+                { operation: "reconcile", requestId: prepared.requestId },
+                session.current,
+              );
+              setStatus(
+                result.status === "effects_verified" ||
+                  result.status === "already_reconciled"
+                  ? t("verifiedEffects")
+                  : t("uncertain"),
+              );
+              await updatePosition();
+            });
+          },
+        },
+      ],
+    );
+  };
+  const provision = () =>
+    run(async () => {
+      if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
+      // Bounded bootstrap. Each call consults its original durable signature and
+      // never resends an uncertain packet. Only evaluation identities are used.
+      for (let step = 0; step < 80; step++) {
+        const value = await evaluationRequest(
+          { operation: "provision" },
+          session.current,
+        );
+        setStatus(String(value.stage ?? ""));
+        if (value.ready === true) {
+          await updatePosition();
+          return;
+        }
+        if (value.stage === "SETTLEMENT_RELEASE_VERIFICATION_REQUIRED") return;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      setStatus(t("uncertain"));
+    });
+  const advance = () =>
+    run(async () => {
+      if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
+      for (let step = 0; step < 48; step++) {
+        const value = await evaluationRequest(
+          { operation: "advance" },
+          session.current,
+        );
+        setStatus(String(value.stage ?? ""));
+        await updatePosition();
+        if (value.needsOwnerAction) return;
+        if (value.stage === "failed")
+          throw Error("EVAL_FINALIZED_OPERATION_FAILED");
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      setStatus(t("uncertain"));
+    });
+  const recover = () =>
+    run(async () => {
+      const value = await updatePosition();
+      const pending = Array.isArray(value.pendingRequests)
+        ? (value.pendingRequests[0] as Record<string, unknown> | undefined)
+        : undefined;
+      if (!pending) return;
+      const result = await evaluationRequest(
+        {
+          operation: pending.signature ? "reconcile" : "close_expired",
+          requestId: pending.request_id,
+        },
+        session.current,
+      );
+      setStatus(String(result.status ?? ""));
+      await updatePosition();
+    });
+  const displayUnits = (value: unknown) => {
+    if (typeof value !== "string" || !/^(0|[1-9][0-9]{0,19})$/.test(value))
+      return "—";
+    const n = BigInt(value);
+    return `${n / 1_000_000n}.${String(n % 1_000_000n).padStart(6, "0")}`;
+  };
+  const actions: EvaluationMoneyAction[] = [
+    "deposit",
+    "issue_shares",
+    "request_redemption",
+    "claim",
+    "renew_plan",
+  ];
+  const pending =
+    Array.isArray(position?.pendingRequests) &&
+    position.pendingRequests.length > 0;
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar barStyle="light-content" backgroundColor="#071c18" />
@@ -252,7 +387,66 @@ export default function DevnetEvaluationApp() {
               <Text style={styles.note}>
                 {verified ? t("authenticated") : t("noPosition")}
               </Text>
-              <Text style={styles.warning}>{t("notReady")}</Text>
+              <Text style={styles.note}>{t("restriction")}</Text>
+              {verified && (
+                <EvaluationButton
+                  label={t("provision")}
+                  disabled={busy}
+                  onPress={() => {
+                    void provision();
+                  }}
+                />
+              )}
+              {position && (
+                <>
+                  <Text>
+                    {t("shares")}: {displayUnits(position.shares)}
+                  </Text>
+                  <Text>
+                    {t("claimable")}: {displayUnits(position.claimable)}
+                  </Text>
+                  <Text>
+                    {t("returned")}: {displayUnits(position.returned)}
+                  </Text>
+                  {actions.map((action) => (
+                    <EvaluationButton
+                      key={action}
+                      label={t(action)}
+                      disabled={
+                        busy ||
+                        !verified ||
+                        pending ||
+                        position.settlementReleased !== true ||
+                        !Array.isArray(position.allowedActions) ||
+                        !position.allowedActions.includes(action)
+                      }
+                      onPress={() => prepareWalletAction(action)}
+                    />
+                  ))}
+                  <EvaluationButton
+                    label={t("process")}
+                    disabled={
+                      busy ||
+                      !verified ||
+                      pending ||
+                      position.settlementReleased !== true
+                    }
+                    onPress={() => {
+                      void advance();
+                    }}
+                  />
+                  <EvaluationButton
+                    label={t("recover")}
+                    disabled={busy || !verified || !pending}
+                    onPress={() => {
+                      void recover();
+                    }}
+                  />
+                </>
+              )}
+              {position?.settlementReleased !== true && (
+                <Text style={styles.warning}>{t("notReady")}</Text>
+              )}
               <Text style={styles.note}>{t("restart")}</Text>
             </>
           )}
@@ -266,7 +460,42 @@ export default function DevnetEvaluationApp() {
           {tab === "activity" && (
             <>
               <Text style={styles.heading}>{t("activity")}</Text>
-              <Text>{position ? t("noPosition") : t("noActivity")}</Text>
+              {Array.isArray(position?.activity) &&
+              position.activity.length > 0 ? (
+                position.activity.map((item: Record<string, unknown>) => (
+                  <View key={String(item.signature)} style={styles.card}>
+                    <Text>
+                      {typeof item.action === "string" &&
+                      actions.includes(item.action as EvaluationMoneyAction)
+                        ? t(item.action as EvaluationMoneyAction)
+                        : t("process")}
+                    </Text>
+                    <Text>
+                      {item.effects_verified === true
+                        ? t("verifiedEffects")
+                        : t("uncertain")}
+                    </Text>
+                    {typeof item.signature === "string" &&
+                      /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(item.signature) && (
+                        <Pressable
+                          accessibilityRole="link"
+                          onPress={() => {
+                            void Linking.openURL(
+                              `https://explorer.solana.com/tx/${item.signature}?cluster=devnet`,
+                            );
+                          }}
+                        >
+                          <Text style={styles.activeText}>
+                            {item.signature.slice(0, 10)}…
+                            {item.signature.slice(-8)}
+                          </Text>
+                        </Pressable>
+                      )}
+                  </View>
+                ))
+              ) : (
+                <Text>{t("noActivity")}</Text>
+              )}
               <EvaluationButton
                 label={t("refresh")}
                 disabled={busy || !verified}

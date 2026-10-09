@@ -2,6 +2,7 @@ import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol";
 import {
   base64FromUint8Array,
   base64ToBase58,
+  base64ToUint8Array,
 } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
 import {
   EVALUATION_CHAIN,
@@ -10,6 +11,11 @@ import {
   inspectEvaluationSignedMessage,
   type EvaluationChallenge,
 } from "./evaluation-protocol";
+import {
+  reviewEvaluationOwnerPacket,
+  verifyEvaluationWalletPacket,
+  type EvaluationMoneyAction,
+} from "./evaluation-owner-review";
 
 const identity = Object.freeze({
   name: "C Market Devnet Evaluation",
@@ -55,6 +61,37 @@ export async function signEvaluationProof(
       owner,
       message,
       result.signed_payloads[0]!,
+    );
+  });
+}
+/** Called only after the owner reviews the specific Devnet action. It signs,
+ * never broadcasts. Backend persists the verified signature before sending. */
+export async function signEvaluationTransaction(
+  result: Readonly<Record<string, unknown>>,
+  owner: string,
+  action: EvaluationMoneyAction,
+) {
+  const prepared = reviewEvaluationOwnerPacket(result, owner, action);
+  return transact(async (wallet) => {
+    const authorization = await wallet.authorize({
+      chain: EVALUATION_CHAIN,
+      identity,
+    });
+    if (
+      !authorization.accounts.some((a) => base64ToBase58(a.address) === owner)
+    )
+      throw Error("EVAL_WALLET_CHANGED");
+    if (Date.now() >= prepared.expiresAt)
+      throw Error("EVAL_OWNER_REQUEST_EXPIRED");
+    const signed = await wallet.signTransactions({
+      payloads: [base64FromUint8Array(prepared.packet)],
+    });
+    if (signed.signed_payloads.length !== 1)
+      throw Error("EVAL_WALLET_RESPONSE_INVALID");
+    return verifyEvaluationWalletPacket(
+      base64ToUint8Array(signed.signed_payloads[0]!),
+      prepared,
+      owner,
     );
   });
 }
