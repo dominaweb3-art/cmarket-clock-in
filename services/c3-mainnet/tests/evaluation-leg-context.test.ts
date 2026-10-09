@@ -32,9 +32,10 @@ export async function evaluationContextFixture(
   direction: 1 | 2,
   leg = 0,
   chainTime = 1800000005n,
+  wallet = pk(),
 ) {
   const c = new EvaluationClient(idl, {
-    wallet: pk().toBase58(),
+    wallet: wallet.toBase58(),
     version: 1n,
     shareMint: pk().toBase58(),
     usdcMint: pk().toBase58(),

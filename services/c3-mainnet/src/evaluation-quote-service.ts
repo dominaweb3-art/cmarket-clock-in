@@ -138,6 +138,15 @@ export class EvaluationQuoteService {
           current.expires_at > current.now,
         "CAS_OR_EXPIRY",
       );
+      check(
+        !(
+          await c.query(
+            "SELECT 1 FROM c3_eval.owner_requests r LEFT JOIN c3_eval.owner_effect_receipts e USING(request_id) LEFT JOIN c3_eval.owner_request_outcomes o USING(request_id) WHERE r.intent_id=$1 AND e.request_id IS NULL AND o.request_id IS NULL",
+            [current.intent_id],
+          )
+        ).rowCount,
+        "OWNER_REQUEST_PENDING",
+      );
       const previous = (
         await c.query(
           "SELECT quote_id,payload_hash,expires_at,state FROM c3_eval.quote_authorizations WHERE intent_id=$1 AND ordinal=$2 AND state IN ('prepared','signed','consumed')",
@@ -354,6 +363,11 @@ export class EvaluationQuoteService {
         signature,
       ),
       executeInstruction: evaluationExecuteInstruction(ctx.client, route),
+      // Server-internal execution context, never accepted from an HTTP body.
+      route,
+      intentId: String(ctx.row.intent_id),
+      dbRevision: String(ctx.row.db_revision),
+      ordinal: ctx.ordinal,
     };
   }
 }

@@ -29,7 +29,11 @@ export function evaluationAta(
   )[0];
 }
 export type EvaluationOwnerAction =
-  "deposit" | "issue_shares" | "request_redemption" | "claim";
+  "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
+export type EvaluationRenewal = Readonly<{
+  direction: 1 | 2;
+  revision: bigint;
+}>;
 export type EvaluationConfig = Readonly<{
   wallet: string;
   shareMint: string;
@@ -153,12 +157,37 @@ export class EvaluationClient {
       data: this.coder.instruction.encode(name, args),
     });
   }
-  ownerInstructions(action: EvaluationOwnerAction, chainTime: bigint) {
+  ownerInstructions(
+    action: EvaluationOwnerAction,
+    chainTime: bigint,
+    renewal?: EvaluationRenewal,
+  ) {
     integer(chainTime);
     const expiry = integer(chainTime + 300n),
       deposit = this.accounts(this.intent("deposit")),
       redemption = this.accounts(this.intent("redemption"));
     switch (action) {
+      case "renew_plan": {
+        if (!renewal || ![1, 2].includes(renewal.direction))
+          throw Error("EVAL_RENEWAL_CONTEXT");
+        return [
+          this.instruction(
+            "renew_settlement_plan",
+            {
+              expected_revision: integer(renewal.revision),
+              expires_at: integer(chainTime + 110n),
+            },
+            {
+              owner: this.owner,
+              config: this.vault,
+              plan: this.pda(
+                "c3-plan-v1",
+                this.intent(renewal.direction === 1 ? "deposit" : "redemption"),
+              ),
+            },
+          ),
+        ];
+      }
       case "deposit":
         return [
           this.instruction(
@@ -201,6 +230,7 @@ export class EvaluationClient {
     chainTime: bigint,
     blockhash: string,
     lastValidBlockHeight: number,
+    renewal?: EvaluationRenewal,
   ) {
     if (
       !Number.isSafeInteger(lastValidBlockHeight) ||
@@ -208,7 +238,7 @@ export class EvaluationClient {
     )
       throw Error("EVAL_BLOCK_HEIGHT");
     new PublicKey(blockhash);
-    const instructions = this.ownerInstructions(action, chainTime);
+    const instructions = this.ownerInstructions(action, chainTime, renewal);
     const message = new TransactionMessage({
       payerKey: this.owner,
       recentBlockhash: blockhash,

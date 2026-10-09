@@ -9,6 +9,9 @@ import {
 import { EvaluationOwnerService } from "../../../services/c3-mainnet/src/evaluation-owner-service.ts";
 import { assertEvaluationDatabase } from "../../../services/c3-mainnet/src/evaluation-scope.ts";
 import type { EvaluationOwnerAction } from "../../../services/c3-mainnet/src/evaluation-client.ts";
+import { EvaluationProvisionService } from "../../../services/c3-mainnet/src/evaluation-provision-service.ts";
+import { EvaluationSettlementService } from "../../../services/c3-mainnet/src/evaluation-settlement-service.ts";
+import { evaluationIdentities } from "./evaluation-identities.ts";
 import { database } from "./database.mjs";
 type Request = IncomingMessage & { body?: unknown };
 type Response = ServerResponse & {
@@ -95,6 +98,26 @@ export default async function handler(req: Request, res: Response) {
       ),
     ) as Idl;
     const service = new EvaluationOwnerService(pool, idl);
+    if (body.operation === "provision" || body.operation === "advance") {
+      exactKeys(body, ["operation"]);
+      await auth.authorize(token);
+      const identities = evaluationIdentities(pool);
+      return res
+        .status(200)
+        .json(
+          body.operation === "provision"
+            ? await new EvaluationProvisionService(
+                pool,
+                idl,
+                identities,
+              ).advance(token)
+            : await new EvaluationSettlementService(
+                pool,
+                idl,
+                identities,
+              ).advance(token),
+        );
+    }
     if (body.operation === "position") {
       exactKeys(body, ["operation"]);
       return res.status(200).json(await service.position(token));
@@ -102,9 +125,13 @@ export default async function handler(req: Request, res: Response) {
     if (body.operation === "prepare") {
       exactKeys(body, ["operation", "action"]);
       check(
-        ["deposit", "issue_shares", "request_redemption", "claim"].includes(
-          String(body.action),
-        ),
+        [
+          "deposit",
+          "issue_shares",
+          "request_redemption",
+          "claim",
+          "renew_plan",
+        ].includes(String(body.action)),
         "EVAL_ACTION",
       );
       return res
@@ -133,6 +160,13 @@ export default async function handler(req: Request, res: Response) {
         .status(200)
         .json(await service.reconcile(token, body.requestId as string));
     }
+    if (body.operation === "close_expired") {
+      exactKeys(body, ["operation", "requestId"]);
+      check(typeof body.requestId === "string", "EVAL_REQUEST");
+      return res
+        .status(200)
+        .json(await service.closeExpired(token, body.requestId as string));
+    }
     throw Error("EVAL_OPERATION");
   } catch (error) {
     // Never return raw PG/RPC errors, URLs, headers, secrets or signed payloads.
@@ -145,13 +179,11 @@ export default async function handler(req: Request, res: Response) {
       : code.includes("SESSION") || code.includes("AUTH")
         ? 401
         : 409;
-    return res
-      .status(status)
-      .json({
-        error: code,
-        cluster: "solana:devnet",
-        simulatedAssets: true,
-        mainnetEnabled: false,
-      });
+    return res.status(status).json({
+      error: code,
+      cluster: "solana:devnet",
+      simulatedAssets: true,
+      mainnetEnabled: false,
+    });
   }
 }

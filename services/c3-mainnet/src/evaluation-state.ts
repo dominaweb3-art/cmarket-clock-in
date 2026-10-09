@@ -212,6 +212,12 @@ export function assertEvaluationAction(
         position.shares === EVALUATION.amount,
       "NOT_CLAIMABLE",
     );
+  else if (action === "renew_plan")
+    check(
+      (position.lifecycle === 1 && position.depositStatus === 2) ||
+        (position.lifecycle === 3 && position.redemptionStatus === 2),
+      "NO_PENDING_PLAN",
+    );
   else throw Error("EVAL_OWNER_ACTION");
 }
 /** Configuration parser accepts only names/keys from the private server DB row. */
