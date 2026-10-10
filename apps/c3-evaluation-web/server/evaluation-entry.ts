@@ -98,7 +98,11 @@ export default async function handler(req: Request, res: Response) {
       ),
     ) as Idl;
     const service = new EvaluationOwnerService(pool, idl);
-    if (body.operation === "provision" || body.operation === "advance") {
+    if (
+      body.operation === "provision" ||
+      body.operation === "advance" ||
+      body.operation === "recover_initial_plan"
+    ) {
       exactKeys(body, ["operation"]);
       await auth.authorize(token);
       const identities = evaluationIdentities(pool);
@@ -111,11 +115,17 @@ export default async function handler(req: Request, res: Response) {
                 idl,
                 identities,
               ).advance(token)
-            : await new EvaluationSettlementService(
-                pool,
-                idl,
-                identities,
-              ).advance(token),
+            : body.operation === "recover_initial_plan"
+              ? await new EvaluationSettlementService(
+                  pool,
+                  idl,
+                  identities,
+                ).recoverInitialPlan(token)
+              : await new EvaluationSettlementService(
+                  pool,
+                  idl,
+                  identities,
+                ).advance(token),
         );
     }
     if (body.operation === "position") {
@@ -131,6 +141,7 @@ export default async function handler(req: Request, res: Response) {
           "request_redemption",
           "claim",
           "renew_plan",
+          "recover_deposit_plan",
         ].includes(String(body.action)),
         "EVAL_ACTION",
       );
@@ -171,9 +182,38 @@ export default async function handler(req: Request, res: Response) {
   } catch (error) {
     // Never return raw PG/RPC errors, URLs, headers, secrets or signed payloads.
     const message = error instanceof Error ? error.message : "";
+    // Operational diagnosis contains only allowlisted classifications, never
+    // error text, SQL parameters, session credentials, wallets or payloads.
+    const sqlState =
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      /^[0-9A-Z]{5}$/.test(error.code)
+        ? error.code
+        : undefined;
+    console.error(
+      JSON.stringify({
+        event: "EVAL_SAFE_FAILURE",
+        sqlState,
+        kind:
+          error instanceof TypeError
+            ? "TYPE"
+            : error instanceof RangeError
+              ? "RANGE"
+              : "OTHER",
+        code: /^[A-Z][A-Z0-9_]{2,90}$/.test(message)
+          ? message
+          : "EVAL_REQUEST_BLOCKED",
+      }),
+    );
     const code = /^[A-Z][A-Z0-9_]{2,90}$/.test(message)
       ? message
-      : "EVAL_REQUEST_BLOCKED";
+      : sqlState
+        ? `EVAL_DATABASE_${sqlState}`
+        : /\b429\b/.test(message)
+          ? "EVAL_RPC_RATE_LIMIT"
+          : "EVAL_REQUEST_BLOCKED";
     const status = code.includes("RATE_LIMIT")
       ? 429
       : code.includes("SESSION") || code.includes("AUTH")

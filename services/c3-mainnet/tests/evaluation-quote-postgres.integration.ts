@@ -44,8 +44,8 @@ test("Devnet quote preparation and existing signer journal use real PG CAS/trigg
   );
   const intent = randomUUID();
   await pool.query(
-    `INSERT INTO c3_eval.intents(intent_id,wallet,vault,share_mint,deposit_plan,configuration_hash,deposit_amount,expires_at,state,db_revision)
-    VALUES($1,$2,$3,$4,$5,$6,1000000,clock_timestamp()+interval '1 hour','buying',2)`,
+    `INSERT INTO c3_eval.intents(intent_id,wallet,vault,share_mint,deposit_plan,configuration_hash,deposit_amount,created_at,expires_at,state,db_revision)
+    VALUES($1,$2,$3,$4,$5,$6,1000000,clock_timestamp()-interval '2 hours',clock_timestamp()-interval '1 hour','buying',2)`,
     [
       intent,
       f.c.config.wallet,
@@ -59,12 +59,16 @@ test("Devnet quote preparation and existing signer journal use real PG CAS/trigg
     "INSERT INTO c3_eval.legs(intent_id,ordinal) SELECT $1,n FROM generate_series(0,5) AS n",
     [intent],
   );
-  t.mock.method(EvaluationOwnerService.prototype, "context", async () => ({
-    proof: { wallet: f.c.config.wallet, challengeId: randomUUID() },
-    client: f.c,
-    accounts: f.accounts,
-    slot: Number(f.snapshot.slot),
-  }));
+  let captures = 0;
+  t.mock.method(EvaluationOwnerService.prototype, "context", async () => {
+    captures++;
+    return {
+      proof: { wallet: f.c.config.wallet, challengeId: randomUUID() },
+      client: f.c,
+      accounts: f.accounts,
+      slot: Number(f.snapshot.slot),
+    };
+  });
   t.mock.method(
     Connection.prototype,
     "getGenesisHash",
@@ -148,6 +152,47 @@ test("Devnet quote preparation and existing signer journal use real PG CAS/trigg
     /REJECTED/,
   );
   assert.equal(called, 0);
+  // Enrollment lifetime is not the funded plan lifetime. A verified live plan
+  // can continue after a long restart; the original intent is never replaced.
+  await assert.rejects(
+    () =>
+      pool.query(
+        "UPDATE c3_eval.intents SET expires_at=clock_timestamp()+interval '1 hour' WHERE intent_id=$1",
+        [intent],
+      ),
+    /ORIGINAL_EXPIRY_IMMUTABLE/,
+  );
+  const before = captures;
+  await assert.rejects(
+    () =>
+      service.prepareAndSign("test-only-session", {
+        publicKey: randomBytes(32),
+        signIdempotently: async () => {
+          called++;
+          return Buffer.alloc(64);
+        },
+        lookupSignature: async () => null,
+      }),
+    /REJECTED/,
+  );
+  assert.equal(
+    captures - before,
+    1,
+    "one server-owned finalized capture per request",
+  );
+  assert.equal(called, 0, "untrusted provider still cannot sign");
+  const originalPlan = f.accounts.get(f.planAddress.toBase58())!;
+  const expiredPlan = Buffer.from(originalPlan.data[0]!, "base64");
+  expiredPlan.writeBigInt64LE(f.snapshot.chainTime, 706);
+  f.accounts.set(f.planAddress.toBase58(), {
+    ...originalPlan,
+    data: [expiredPlan.toString("base64"), "base64"],
+  });
+  await assert.rejects(
+    () => service.prepare("test-only-session"),
+    /EXPIRED_OR_SLIPPAGE/,
+  );
+  f.accounts.set(f.planAddress.toBase58(), originalPlan);
   await pool.query(
     "UPDATE c3_eval.intents SET db_revision=db_revision+1 WHERE intent_id=$1",
     [intent],

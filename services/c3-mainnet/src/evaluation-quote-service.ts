@@ -2,7 +2,8 @@
  * journals -> existing durable signer journal. No transaction signing/send.
  * Kept internal until the keeper/effect/provisioning gate has passed. */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Idl } from "@coral-xyz/anchor";
 import type { Pool } from "pg";
 import { EvaluationOwnerService } from "./evaluation-owner-service.ts";
@@ -30,10 +31,7 @@ const check = (v: unknown, code: string): void => {
 export class EvaluationQuoteService {
   private readonly pool: Pool;
   private readonly owner: EvaluationOwnerService;
-  private readonly rpc = new Connection("https://api.devnet.solana.com", {
-    commitment: "finalized",
-    disableRetryOnRateLimit: true,
-  });
+  private readonly rpc = evaluationRpc();
   constructor(pool: Pool, idl: Idl) {
     this.pool = pool;
     this.owner = new EvaluationOwnerService(pool, idl);
@@ -113,6 +111,18 @@ export class EvaluationQuoteService {
   /** Caller supplies a session only; never an amount, output, mint or policy. */
   async prepare(token: string) {
     const ctx = await this.capture(token);
+    return this.prepareCaptured(ctx);
+  }
+  /** One server-owned finalized snapshot for this request; no HTTP context
+   * argument. Both writes still enforce revision CAS and database expiry. */
+  async prepareAndSign(token: string, provider: DurableQuoteSigningProvider) {
+    const ctx = await this.capture(token);
+    const quote = await this.prepareCaptured(ctx);
+    return this.signCaptured(ctx, quote.quoteId, provider);
+  }
+  private async prepareCaptured(
+    ctx: Awaited<ReturnType<EvaluationQuoteService["capture"]>>,
+  ) {
     const route = evaluationTestRoute(ctx.client, ctx.trusted, randomBytes(32));
     const blockhash = await this.rpc.getLatestBlockhash("finalized");
     const measurement = compileEvaluationServicePacket(
@@ -135,7 +145,11 @@ export class EvaluationQuoteService {
           current.db_revision === ctx.row.db_revision &&
           current.chain_revision === ctx.row.chain_revision &&
           current.state === ctx.row.state &&
-          current.expires_at > current.now,
+          // Initial enrollment expiry cannot revoke funded custody or defeat an
+          // explicitly owner-signed, finalized plan generation after restart.
+          // The freshly verified ON-CHAIN plan supplies the settlement expiry.
+          ctx.trusted.expires >
+            BigInt(Math.floor(current.now.getTime() / 1000)),
         "CAS_OR_EXPIRY",
       );
       check(
@@ -252,6 +266,13 @@ export class EvaluationQuoteService {
   ) {
     check(/^[a-f0-9]{64}$/.test(quoteId), "ID");
     const ctx = await this.capture(token);
+    return this.signCaptured(ctx, quoteId, provider);
+  }
+  private async signCaptured(
+    ctx: Awaited<ReturnType<EvaluationQuoteService["capture"]>>,
+    quoteId: string,
+    provider: DurableQuoteSigningProvider,
+  ) {
     const q = (
       await this.pool.query(
         `SELECT q.*,v.context FROM c3_eval.quote_authorizations q JOIN c3_eval.leg_context_verifications v USING(intent_id,ordinal,intent_revision)

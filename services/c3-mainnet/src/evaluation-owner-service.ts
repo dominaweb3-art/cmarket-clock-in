@@ -2,6 +2,7 @@
  * journal and read-only recovery. No Mainnet endpoint, signer or policy import. */
 import { createHash, randomUUID } from "node:crypto";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Idl } from "@coral-xyz/anchor";
 import type { Pool } from "pg";
 import { EvaluationAuth, EVALUATION_ORIGIN } from "./evaluation-auth.ts";
@@ -34,13 +35,13 @@ const hash = (v: Uint8Array | string) =>
 const check = (v: unknown, code: string): void => {
   if (!v) throw Error("EVAL_OWNER_" + code);
 };
-const RPC = "https://api.devnet.solana.com";
 const actions = [
   "deposit",
   "issue_shares",
   "request_redemption",
   "claim",
   "renew_plan",
+  "recover_deposit_plan",
 ];
 export class EvaluationOwnerService {
   private readonly pool: Pool;
@@ -53,10 +54,7 @@ export class EvaluationOwnerService {
     this.pool = pool;
     this.idl = idl;
     // Transport and chain are not supplied by an HTTP caller/environment.
-    this.rpc = new Connection(RPC, {
-      commitment: "finalized",
-      disableRetryOnRateLimit: true,
-    });
+    this.rpc = evaluationRpc();
     this.auth = new EvaluationAuth(pool);
     this.journal = new OpenOwnerJournal(
       evaluationJournalPool(pool),
@@ -168,6 +166,14 @@ export class EvaluationOwnerService {
             )
           ).rows
         : [],
+      pendingInitialPlan: intent
+        ? ((
+            await this.pool.query(
+              "SELECT s.signature FROM c3_eval.service_contexts c JOIN c3_eval.service_packets p USING(operation_id) LEFT JOIN c3_eval.service_submissions s USING(operation_id) WHERE c.intent_id=$1 AND p.purpose='plan' AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations x WHERE x.operation_id=c.operation_id) AND NOT EXISTS(SELECT 1 FROM c3_eval.events e WHERE e.idempotency_hash=c.operation_id) LIMIT 1",
+              [intent.intent_id],
+            )
+          ).rows[0] ?? null)
+        : null,
       finalizedSlot: ctx.slot,
       inventory: ctx.position.inventory.map(String),
       intent: intent ?? null,
@@ -185,6 +191,24 @@ export class EvaluationOwnerService {
     check(actions.includes(action), "ACTION");
     const ctx = await this.context(token);
     assertEvaluationAction(action, ctx.position);
+    if (action === "recover_deposit_plan") {
+      const plan = ctx.client.pda("c3-plan-v1", ctx.client.intent("deposit"));
+      const raw = await this.rpc.getAccountInfoAndContext(plan, {
+        commitment: "finalized",
+        minContextSlot: ctx.slot,
+      });
+      check(!raw.value, "INITIAL_PLAN_EXISTS_RECONCILE_FIRST");
+      ctx.accounts.set(String(plan), null);
+      check(
+        !(
+          await this.pool.query(
+            "SELECT 1 FROM c3_eval.service_contexts c WHERE c.intent_id=(SELECT intent_id FROM c3_eval.intents WHERE wallet=$1) AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations e WHERE e.operation_id=c.operation_id) LIMIT 1",
+            [ctx.proof.wallet],
+          )
+        ).rowCount,
+        "INITIAL_PLAN_SIGNATURE_RECONCILE_FIRST",
+      );
+    }
     const configurationHash = hash(
       JSON.stringify({
         ...ctx.client.config,
@@ -546,6 +570,23 @@ export class EvaluationOwnerService {
       }
     }
     const ctx = await this.context(token, valid.context.slot);
+    if (r.action === "recover_deposit_plan") {
+      const plan = ctx.client.pda("c3-plan-v1", ctx.client.intent("deposit"));
+      const a = await this.rpc.getAccountInfoAndContext(plan, {
+        commitment: "finalized",
+        minContextSlot: ctx.slot,
+      });
+      ctx.accounts.set(
+        String(plan),
+        a.value
+          ? {
+              owner: a.value.owner.toBase58(),
+              executable: a.value.executable,
+              data: [a.value.data.toString("base64"), "base64"],
+            }
+          : null,
+      );
+    }
     if (r.action === "renew_plan") {
       const renewal = (
         await this.pool.query(
@@ -755,6 +796,7 @@ export class EvaluationOwnerService {
         issue_shares: ["buying", "active", 2, 5],
         request_redemption: ["active", "redemption_requested", 3, 2],
         claim: ["claimable", "redeemed", 4, 6],
+        recover_deposit_plan: ["funded", "buying", 1, 2],
       } as const
     )[action];
     check(
@@ -766,7 +808,7 @@ export class EvaluationOwnerService {
       "POST_STATE",
     );
     check(
-      action === "deposit"
+      action === "deposit" || action === "recover_deposit_plan"
         ? ctx.position.shares === 0n &&
             ctx.position.inventory[0]! >= EVALUATION.amount
         : action === "claim"
@@ -774,6 +816,29 @@ export class EvaluationOwnerService {
           : ctx.position.shares === EVALUATION.amount,
       "POST_SHARES_OR_RESERVES",
     );
+    if (action === "recover_deposit_plan") {
+      const plan = ctx.client.pda("c3-plan-v1", ctx.client.intent("deposit"));
+      const raw = await this.rpc.getAccountInfoAndContext(plan, {
+        commitment: "finalized",
+        minContextSlot: tx!.slot,
+      });
+      check(raw.value?.owner.equals(ctx.client.program), "OWNER_PLAN_ACCOUNT");
+      const decoded = ctx.client.coder.accounts.decode(
+        "SettlementPlan",
+        raw.value!.data,
+      ) as Record<string, unknown>;
+      check(
+        String(decoded.wallet) === ctx.proof.wallet &&
+          String(decoded.vault) === String(ctx.client.vault) &&
+          decoded.direction === 1 &&
+          String(decoded.revision) === "0" &&
+          decoded.executed_bitmap === 0 &&
+          String(decoded.router_program) === EVALUATION.router &&
+          Array.isArray(decoded.minimum_outputs) &&
+          decoded.minimum_outputs.map(String).join(",") === "40000,30000,30000",
+        "OWNER_PLAN_POST_STATE",
+      );
+    }
     const c = await this.pool.connect();
     try {
       await c.query("BEGIN");

@@ -60,6 +60,17 @@ test("single durable dispatch survives lost RPC reply, restart and concurrent re
       "utf8",
     ),
   );
+  for (const migration of [
+    "0003_evaluation_initial_plan_expiry.sql",
+    "0004_evaluation_owner_plan_recovery.sql",
+  ]) {
+    await pool.query(
+      readFileSync(
+        new URL(`../../../scripts/sql/${migration}`, import.meta.url),
+        "utf8",
+      ),
+    );
+  }
   t.mock.method(
     Connection.prototype,
     "getGenesisHash",

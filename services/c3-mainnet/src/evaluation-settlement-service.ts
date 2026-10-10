@@ -4,12 +4,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Idl } from "@coral-xyz/anchor";
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   type TransactionInstruction,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
+import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Pool } from "pg";
 import { EvaluationOwnerService } from "./evaluation-owner-service.ts";
 import { EvaluationQuoteService } from "./evaluation-quote-service.ts";
@@ -34,6 +34,7 @@ import {
 import type { DurableQuoteSigningProvider } from "./open-signing-journal.ts";
 import { decodeBase58 } from "./solana.ts";
 import { evaluationCanonical as canonicalize } from "./evaluation-canonical.ts";
+import { captureInitialPlanExpiry } from "./evaluation-initial-plan-expiry.ts";
 const hash = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest();
 const check = (v: unknown, code: string): void => {
@@ -63,10 +64,7 @@ export class EvaluationSettlementService {
   private readonly quotes: EvaluationQuoteService;
   private readonly providers: Providers;
   private readonly journal: EvaluationServiceJournal;
-  private readonly rpc = new Connection("https://api.devnet.solana.com", {
-    commitment: "finalized",
-    disableRetryOnRateLimit: true,
-  });
+  private readonly rpc = evaluationRpc();
   constructor(pool: Pool, idl: Idl, providers: Providers) {
     check(
       providers.governance.publicKey === EVALUATION.governance &&
@@ -142,10 +140,24 @@ export class EvaluationSettlementService {
   ) {
     check(items.length > 0 && items.length <= 2, "RESERVATION_COUNT");
     const scope = String(row.intent_id);
+    const replacements = Number(
+      (
+        await this.pool.query(
+          "SELECT count(*) FROM c3_eval.initial_plan_expirations WHERE intent_id=$1",
+          [scope],
+        )
+      ).rows[0].count,
+    );
     const latest = await this.rpc.getLatestBlockhash("finalized");
     const entries = items.map(({ context, instructions, generation }) => ({
       context,
-      id: evaluationOperationId(scope, context.kind, generation),
+      id: evaluationOperationId(
+        scope,
+        context.kind,
+        context.kind === "plan"
+          ? generation + ":expiry-generation:" + replacements
+          : generation,
+      ),
       packet: compileEvaluationServicePacket(
         instructions,
         context.kind === "authorize" ? "governance" : "keeper",
@@ -665,7 +677,7 @@ export class EvaluationSettlementService {
         );
       }
     }
-    if (!receipt) {
+    if (!receipt && !op.signature) {
       const provider =
         context.kind === "authorize"
           ? this.providers.governance
@@ -717,6 +729,124 @@ export class EvaluationSettlementService {
       automaticallyResubmitted: false,
     };
   }
+  /** Separate authenticated owner command; no automatic rebuild or resend. */
+  async recoverInitialPlan(token: string) {
+    check(EVALUATION.lifecycleReady, "RUNTIME_NOT_RELEASED");
+    const ctx = await this.owner.context(token);
+    const row = (
+      await this.pool.query("SELECT * FROM c3_eval.intents WHERE wallet=$1", [
+        ctx.proof.wallet,
+      ])
+    ).rows[0];
+    check(
+      row && ["funded", "redemption_requested"].includes(row.state),
+      "INITIAL_PLAN_STAGE",
+    );
+    const direction = row.state === "funded" ? 1 : 2;
+    const plan = String(
+      ctx.client.pda(
+        "c3-plan-v1",
+        ctx.client.intent(direction === 1 ? "deposit" : "redemption"),
+      ),
+    );
+    const ops = (
+      await this.pool.query(
+        "SELECT p.*,c.context,c.context_hash,c.db_revision,c.chain_revision,s.signature FROM c3_eval.service_packets p JOIN c3_eval.service_contexts c USING(operation_id) LEFT JOIN c3_eval.service_submissions s USING(operation_id) WHERE c.intent_id=$1 AND p.purpose='plan' AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations x WHERE x.operation_id=p.operation_id) ORDER BY c.created_at",
+        [row.intent_id],
+      )
+    ).rows;
+    check(ops.length === 1, "INITIAL_PLAN_OPERATION");
+    const op = ops[0];
+    check(
+      hash(canonicalize(op.context)).equals(op.context_hash) &&
+        String(op.db_revision) === String(row.db_revision) &&
+        String(op.chain_revision) === String(row.chain_revision) &&
+        op.context.direction === direction,
+      "INITIAL_PLAN_CAS",
+    );
+    const evidence = await captureInitialPlanExpiry(this.rpc, op, plan);
+    // Validate inventory/reserves/lifecycle again at the finalized barrier.
+    const after = await this.owner.context(token, evidence.slot);
+    check(
+      canonicalize([...ctx.accounts].map(([a, v]) => [a, v?.data ?? null])) ===
+        canonicalize([...after.accounts].map(([a, v]) => [a, v?.data ?? null])),
+      "INITIAL_PLAN_EFFECTS_CHANGED",
+    );
+    const c = await this.pool.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL lock_timeout='3s'");
+      const current = (
+        await c.query(
+          "SELECT * FROM c3_eval.intents WHERE intent_id=$1 FOR UPDATE",
+          [row.intent_id],
+        )
+      ).rows[0];
+      check(
+        String(current.db_revision) === String(row.db_revision) &&
+          String(current.chain_revision) === String(row.chain_revision) &&
+          current.state === row.state,
+        "INITIAL_PLAN_CAS",
+      );
+      check(
+        !(
+          await c.query(
+            "SELECT 1 FROM c3_eval.service_receipts WHERE operation_id=$1 UNION ALL SELECT 1 FROM c3_eval.events WHERE idempotency_hash=$1",
+            [op.operation_id],
+          )
+        ).rowCount,
+        "INITIAL_PLAN_ALREADY_RECONCILED",
+      );
+      check(
+        !(
+          await c.query(
+            "SELECT 1 FROM c3_eval.owner_requests r LEFT JOIN c3_eval.owner_request_outcomes o USING(request_id) LEFT JOIN c3_eval.owner_effect_receipts e USING(request_id) WHERE r.intent_id=$1 AND o.request_id IS NULL AND e.request_id IS NULL",
+            [row.intent_id],
+          )
+        ).rowCount,
+        "OWNER_REQUEST_PENDING",
+      );
+      await c.query(
+        "INSERT INTO c3_eval.initial_plan_expirations(operation_id,intent_id,expected_db_revision,expected_chain_revision,barrier_slot,evidence_hash) VALUES($1,$2,$3,$4,$5,$6)",
+        [
+          op.operation_id,
+          row.intent_id,
+          row.db_revision,
+          row.chain_revision,
+          evidence.slot,
+          evidence.evidenceHash,
+        ],
+      );
+      await c.query(
+        "UPDATE c3_eval.intents SET db_revision=db_revision+1,updated_at=clock_timestamp() WHERE intent_id=$1",
+        [row.intent_id],
+      );
+      await c.query(
+        "INSERT INTO c3_eval.events(event_id,intent_id,idempotency_hash,db_revision,state,evidence_hash) VALUES($1,$2,$3,$4,$5,$6)",
+        [
+          randomUUID(),
+          row.intent_id,
+          hash("evaluation:initial-plan-expiry:" + op.operation_id).toString(
+            "hex",
+          ),
+          String(BigInt(row.db_revision) + 1n),
+          row.state,
+          evidence.evidenceHash.toString("hex"),
+        ],
+      );
+      await c.query("COMMIT");
+      return {
+        status: "closed_unexecuted",
+        originalSignature: op.signature ?? null,
+        automaticallyResubmitted: false,
+      };
+    } catch (error) {
+      await c.query("ROLLBACK");
+      throw error;
+    } finally {
+      c.release();
+    }
+  }
   async advance(token: string) {
     check(EVALUATION.lifecycleReady, "RUNTIME_NOT_RELEASED");
     const ctx = await this.owner.context(token);
@@ -729,7 +859,7 @@ export class EvaluationSettlementService {
     // Process original signatures/messages before building a new quote.
     const pending = (
       await this.pool.query(
-        `SELECT c.operation_id FROM c3_eval.service_contexts c JOIN c3_eval.service_packets p USING(operation_id) LEFT JOIN c3_eval.service_receipts r USING(operation_id) WHERE c.intent_id=$1 AND NOT EXISTS(SELECT 1 FROM c3_eval.service_retirements t WHERE t.operation_id=c.operation_id) AND (r.operation_id IS NULL OR (p.purpose<>'authorize' AND NOT EXISTS(SELECT 1 FROM c3_eval.events e WHERE e.idempotency_hash=c.operation_id))) ORDER BY c.created_at LIMIT 1`,
+        `SELECT c.operation_id FROM c3_eval.service_contexts c JOIN c3_eval.service_packets p USING(operation_id) LEFT JOIN c3_eval.service_receipts r USING(operation_id) WHERE c.intent_id=$1 AND NOT EXISTS(SELECT 1 FROM c3_eval.service_retirements t WHERE t.operation_id=c.operation_id) AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations t WHERE t.operation_id=c.operation_id) AND (r.operation_id IS NULL OR (p.purpose<>'authorize' AND NOT EXISTS(SELECT 1 FROM c3_eval.events e WHERE e.idempotency_hash=c.operation_id))) ORDER BY c.created_at LIMIT 1`,
         [row.intent_id],
       )
     ).rows[0];
@@ -818,12 +948,11 @@ export class EvaluationSettlementService {
         ),
       );
     }
-    const quote = await this.quotes.prepare(token),
-      signed = await this.quotes.signStored(
+    const signed = await this.quotes.prepareAndSign(
         token,
-        quote.quoteId,
         this.providers.quotes,
       ),
+      quote = { quoteId: signed.quoteId },
       route = signed.route;
     const base = {
       direction,

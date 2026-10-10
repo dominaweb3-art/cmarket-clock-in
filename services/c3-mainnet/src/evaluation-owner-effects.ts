@@ -70,12 +70,23 @@ export function verifyEvaluationOwnerEffects(
     action === "request_redemption" || action === "claim"
       ? client.accounts(client.intent("redemption"))
       : client.accounts(client.intent("deposit"));
+  if (action === "recover_deposit_plan")
+    Object.assign(names, {
+      keeper: client.owner,
+      plan: client.pda("c3-plan-v1", client.intent("deposit")),
+    });
   const outerNames =
     action === "deposit"
       ? ["create_deposit_intent", "deposit_usdc"]
       : action === "request_redemption"
         ? ["create_redemption_intent", "lock_shares_for_redemption"]
-        : [action === "claim" ? "claim_usdc" : "issue_initial_shares"];
+        : [
+            action === "recover_deposit_plan"
+              ? "create_deposit_settlement_plan"
+              : action === "claim"
+                ? "claim_usdc"
+                : "issue_initial_shares",
+          ];
   check(msg.compiledInstructions.length === outerNames.length, "OUTER_COUNT");
   msg.compiledInstructions.forEach((ix, i) => {
     const definition = client.idl.instructions.find(
@@ -143,13 +154,23 @@ export function verifyEvaluationOwnerEffects(
       create?: boolean;
     }[];
   }[] = [];
-  if (action === "deposit" || action === "request_redemption")
+  if (
+    action === "deposit" ||
+    action === "request_redemption" ||
+    action === "recover_deposit_plan"
+  )
     expected.push({
       index: 0,
       instructions: [
         {
           program: SystemProgram.programId.toBase58(),
-          accounts: [client.owner.toBase58(), names.intent!.toBase58()],
+          accounts: [
+            client.owner.toBase58(),
+            (action === "recover_deposit_plan"
+              ? names.plan!
+              : names.intent!
+            ).toBase58(),
+          ],
           create: true,
         },
       ],
@@ -235,7 +256,11 @@ export function verifyEvaluationOwnerEffects(
           bytes.length === 52 &&
             bytes.readUInt32LE(0) === 0 &&
             bytes.readBigUInt64LE(12) ===
-              (action === "deposit" ? 288n : 234n) &&
+              (action === "recover_deposit_plan"
+                ? 901n
+                : action === "deposit"
+                  ? 288n
+                  : 234n) &&
             new PublicKey(bytes.subarray(20)).equals(client.program),
           "HOSTILE_SYSTEM_CREATE",
         );
@@ -319,7 +344,11 @@ export function verifyEvaluationOwnerEffects(
     const expectedDelta =
       i === 0
         ? -BigInt(meta!.fee) - createRent
-        : account(i) === names.intent!.toBase58()
+        : account(i) ===
+            (action === "recover_deposit_plan"
+              ? names.plan!
+              : names.intent!
+            ).toBase58()
           ? createRent
           : 0n;
     check(

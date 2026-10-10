@@ -14,9 +14,11 @@ export const EVALUATION = Object.freeze({
   cluster: "solana:devnet",
   simulatedAssets: true,
   mainnetEnabled: false,
-  // Flip only in a reviewed evaluation commit after hosted keeper/effect
-  // reconciliation and Devnet provisioning pass. Never via environment values.
-  lifecycleReady: false,
+  // Devnet-only release: exact deployed bytes and 19 hosted provisioning
+  // effects verified on 2026-10-09; focused custody/renewal/effect tests pass.
+  // This permits test-token acceptance, not a claim of completed physical QA
+  // or Mainnet capability. Never selected through an environment value.
+  lifecycleReady: true,
   amount: 1_000_000n,
   weights: Object.freeze([4000, 3000, 3000]),
 });

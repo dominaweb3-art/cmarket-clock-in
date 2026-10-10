@@ -4,12 +4,12 @@
 import { createHash } from "node:crypto";
 import { BorshCoder, BN, type Idl } from "@coral-xyz/anchor";
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   type TransactionInstruction,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
+import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Pool } from "pg";
 import { EvaluationAuth } from "./evaluation-auth.ts";
 import { EVALUATION, assertEvaluationDatabase } from "./evaluation-scope.ts";
@@ -78,10 +78,7 @@ export class EvaluationProvisionService {
   private readonly pool: Pool;
   private readonly idl: Idl;
   private readonly signers: EvaluationProvisionSigners;
-  private readonly rpc = new Connection("https://api.devnet.solana.com", {
-    commitment: "finalized",
-    disableRetryOnRateLimit: true,
-  });
+  private readonly rpc = evaluationRpc();
   private readonly journal: EvaluationServiceJournal;
   constructor(pool: Pool, idl: Idl, signers: EvaluationProvisionSigners) {
     check(

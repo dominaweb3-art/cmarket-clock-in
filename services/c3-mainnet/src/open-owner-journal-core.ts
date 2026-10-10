@@ -150,8 +150,8 @@ export class OpenOwnerJournal {
    s.session_hash,s.expires_at AS session_expiry,clock_timestamp() AS now
    FROM c3_open.owner_requests r JOIN c3_open.intents i USING(intent_id)
    JOIN c3_open.owner_sessions s ON s.intent_id=i.intent_id AND s.wallet=i.wallet
-   JOIN c3_open.owner_challenges auth ON auth.challenge_id=s.challenge_id
-   WHERE r.request_id=$1 AND s.session_hash=$2 AND auth.audience=$3 FOR UPDATE OF i`,
+   JOIN c3_open.owner_challenges proof ON proof.challenge_id=s.challenge_id
+   WHERE r.request_id=$1 AND s.session_hash=$2 AND proof.audience=$3 FOR UPDATE OF i`,
         [requestId, hash(token), this.origin],
       )
     ).rows[0];

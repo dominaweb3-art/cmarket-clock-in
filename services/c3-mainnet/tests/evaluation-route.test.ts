@@ -93,3 +93,21 @@ test("reject mint-scope plan substitution, unsafe budget, stale context and unat
   assert.notDeepEqual(a.seal.contextHash, b.seal.contextHash);
   assert.notDeepEqual(a.idempotency, b.idempotency);
 });
+test("slot ceiling does not shorten valid temporal freshness or extend 30-second/plan/registry expiry", () => {
+  const base = context(1, 0, 400000n);
+  const route = evaluationTestRoute(client, base, Buffer.alloc(32, 1));
+  assert.equal(route.seal.expiresAt, base.created + 30n);
+  assert.equal(route.seal.expiresSlot, base.slot + 128n);
+  assert.ok(base.slot + 64n < route.seal.expiresSlot);
+  const shorter = evaluationTestRoute(
+    client,
+    {
+      ...base,
+      expires: base.created + 10n,
+      registryExpiresSlot: base.slot + 5n,
+    },
+    Buffer.alloc(32, 2),
+  );
+  assert.equal(shorter.seal.expiresAt, base.created + 10n);
+  assert.equal(shorter.seal.expiresSlot, base.slot + 5n);
+});

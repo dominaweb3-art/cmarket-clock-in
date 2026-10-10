@@ -212,6 +212,14 @@ export function assertEvaluationAction(
         position.shares === EVALUATION.amount,
       "NOT_CLAIMABLE",
     );
+  else if (action === "recover_deposit_plan")
+    check(
+      position.lifecycle === 1 &&
+        position.depositStatus === 2 &&
+        position.shares === 0n &&
+        position.inventory.slice(1).every((n) => n === 0n),
+      "NO_UNSWAPPED_DEPOSIT",
+    );
   else if (action === "renew_plan")
     check(
       (position.lifecycle === 1 && position.depositStatus === 2) ||

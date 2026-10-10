@@ -20,7 +20,7 @@ const check = (v: unknown, c: string): void => {
 };
 const hash = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest();
-export const evaluationPendingOperationsSql = `SELECT c.operation_id,c.context,c.context_hash,p.unsigned_packet,p.message_hash,p.last_valid_height,s.signature,r.outcome FROM c3_eval.service_contexts c JOIN c3_eval.service_packets p USING(operation_id) LEFT JOIN c3_eval.service_submissions s USING(operation_id) LEFT JOIN c3_eval.service_receipts r USING(operation_id) WHERE c.intent_id=$1 AND NOT EXISTS(SELECT 1 FROM c3_eval.service_retirements t WHERE t.operation_id=c.operation_id) AND (r.operation_id IS NULL OR (p.purpose<>'authorize' AND NOT EXISTS(SELECT 1 FROM c3_eval.events e WHERE e.idempotency_hash=c.operation_id))) ORDER BY c.operation_id`;
+export const evaluationPendingOperationsSql = `SELECT c.operation_id,c.context,c.context_hash,p.unsigned_packet,p.message_hash,p.last_valid_height,s.signature,r.outcome FROM c3_eval.service_contexts c JOIN c3_eval.service_packets p USING(operation_id) LEFT JOIN c3_eval.service_submissions s USING(operation_id) LEFT JOIN c3_eval.service_receipts r USING(operation_id) WHERE c.intent_id=$1 AND NOT EXISTS(SELECT 1 FROM c3_eval.service_retirements t WHERE t.operation_id=c.operation_id) AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations t WHERE t.operation_id=c.operation_id) AND (r.operation_id IS NULL OR (p.purpose<>'authorize' AND NOT EXISTS(SELECT 1 FROM c3_eval.events e WHERE e.idempotency_hash=c.operation_id))) ORDER BY c.operation_id`;
 /** Never treats wall clock alone, a missing transaction or a signature as success. */
 export async function captureEvaluationRenewal(
   pool: Pool,

@@ -10,6 +10,7 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { EVALUATION, evaluationPdas } from "./evaluation-scope.ts";
+import { evaluationCreatePlan } from "./evaluation-settlement-client.ts";
 
 export const EVAL_TOKEN = new PublicKey(
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
@@ -29,7 +30,12 @@ export function evaluationAta(
   )[0];
 }
 export type EvaluationOwnerAction =
-  "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
+  | "deposit"
+  | "issue_shares"
+  | "request_redemption"
+  | "claim"
+  | "renew_plan"
+  | "recover_deposit_plan";
 export type EvaluationRenewal = Readonly<{
   direction: 1 | 2;
   revision: bigint;
@@ -167,6 +173,19 @@ export class EvaluationClient {
       deposit = this.accounts(this.intent("deposit")),
       redemption = this.accounts(this.intent("redemption"));
     switch (action) {
+      case "recover_deposit_plan": {
+        const instruction = evaluationCreatePlan(
+          this,
+          1,
+          chainTime,
+        ).instruction;
+        instruction.keys[0] = {
+          pubkey: this.owner,
+          isSigner: true,
+          isWritable: true,
+        };
+        return [instruction];
+      }
       case "renew_plan": {
         if (!renewal || ![1, 2].includes(renewal.direction))
           throw Error("EVAL_RENEWAL_CONTEXT");

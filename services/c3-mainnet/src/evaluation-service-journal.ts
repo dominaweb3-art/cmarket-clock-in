@@ -8,6 +8,7 @@ import {
   VersionedTransaction,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
+import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Pool } from "pg";
 import { EVALUATION } from "./evaluation-scope.ts";
 
@@ -98,10 +99,7 @@ export class EvaluationServiceJournal {
   private readonly rpc: Connection;
   constructor(pool: Pool) {
     this.pool = pool;
-    this.rpc = new Connection("https://api.devnet.solana.com", {
-      commitment: "finalized",
-      disableRetryOnRateLimit: true,
-    });
+    this.rpc = evaluationRpc();
   }
   async dispatch(input: EvaluationPacket, signer: EvaluationPacketSigner) {
     check(/^[a-f0-9]{64}$/.test(input.operationId), "OPERATION_ID");
@@ -269,7 +267,19 @@ export class EvaluationServiceJournal {
         state: "submitted" as const,
         dispatched: true,
       };
-    } catch {
+    } catch (error) {
+      // No raw logs/error text or signed bytes. This is NOT a finalized failure
+      // receipt: the original signature still requires read-only reconciliation.
+      const text = error instanceof Error ? error.message : "";
+      console.error(
+        JSON.stringify({
+          event: "EVAL_SAFE_DISPATCH_UNCERTAIN",
+          reason: text.includes("429") ? "RPC_RATE_LIMIT" : "SEND_OR_PREFLIGHT",
+          instructionCode: /custom program error: 0x([0-9a-f]{1,8})/i.exec(
+            text,
+          )?.[1],
+        }),
+      );
       return {
         signature: signature!,
         state: "uncertain" as const,

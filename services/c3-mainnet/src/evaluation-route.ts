@@ -192,9 +192,13 @@ export function evaluationTestRoute(
         ? context.expires
         : context.created + 30n,
     expiresSlot:
-      context.registryExpiresSlot < context.slot + 60n
+      // Slots are not seconds. Finalized authorization followed by execution
+      // observed 64 slots in only 16 seconds on Devnet. Keep an independent
+      // finite slot ceiling; the unchanged 30-second on-chain policy remains
+      // authoritative even if slots advance more slowly or rapidly.
+      context.registryExpiresSlot < context.slot + 128n
         ? context.registryExpiresSlot
-        : context.slot + 60n,
+        : context.slot + 128n,
   };
   const payload = encodeQuoteSealV1(seal);
   check(payload.length === 300);
