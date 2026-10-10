@@ -41,7 +41,14 @@ export default async function handler(req, res) {
   const result = {
     mode: "DEVNET_SIMULATED_ASSETS",
     mainnetEnabled: false,
-    evaluationReady: false,
+    // Recorded physical acceptance, not a runtime gate or a health-derived claim.
+    evaluationReady: true,
+    physicalAcceptance: {
+      version: "0.1.14",
+      date: "2026-10-10",
+      evidence:
+        "https://github.com/dominaweb3-art/cmarket-clock-in/blob/delivery/c3-devnet-evaluation/docs/C3_DEVNET_EVALUATION_QA.md",
+    },
     database: "UNVERIFIED",
     devnet: "UNVERIFIED",
   };
