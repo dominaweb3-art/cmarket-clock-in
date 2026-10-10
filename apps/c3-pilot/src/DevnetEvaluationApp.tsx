@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Image,
   Linking,
   Pressable,
   SafeAreaView,
@@ -29,6 +28,14 @@ import {
 } from "./evaluation-wallet";
 import type { EvaluationMoneyAction } from "./evaluation-owner-review";
 import { base64FromUint8Array } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
+import {
+  BottomNavigation,
+  C3Summary,
+  EmptyActivity,
+  NavigationGlyph,
+  UpcomingIndices,
+} from "./EvaluationVisuals";
+import { visualText, type EvaluationTab } from "./evaluation-visual-copy";
 
 const STORAGE = "c3-evaluation-language/v1";
 function EvaluationButton({
@@ -55,7 +62,11 @@ function EvaluationButton({
 }
 export default function DevnetEvaluationApp() {
   const [language, setLanguage] = useState<Language>("en");
-  const [tab, setTab] = useState<"home" | "indices" | "activity">("home");
+  const [tab, setTab] = useState<EvaluationTab>("home");
+  const [accountOpen, setAccountOpen] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const accountY = useRef(0);
+  const scrollToAccount = useRef(false);
   const [wallet, setWallet] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,6 +77,18 @@ export default function DevnetEvaluationApp() {
   const lock = useRef(false);
   const session = useRef<string | undefined>(undefined);
   const t = (key: EvaluationKey) => evalText(language, key);
+  const u = (key: Parameters<typeof visualText>[1]) =>
+    visualText(language, key);
+  const changeTab = (value: EvaluationTab) => {
+    setTab(value);
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  };
+  const openAccount = () => {
+    scrollToAccount.current = !accountOpen || tab !== "home";
+    setAccountOpen(true);
+    setTab("home");
+    scroll.current?.scrollTo({ y: accountY.current, animated: true });
+  };
   useEffect(() => {
     AsyncStorage.getItem(STORAGE)
       .then((v) => {
@@ -341,58 +364,108 @@ export default function DevnetEvaluationApp() {
     position.pendingRequests.length > 0;
   return (
     <SafeAreaView style={styles.page}>
-      <StatusBar barStyle="light-content" backgroundColor="#071c18" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <View style={styles.header}>
+        <Text style={styles.title}>C Market</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={u("details")}
+          onPress={openAccount}
+          style={styles.headerLanguage}
+        >
+          <Text style={styles.activeText}>
+            {language === "zh-CN"
+              ? "中文"
+              : language === "pt-BR"
+                ? "PT"
+                : language.toUpperCase()}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={u("account")}
+          accessibilityState={{ expanded: accountOpen && tab === "home" }}
+          onPress={openAccount}
+          style={styles.walletButton}
+        >
+          <NavigationGlyph name="wallet" color="#0b1221" />
+          {wallet ? <View style={styles.connectionDot} /> : null}
+        </Pressable>
+      </View>
       <View style={styles.banner}>
+        <Text style={styles.demo}>{u("demo")}</Text>
         <Text style={styles.bannerText}>{t("notice")}</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Image
-          source={require("../../mobile/assets/images/icon.png")}
-          style={styles.logo}
-          accessibilityLabel="C Market"
-        />
-        <Text style={styles.title}>{t("title")}</Text>
-        <Text style={styles.note}>{t("mainnet")}</Text>
-        <View style={styles.card}>
-          <Text style={styles.heading}>{t("language")}</Text>
-          <View style={styles.languages}>
-            {languages.map((value) => (
-              <Pressable
-                key={value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: language === value }}
-                onPress={() => {
-                  setLanguage(value);
-                  void AsyncStorage.setItem(STORAGE, value).catch(
-                    () => undefined,
-                  );
-                }}
-                style={[styles.chip, value === language && styles.selected]}
-              >
-                <Text>{languageLabels[value]}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-        <View style={styles.tabs}>
-          {(["home", "indices", "activity"] as const).map((value) => (
-            <Pressable
-              key={value}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: value === tab }}
-              onPress={() => setTab(value)}
-              style={styles.chip}
-            >
-              <Text style={value === tab && styles.activeText}>{t(value)}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.card}>
-          {tab === "home" && (
+      <ScrollView
+        ref={scroll}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scroll}
+      >
+        {(tab === "home" || tab === "indices") && (
+          <C3Summary
+            language={language}
+            onExplore={openAccount}
+            disabled={busy}
+            {...(tab === "home"
+              ? { onDetails: () => changeTab("indices") }
+              : {})}
+          />
+        )}
+        <View
+          style={[styles.card, tab === "home" && !accountOpen && styles.hidden]}
+          onLayout={(event) => {
+            if (tab === "home" && accountOpen) {
+              accountY.current = event.nativeEvent.layout.y;
+              if (scrollToAccount.current) {
+                scrollToAccount.current = false;
+                scroll.current?.scrollTo({
+                  y: accountY.current,
+                  animated: true,
+                });
+              }
+            }
+          }}
+        >
+          {tab === "home" && accountOpen && (
             <>
-              <Text style={styles.heading}>{t("home")}</Text>
+              <View style={styles.panelHeader}>
+                <Text style={styles.heading}>{u("account")}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={u("back")}
+                  onPress={() => {
+                    setAccountOpen(false);
+                    scroll.current?.scrollTo({ y: 0, animated: true });
+                  }}
+                  style={styles.close}
+                >
+                  <Text style={styles.closeText}>×</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.heading}>{t("language")}</Text>
+              <View style={styles.languages}>
+                {languages.map((value) => (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="button"
+                    accessibilityLabel={languageLabels[value]}
+                    accessibilityState={{ selected: language === value }}
+                    onPress={() => {
+                      setLanguage(value);
+                      void AsyncStorage.setItem(STORAGE, value).catch(
+                        () => undefined,
+                      );
+                    }}
+                    style={[styles.chip, value === language && styles.selected]}
+                  >
+                    <Text style={styles.languageText}>
+                      {languageLabels[value]}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
               {wallet && (
-                <Text>
+                <Text style={styles.walletAddress}>
                   {wallet.slice(0, 6)}…{wallet.slice(-6)}
                 </Text>
               )}
@@ -439,15 +512,23 @@ export default function DevnetEvaluationApp() {
               )}
               {position && (
                 <>
-                  <Text>
-                    {t("shares")}: {displayUnits(position.shares)}
-                  </Text>
-                  <Text>
-                    {t("claimable")}: {displayUnits(position.claimable)}
-                  </Text>
-                  <Text>
-                    {t("returned")}: {displayUnits(position.returned)}
-                  </Text>
+                  <View style={styles.position}>
+                    <Text style={styles.heading}>{u("position")}</Text>
+                    <Text style={styles.metricLabel}>{t("shares")}</Text>
+                    <Text style={styles.metric}>
+                      {displayUnits(position.shares)}
+                    </Text>
+                    <Text style={styles.metricLabel}>{t("claimable")}</Text>
+                    <Text style={styles.metric}>
+                      {displayUnits(position.claimable)}
+                    </Text>
+                    <Text style={styles.metricLabel}>{t("returned")}</Text>
+                    <Text style={styles.metric}>
+                      {displayUnits(position.returned)}
+                    </Text>
+                  </View>
+                  <Text style={styles.heading}>{u("controls")}</Text>
+                  <Text style={styles.note}>{u("stepHint")}</Text>
                   {actions.map((action) => (
                     <EvaluationButton
                       key={action}
@@ -497,24 +578,34 @@ export default function DevnetEvaluationApp() {
           {tab === "indices" && (
             <>
               <Text style={styles.heading}>{t("target")}</Text>
+              <Text style={styles.note}>{u("goals")}</Text>
               <Text style={styles.note}>{t("assets")}</Text>
-              <Text style={styles.heading}>{t("upcoming")}</Text>
+              <Text style={styles.note}>{t("restriction")}</Text>
             </>
           )}
           {tab === "activity" && (
             <>
               <Text style={styles.heading}>{t("activity")}</Text>
+              <Text style={styles.note}>{u("verifiedOnly")}</Text>
               {Array.isArray(position?.activity) &&
               position.activity.length > 0 ? (
                 position.activity.map((item: Record<string, unknown>) => (
-                  <View key={String(item.signature)} style={styles.card}>
-                    <Text>
-                      {typeof item.action === "string" &&
-                      actions.includes(item.action as EvaluationMoneyAction)
-                        ? t(item.action as EvaluationMoneyAction)
-                        : t("process")}
-                    </Text>
-                    <Text>
+                  <View key={String(item.signature)} style={styles.receipt}>
+                    <View style={styles.receiptHeader}>
+                      <NavigationGlyph
+                        name="activity"
+                        color={
+                          item.effects_verified === true ? "#075c47" : "#76808d"
+                        }
+                      />
+                      <Text style={styles.receiptTitle}>
+                        {typeof item.action === "string" &&
+                        actions.includes(item.action as EvaluationMoneyAction)
+                          ? t(item.action as EvaluationMoneyAction)
+                          : t("process")}
+                      </Text>
+                    </View>
+                    <Text style={styles.receiptStatus}>
                       {item.effects_verified === true
                         ? t("verifiedEffects")
                         : t("uncertain")}
@@ -523,6 +614,8 @@ export default function DevnetEvaluationApp() {
                       /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(item.signature) && (
                         <Pressable
                           accessibilityRole="link"
+                          accessibilityLabel={`Solana Explorer Devnet: ${item.signature}`}
+                          style={styles.explorerLink}
                           onPress={() => {
                             void Linking.openURL(
                               `https://explorer.solana.com/tx/${item.signature}?cluster=devnet`,
@@ -538,7 +631,14 @@ export default function DevnetEvaluationApp() {
                   </View>
                 ))
               ) : (
-                <Text>{t("noActivity")}</Text>
+                <EmptyActivity language={language} />
+              )}
+              {!verified && (
+                <EvaluationButton
+                  label={u("account")}
+                  onPress={openAccount}
+                  disabled={busy}
+                />
               )}
               <EvaluationButton
                 label={t("refresh")}
@@ -553,23 +653,68 @@ export default function DevnetEvaluationApp() {
             {busy ? t("busy") : status}
           </Text>
         </View>
+        {(tab === "home" || tab === "indices") && (
+          <UpcomingIndices language={language} />
+        )}
+        <Text style={styles.footer}>{t("mainnet")}</Text>
       </ScrollView>
+      <BottomNavigation language={language} tab={tab} onChange={changeTab} />
     </SafeAreaView>
   );
 }
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#eef4f0",
-    paddingTop: StatusBar.currentHeight ?? 0,
-  },
-  banner: { backgroundColor: "#071c18", padding: 12 },
-  bannerText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  scroll: { padding: 20, paddingBottom: 40 },
-  title: { color: "#071c18", fontSize: 30, fontWeight: "800", marginBottom: 8 },
-  logo: { width: 64, height: 64, borderRadius: 14, marginBottom: 12 },
-  card: {
     backgroundColor: "#fff",
+    paddingTop: StatusBar.currentHeight ?? 0,
+    paddingBottom: 24,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  headerLanguage: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletButton: {
+    backgroundColor: "#f3f5f7",
+    borderRadius: 16,
+    padding: 12,
+    minHeight: 48,
+    minWidth: 48,
+  },
+  connectionDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#008564",
+    position: "absolute",
+    right: 8,
+    top: 8,
+  },
+  banner: {
+    backgroundColor: "#eaf7f1",
+    borderRadius: 16,
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 8,
+  },
+  demo: { fontSize: 16, fontWeight: "700", color: "#124b3d", marginBottom: 3 },
+  bannerText: { color: "#526c61", fontSize: 12, lineHeight: 17 },
+  scrollView: { flex: 1 },
+  scroll: { padding: 20, paddingTop: 12, paddingBottom: 24 },
+  title: { flex: 1, color: "#0b1221", fontSize: 30, fontWeight: "800" },
+  hidden: { display: "none" },
+  card: {
+    backgroundColor: "#fbfefd",
+    borderWidth: 1,
+    borderColor: "#e2ede8",
     borderRadius: 20,
     padding: 20,
     marginTop: 16,
@@ -600,11 +745,6 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   disabled: { opacity: 0.45 },
   languages: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tabs: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20,
-  },
   chip: {
     padding: 12,
     backgroundColor: "#e6eeea",
@@ -613,4 +753,49 @@ const styles = StyleSheet.create({
   },
   selected: { borderColor: "#006d50", borderWidth: 2 },
   activeText: { color: "#006d50", fontWeight: "800" },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  close: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  closeText: { color: "#657080", fontSize: 30 },
+  walletAddress: {
+    fontSize: 15,
+    color: "#075c47",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  position: {
+    backgroundColor: "#eaf7f1",
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 16,
+  },
+  metricLabel: { color: "#526c61", fontSize: 13, marginTop: 12 },
+  metric: { color: "#12372d", fontSize: 22, fontWeight: "700", marginTop: 4 },
+  receipt: {
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderColor: "#e2ede8",
+    gap: 8,
+  },
+  receiptHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  receiptTitle: { flex: 1, fontSize: 16, fontWeight: "600", color: "#0b1221" },
+  receiptStatus: { color: "#526c61", fontSize: 13, lineHeight: 19 },
+  explorerLink: { minHeight: 44, justifyContent: "center" },
+  languageText: { color: "#263f35" },
+  footer: {
+    fontSize: 12,
+    color: "#66746f",
+    marginTop: 20,
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

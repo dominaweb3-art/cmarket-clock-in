@@ -13,9 +13,9 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const project = join(root, "variants/evaluation");
-const dist = join(root, "dist/devnet-evaluation-lifecycle-v15");
+const dist = join(root, "dist/devnet-evaluation-ui-v16");
 const signing = join(root, "release-signing");
-const apkName = "c-market-c3-devnet-evaluation-0.1.14.apk";
+const apkName = "c-market-c3-devnet-evaluation-0.1.15.apk";
 const apk = join(dist, apkName);
 if (existsSync(apk)) throw Error("EVAL_PRESERVE_EXISTING_APK");
 if (
