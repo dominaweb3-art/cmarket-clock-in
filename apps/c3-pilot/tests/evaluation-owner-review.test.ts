@@ -24,7 +24,7 @@ const {
 } = createRequire(
   new URL("../../../services/c3-mainnet/package.json", import.meta.url),
 )("@solana/web3.js");
-test("five owner packets match official PDA/ATA derivation and exact Borsh bytes", async () => {
+test("six owner packets match official PDA/ATA derivation and exact Borsh bytes", async () => {
   const wallet = Keypair.generate(),
     now = Date.now(),
     time = BigInt(Math.floor(now / 1000)),
@@ -68,6 +68,7 @@ test("five owner packets match official PDA/ATA derivation and exact Borsh bytes
     "request_redemption",
     "claim",
     "renew_plan",
+    "recover_deposit_plan",
   ];
   for (const action of actions) {
     const renewal =
@@ -205,6 +206,30 @@ test("five owner packets match official PDA/ATA derivation and exact Borsh bytes
     rejectRehashed([...original, ix]);
     if (original.length > 1) rejectRehashed([...original].reverse());
     if (renewal) {
+      const zeroBuild = client.compileOwner(
+        "renew_plan",
+        time,
+        String(Keypair.generate().publicKey),
+        1000,
+        { direction: 1, revision: 0n },
+      );
+      assert.doesNotThrow(() =>
+        reviewEvaluationOwnerPacket(
+          {
+            ...result,
+            packet: zeroBuild.packet.toString("base64"),
+            messageHash: zeroBuild.messageHash.toString("hex"),
+            renewal: {
+              direction: 1,
+              revision: "0",
+              expiry: String(time + 110n),
+            },
+          },
+          String(wallet.publicKey),
+          "renew_plan",
+          now,
+        ),
+      );
       for (const update of [
         { direction: 2 },
         { revision: "6" },

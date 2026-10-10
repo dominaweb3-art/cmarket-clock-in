@@ -39,6 +39,9 @@ credentials.json
 /output/pdf/
 /artifacts/c3-devnet-evaluation/
 /apps/c3-evaluation-web/.vercel/
+/apps/c3-evaluation-web/public/downloads/*.apk
+/apps/c3-evaluation-web/public/downloads/*.pdf
+/tmp/pdfs/c3-devnet-pitch/
 /apps/c3-evaluation-web/api/evaluation.mjs
 /apps/c3-evaluation-web/resources/
 /apps/c3-pilot/variants/evaluation/android/

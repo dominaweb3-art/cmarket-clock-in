@@ -12,7 +12,12 @@ import {
   type OwnerInstructionReview,
 } from "./owner-transaction-review.ts";
 export type EvaluationMoneyAction =
-  "deposit" | "issue_shares" | "request_redemption" | "claim" | "renew_plan";
+  | "deposit"
+  | "issue_shares"
+  | "request_redemption"
+  | "claim"
+  | "renew_plan"
+  | "recover_deposit_plan";
 type RenewalReview = Readonly<{ direction: 1 | 2; revision: bigint }>;
 const encoder = new TextEncoder();
 const text = (s: string) => encoder.encode(s);
@@ -185,6 +190,10 @@ const definitions = {
     d: [184, 149, 8, 59, 254, 68, 86, 19],
     a: ["owner+", "config", "plan*"],
   },
+  create_deposit_settlement_plan: {
+    d: [234, 1, 191, 24, 228, 57, 127, 74],
+    a: ["keeper*+", "config", "intent*", "plan*", "system_program"],
+  },
 } as const;
 export function evaluationOwnerTemplates(
   wallet: string,
@@ -204,7 +213,9 @@ export function evaluationOwnerTemplates(
             ? ["claim_usdc"]
             : action === "renew_plan"
               ? ["renew_settlement_plan"]
-              : [];
+              : action === "recover_deposit_plan"
+                ? ["create_deposit_settlement_plan"]
+                : [];
   if (!methods.length) throw Error("EVAL_OWNER_ACTION");
   const args = join(u64(1n), u64(1_000_000n), u64(1n), u64(chainTime + 300n));
   const intent =
@@ -215,37 +226,68 @@ export function evaluationOwnerTemplates(
     action === "renew_plan" &&
     (!renewal ||
       ![1, 2].includes(renewal.direction) ||
-      renewal.revision <= 0n ||
+      renewal.revision < 0n ||
       renewal.revision >= (1n << 64n) - 1n)
   )
     throw Error("EVAL_OWNER_RENEWAL_CONTEXT");
-  const plan = renewal
-    ? pda(
-        [
-          text("c3-plan-v1"),
-          renewal.direction === 1 ? accounts.deposit : accounts.redemption,
-        ],
-        accounts.program,
-      )
-    : undefined;
+  const plan =
+    action === "recover_deposit_plan"
+      ? pda([text("c3-plan-v1"), accounts.deposit], accounts.program)
+      : renewal
+        ? pda(
+            [
+              text("c3-plan-v1"),
+              renewal.direction === 1 ? accounts.deposit : accounts.redemption,
+            ],
+            accounts.program,
+          )
+        : undefined;
+  const budgets = [400000n, 300000n, 300000n];
+  const minimums = budgets.map((n) => n / 10n);
+  const routeHashes = budgets.map((budget, i) =>
+    sha256(
+      join(
+        text("c3-evaluation-test-route-v1"),
+        sha256(text("global:swap")).slice(0, 8),
+        u64(budget),
+        u64(minimums[i]!),
+        Uint8Array.of(0),
+      ),
+    ),
+  );
+  const createPlanArgs =
+    action === "recover_deposit_plan"
+      ? join(
+          ...routeHashes,
+          ...minimums.map(u64),
+          u64(chainTime),
+          u64(chainTime + 110n),
+          Uint8Array.of(100, 0),
+          sha256(join(text("c3-evaluation-plan-v1"), plan!)),
+        )
+      : undefined;
   const result = methods.map((name) => ({
     program: accounts.program,
     data: join(
       Uint8Array.from(definitions[name].d),
-      ...(name.startsWith("create_")
-        ? [args]
-        : name === "renew_settlement_plan"
-          ? [join(u64(renewal!.revision), u64(chainTime + 110n))]
-          : []),
+      ...(name === "create_deposit_settlement_plan"
+        ? [createPlanArgs!]
+        : name.startsWith("create_")
+          ? [args]
+          : name === "renew_settlement_plan"
+            ? [join(u64(renewal!.revision), u64(chainTime + 110n))]
+            : []),
     ),
     accounts: definitions[name].a.map((field) => {
       const n = field.replace(/[+*]/g, "");
       const k =
         n === "intent"
           ? intent
-          : n === "plan"
-            ? plan
-            : accounts[n as keyof typeof accounts];
+          : n === "keeper"
+            ? accounts.owner
+            : n === "plan"
+              ? plan
+              : accounts[n as keyof typeof accounts];
       if (!k) throw Error("EVAL_OWNER_ACCOUNT");
       return {
         key: k,
@@ -295,7 +337,7 @@ export function reviewEvaluationOwnerPacket(
       !r ||
       ![1, 2].includes(Number(r.direction)) ||
       typeof r.revision !== "string" ||
-      !/^[1-9][0-9]{0,19}$/.test(r.revision) ||
+      !/^(0|[1-9][0-9]{0,19})$/.test(r.revision) ||
       r.expiry !== String(BigInt(time) + 110n)
     )
       throw Error("EVAL_OWNER_RENEWAL_CONTEXT");

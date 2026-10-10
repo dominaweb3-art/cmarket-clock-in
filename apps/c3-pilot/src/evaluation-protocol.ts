@@ -48,12 +48,17 @@ export function inspectEvaluationSignedMessage(
   payload: string,
 ) {
   const signed = base64ToUint8Array(payload);
-  if (
-    signed.length !== message.length + 64 ||
-    !message.every((v, i) => signed[i] === v)
+  // The official MWA reference's sign-in fallback accepts detached signatures
+  // as well as message || signature. Never accept a rewritten signed message:
+  // both forms MUST verify against the exact challenge inspected above.
+  let signature: Uint8Array;
+  if (signed.length === 64) signature = signed;
+  else if (
+    signed.length === message.length + 64 &&
+    message.every((v, i) => signed[i] === v)
   )
-    throw Error("EVAL_WALLET_MESSAGE_CHANGED");
-  const signature = signed.slice(message.length);
+    signature = signed.slice(message.length);
+  else throw Error("EVAL_WALLET_MESSAGE_CHANGED");
   if (!ed25519.verify(signature, message, base58ToUint8Array(wallet)))
     throw Error("EVAL_WALLET_SIGNATURE_INVALID");
   return signature;
@@ -63,7 +68,9 @@ export async function evaluationRequest(
   token?: string,
 ): Promise<Record<string, unknown>> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  // Hosted lifecycle advances may need paced finalized RPC reads. An abort is
+  // never interpreted as failure or permission to repeat the original send.
+  const timeout = setTimeout(() => controller.abort(), 50000);
   try {
     const response = await fetch(`${EVALUATION_ENDPOINT}/api/evaluation`, {
       method: "POST",

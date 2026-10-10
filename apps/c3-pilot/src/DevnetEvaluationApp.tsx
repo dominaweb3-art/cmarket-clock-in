@@ -260,6 +260,10 @@ export default function DevnetEvaluationApp() {
         setStatus(String(value.stage ?? ""));
         await updatePosition();
         if (value.needsOwnerAction) return;
+        if (value.stage === "uncertain") {
+          setStatus(t("uncertain"));
+          return;
+        }
         if (value.stage === "failed")
           throw Error("EVAL_FINALIZED_OPERATION_FAILED");
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -272,6 +276,15 @@ export default function DevnetEvaluationApp() {
       const pending = Array.isArray(value.pendingRequests)
         ? (value.pendingRequests[0] as Record<string, unknown> | undefined)
         : undefined;
+      if (!pending && value.pendingInitialPlan) {
+        const result = await evaluationRequest(
+          { operation: "recover_initial_plan" },
+          session.current,
+        );
+        setStatus(String(result.status ?? ""));
+        await updatePosition();
+        return;
+      }
       if (!pending) return;
       const result = await evaluationRequest(
         {
@@ -295,6 +308,7 @@ export default function DevnetEvaluationApp() {
     "request_redemption",
     "claim",
     "renew_plan",
+    "recover_deposit_plan",
   ];
   const pending =
     Array.isArray(position?.pendingRequests) &&
@@ -437,7 +451,11 @@ export default function DevnetEvaluationApp() {
                   />
                   <EvaluationButton
                     label={t("recover")}
-                    disabled={busy || !verified || !pending}
+                    disabled={
+                      busy ||
+                      !verified ||
+                      (!pending && !position.pendingInitialPlan)
+                    }
                     onPress={() => {
                       void recover();
                     }}

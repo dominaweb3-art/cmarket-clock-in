@@ -99,6 +99,9 @@ h2 {
 a {
   color: #0c674c;
 }
+code {
+  overflow-wrap: anywhere;
+}
 footer {
   color: #526571;
   border-top: 1px solid #d9e2e4;

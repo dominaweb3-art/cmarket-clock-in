@@ -9,6 +9,7 @@ const en = {
   request_redemption: "Sell my evaluation shares",
   claim: "Burn shares and claim realized test USDC",
   renew_plan: "Approve renewal of expired settlement plan",
+  recover_deposit_plan: "Approve fresh plan for my unswapped deposit",
   renewalNotice:
     "This Devnet signature extends the expired plan by at most 110 seconds and increments its revision. It does not move tokens, lower minimum outputs or reset completed swaps. Previous signatures and inventory remain recorded.",
   process: "Process / reconcile authorized test swaps",
@@ -65,6 +66,7 @@ const es: Dictionary = {
   request_redemption: "Vender mis participaciones de evaluación",
   claim: "Quemar participaciones y reclamar USDC de prueba liquidado",
   renew_plan: "Autorizar renovación del plan de liquidación vencido",
+  recover_deposit_plan: "Autorizar plan fresco para mi depósito sin swaps",
   renewalNotice:
     "Esta firma Devnet extiende el plan vencido hasta 110 segundos y aumenta su revisión. No mueve tokens, reduce mínimos ni reinicia swaps completados. Se conservan inventario y firmas anteriores.",
   process: "Procesar / conciliar swaps de prueba autorizados",
@@ -120,6 +122,7 @@ const zh: Dictionary = {
   request_redemption: "出售我的评估份额",
   claim: "销毁份额并领取实际结算的测试 USDC",
   renew_plan: "批准续期已过期的结算计划",
+  recover_deposit_plan: "批准未兑换存款的新结算计划",
   renewalNotice:
     "此 Devnet 签名将已过期计划续期最多 110 秒并增加版本。它不会转移代币、降低最低输出或重置已完成兑换。保留原有签名及资产记录。",
   process: "处理 / 核对已授权的测试兑换",
@@ -173,6 +176,7 @@ const pt: Dictionary = {
   request_redemption: "Vender minhas cotas de avaliação",
   claim: "Queimar cotas e resgatar USDC de teste liquidado",
   renew_plan: "Autorizar renovação do plano de liquidação expirado",
+  recover_deposit_plan: "Autorizar plano novo para meu depósito sem swaps",
   renewalNotice:
     "Esta assinatura Devnet estende o plano expirado em até 110 segundos e incrementa sua revisão. Não move tokens, reduz mínimos nem reinicia swaps concluídos. Inventário e assinaturas anteriores são preservados.",
   process: "Processar / reconciliar swaps de teste autorizados",

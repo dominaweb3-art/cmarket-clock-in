@@ -28,6 +28,37 @@ const challenge = {
 test("exact Devnet authentication message and signature; no wallet callback", () => {
   const message = inspectEvaluationChallenge(challenge, wallet, now);
   const signature = ed25519.sign(message, secret);
+  assert.deepEqual(
+    inspectEvaluationSignedMessage(
+      wallet,
+      message,
+      base64FromUint8Array(signature),
+    ),
+    signature,
+  );
+  assert.throws(() =>
+    inspectEvaluationSignedMessage(
+      wallet,
+      new TextEncoder().encode("changed challenge"),
+      base64FromUint8Array(signature),
+    ),
+  );
+  assert.throws(() =>
+    inspectEvaluationSignedMessage(
+      wallet,
+      message,
+      base64FromUint8Array(ed25519.sign(message, new Uint8Array(32).fill(8))),
+    ),
+  );
+  for (const length of [0, 63, 65, message.length + 63, message.length + 65]) {
+    assert.throws(() =>
+      inspectEvaluationSignedMessage(
+        wallet,
+        message,
+        base64FromUint8Array(new Uint8Array(length)),
+      ),
+    );
+  }
   const payload = new Uint8Array(message.length + 64);
   payload.set(message);
   payload.set(signature, message.length);
@@ -38,6 +69,15 @@ test("exact Devnet authentication message and signature; no wallet callback", ()
       base64FromUint8Array(payload),
     ),
     signature,
+  );
+  const changed = payload.slice();
+  changed[0]! ^= 1;
+  assert.throws(() =>
+    inspectEvaluationSignedMessage(
+      wallet,
+      message,
+      base64FromUint8Array(changed),
+    ),
   );
   payload[message.length]! ^= 1;
   assert.throws(() =>

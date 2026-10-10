@@ -1,4 +1,4 @@
-/** Separate AUTH-QA artifact, not completed evaluation. Never installs, signs
+/** Separate lifecycle candidate, not a claim of completed evaluation. Never installs, signs
  * blockchain transactions, generates identities or replaces prior artifacts. */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -13,9 +13,10 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const project = join(root, "variants/evaluation");
-const dist = join(root, "dist/devnet-evaluation-auth-qa-v2");
+const dist = join(root, "dist/devnet-evaluation-lifecycle-v5");
 const signing = join(root, "release-signing");
-const apk = join(dist, "c-market-c3-devnet-auth-qa-0.1.1.apk");
+const apkName = "c-market-c3-devnet-evaluation-0.1.4.apk";
+const apk = join(dist, apkName);
 if (existsSync(apk)) throw Error("EVAL_PRESERVE_EXISTING_APK");
 if (
   !existsSync(join(signing, "qa.keystore")) ||
@@ -76,16 +77,13 @@ copyFileSync(
   apk,
 );
 const sha256 = createHash("sha256").update(readFileSync(apk)).digest("hex");
-writeFileSync(
-  apk + ".sha256",
-  `${sha256}  c-market-c3-devnet-auth-qa-0.1.1.apk\n`,
-);
+writeFileSync(apk + ".sha256", `${sha256}  ${apkName}\n`);
 console.log(
   JSON.stringify({
     apk,
     sha256,
     mainnetEnabled: false,
     evaluationComplete: false,
-    scope: "CONNECTION_MESSAGE_AUTH_QA_ONLY",
+    scope: "DEVNET_LIFECYCLE_PENDING_PHYSICAL_ACCEPTANCE",
   }),
 );

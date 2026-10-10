@@ -2,14 +2,14 @@
   "expo": {
     "name": "C Market Devnet",
     "slug": "c-market-c3-devnet-evaluation",
-    "version": "0.1.1",
+    "version": "0.1.4",
     "icon": "../../../mobile/assets/images/icon.png",
     "orientation": "portrait",
     "scheme": "cmarketc3evaluation",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.dominaweb3.cmarket.c3evaluation",
-      "versionCode": 2,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "../../../mobile/assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -23,7 +23,7 @@
       ]
     },
     "extra": {
-      "releaseScope": "DEVNET_EVALUATION_AUTH_QA_INCOMPLETE",
+      "releaseScope": "DEVNET_EVALUATION_LIFECYCLE_CANDIDATE",
       "mainnetMonetaryCapability": false,
       "simulatedAssets": true
     }

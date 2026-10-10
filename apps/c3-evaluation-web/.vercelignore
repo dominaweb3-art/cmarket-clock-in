@@ -7,3 +7,4 @@ scripts
 *.keystore
 *.password
 *.apk
+!public/downloads/c-market-c3-devnet-evaluation-0.1.4.apk

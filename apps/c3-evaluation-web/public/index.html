@@ -13,7 +13,8 @@
   <body>
     <header>
       <img src="/cmarket-wordmark.png" width="256" alt="C Market" /><span
-        >Evaluación Devnet · tokens sin valor monetario</span
+        >Evaluación Devnet · tokens y liquidez de prueba sin valor
+        monetario</span
       >
     </header>
     <main>
@@ -31,13 +32,75 @@
         <article><strong>30%</strong><span>Solana target</span></article>
       </section>
       <section class="notice">
-        <h2>Delivery status: in preparation</h2>
+        <h2>Technical cycle verified; physical acceptance pending</h2>
         <p>
           The complete Seeker deposit → simulated allocation → on-chain shares →
           sale → test-USDC claim has not yet passed physical acceptance. The
-          evaluation APK download will be published only with its verified
-          version, certificate and SHA-256. No working APK or completed position
-          is claimed here.
+          hosted technical cycle has passed on Devnet using an evaluation test
+          identity: deposit, six swaps, actual on-chain share issuance and burn,
+          and a 0.99 test-USDC claim. This is not a physical Phantom signature
+          test. The signed 0.1.4 candidate below is for supervised evaluation,
+          not a completed production product. Mainnet remains disabled.
+        </p>
+      </section>
+      <section>
+        <h2>Signed evaluation candidate</h2>
+        <p>
+          <a href="/downloads/c-market-c3-devnet-evaluation-0.1.4.apk" download
+            >Download Android APK 0.1.4</a
+          >
+          ·
+          <a href="/downloads/c-market-c3-devnet-evaluation-0.1.4.sha256"
+            >SHA-256</a
+          >
+          ·
+          <a href="/downloads/C-Market-C3-Devnet-Pitch.pdf"
+            >Evaluation pitch PDF</a
+          >
+        </p>
+        <p>
+          Package: com.dominaweb3.cmarket.c3evaluation. It does not replace the
+          stable C Market app.
+        </p>
+        <p>
+          APK SHA-256:
+          <code
+            >1fda6bfde22e74eb9e661aa8e0932fc69b139ddc83873b44033075004c46f743</code
+          >
+        </p>
+        <p>
+          Certificate SHA-256:
+          <code
+            >58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016</code
+          >
+        </p>
+        <ol>
+          <li>
+            Install on Android/Seeker. Connect a compatible wallet and approve
+            only the ownership message first.
+          </li>
+          <li>
+            Provision free Devnet test tokens and a wallet-specific vault.
+            Review and approve exactly 1 test USDC.
+          </li>
+          <li>
+            Process three test allocation legs, then approve on-chain shares.
+            Restart and query the recovered position.
+          </li>
+          <li>
+            Approve redemption, process three test sales, then burn shares and
+            claim the actual settled test USDC.
+          </li>
+        </ol>
+        <p>
+          An uncertain signature is reconciled, never resent automatically.
+          Expired plans need explicit owner renewal. One lifetime position per
+          vault; evaluation provisioning is bounded. No real funds, fees or
+          investment exposure.
+        </p>
+        <p>
+          Final physical recording and operation with the Mac disconnected
+          remain pending. No completed video is claimed.
         </p>
       </section>
       <section>

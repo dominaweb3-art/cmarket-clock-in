@@ -10,6 +10,27 @@ C Market is an experimental Android application designed for Seeker users who wa
 
 The project is being prepared for **CLOCK IN — A Solana Mobile Hackathon**.
 
+## Active delivery: Devnet evaluation — 10 October 2026
+
+The delivery branch is `delivery/c3-devnet-evaluation`. It uses separate,
+worthless test assets and a test router, not real BTC/ETH exposure or Jupiter
+Devnet liquidity. Mainnet remains disabled; the historical candidates below
+are preserved and do not describe the current evaluation artifact.
+
+Both evaluation programs have been deployed and finalized on Solana Devnet.
+Their deployed bytes match the prepared binaries. The hosted backend and
+PostgreSQL journal run at <https://cmarket-nine.vercel.app>.
+The 0.1.4 lifecycle candidate is installed on Seeker with the existing
+evaluation certificate, preserving prior artifacts and stable applications.
+The same hosted compiler and PostgreSQL journals completed a technical Devnet
+cycle: 1 test USDC deposited, six test-router swaps finalized, on-chain shares
+issued and burned, and 0.99 test USDC claimed. This used an evaluation test key,
+NOT a physical Phantom signature. A duplicate claim was rejected.
+The complete physical deposit, allocation, shares, sale and claim acceptance
+is still pending. Do not describe this status as a completed investment product.
+See [current evidence and limitations](docs/C3_DEVNET_EVALUATION_QA.md).
+See [judge instructions and recording script](submission/c3-devnet-delivery.md).
+
 ## Active restricted C3 candidate — 5 October 2026
 
 The current open-vault work is in `apps/c3-pilot`, `services/c3-mainnet` and
