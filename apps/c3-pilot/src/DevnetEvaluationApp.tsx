@@ -14,9 +14,12 @@ import {
 } from "react-native";
 import { languageLabels, languages, type Language } from "./locales";
 import { evalText, type EvaluationKey } from "./evaluation-locales";
+import { evaluationErrorCode } from "./evaluation-errors";
+import { waitForEvaluationNetwork } from "./evaluation-transport";
 import {
   EVALUATION_ENDPOINT,
   evaluationRequest,
+  submitEvaluationProof,
   type EvaluationChallenge,
 } from "./evaluation-protocol";
 import {
@@ -77,10 +80,7 @@ export default function DevnetEvaluationApp() {
     try {
       await action();
     } catch (error) {
-      const code =
-        error instanceof Error && /^[A-Z][A-Z0-9_]{2,90}$/.test(error.message)
-          ? error.message
-          : "EVAL_OPERATION_CANCELLED";
+      const code = evaluationErrorCode(error);
       setStatus(code);
       Alert.alert(t("status"), `${t("error")}\n${code}`);
     } finally {
@@ -105,26 +105,35 @@ export default function DevnetEvaluationApp() {
         text: t("continue"),
         onPress: () => {
           void run(async () => {
-            const challenge = (await evaluationRequest({
-              operation: "challenge",
-              wallet,
-            })) as EvaluationChallenge;
-            const signature = await signEvaluationProof(challenge, wallet);
-            const result = await evaluationRequest({
-              operation: "authenticate",
-              challengeId: challenge.challengeId,
-              message: challenge.message,
-              signature: base64FromUint8Array(signature),
-            });
-            if (
-              result.wallet !== wallet ||
-              typeof result.sessionToken !== "string" ||
-              !/^[a-f0-9]{64}$/.test(result.sessionToken)
-            )
-              throw Error("EVAL_AUTH_RESPONSE_INVALID");
-            session.current = result.sessionToken;
-            setVerified(true);
-            setStatus(t("authenticated"));
+            let stage = "CHALLENGE_REQUEST";
+            try {
+              const challenge = (await evaluationRequest({
+                operation: "challenge",
+                wallet,
+              })) as EvaluationChallenge;
+              stage = "WALLET_PROOF";
+              const signature = await signEvaluationProof(challenge, wallet);
+              stage = "SIGNATURE_ENCODING";
+              const encodedSignature = base64FromUint8Array(signature);
+              stage = "PROOF_SUBMISSION";
+              const result = await submitEvaluationProof(
+                challenge,
+                encodedSignature,
+              );
+              if (
+                result.wallet !== wallet ||
+                typeof result.sessionToken !== "string" ||
+                !/^[a-f0-9]{64}$/.test(result.sessionToken)
+              )
+                throw Error("EVAL_AUTH_RESPONSE_INVALID");
+              session.current = result.sessionToken;
+              setVerified(true);
+              setStatus(t("authenticated"));
+            } catch (error) {
+              throw Error(
+                `EVAL_AUTH_${stage}_${evaluationErrorCode(error).replace(/^EVAL_/, "")}`,
+              );
+            }
           });
         },
       },
@@ -162,6 +171,20 @@ export default function DevnetEvaluationApp() {
           result.devnet !== "VERIFIED_DEVNET"
         )
           throw Error("EVAL_BACKEND_NOT_READY");
+        // Read-only negative proof: verifies the actual POST transport without
+        // requesting another wallet signature or creating a session.
+        try {
+          await evaluationRequest({
+            operation: "authenticate",
+            challengeId: "11111111-1111-4111-8111-111111111111",
+            message: "invalid diagnostic proof",
+            signature:
+              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          });
+          throw Error("EVAL_INVALID_PROOF_ACCEPTED");
+        } catch (error) {
+          if (evaluationErrorCode(error) !== "EVAL_AUTH_CHALLENGE") throw error;
+        }
         setStatus(t("healthy"));
       } finally {
         clearTimeout(timer);
@@ -202,6 +225,9 @@ export default function DevnetEvaluationApp() {
                 prepared,
                 wallet,
                 action,
+              );
+              await waitForEvaluationNetwork(
+                Date.parse(String(prepared.expiresAt)),
               );
               // No automatic retry. The request already exists durably BEFORE MWA.
               await evaluationRequest(
@@ -462,7 +488,7 @@ export default function DevnetEvaluationApp() {
                   />
                 </>
               )}
-              {position?.settlementReleased !== true && (
+              {position && position.settlementReleased !== true && (
                 <Text style={styles.warning}>{t("notReady")}</Text>
               )}
               <Text style={styles.note}>{t("restart")}</Text>

@@ -13,9 +13,9 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const project = join(root, "variants/evaluation");
-const dist = join(root, "dist/devnet-evaluation-lifecycle-v5");
+const dist = join(root, "dist/devnet-evaluation-lifecycle-v15");
 const signing = join(root, "release-signing");
-const apkName = "c-market-c3-devnet-evaluation-0.1.4.apk";
+const apkName = "c-market-c3-devnet-evaluation-0.1.14.apk";
 const apk = join(dist, apkName);
 if (existsSync(apk)) throw Error("EVAL_PRESERVE_EXISTING_APK");
 if (
@@ -33,6 +33,10 @@ const env = Object.fromEntries(
 Object.assign(env, {
   NODE_ENV: "production",
   EXPO_NO_DOTENV: "1",
+  // Expo 57 provides this supported compatibility switch. Keep the evaluation
+  // HTTPS transport on RN's existing implementation across MWA foregrounding.
+  // This is fixed at build time, not a credential or network/monetary override.
+  EXPO_PUBLIC_USE_RN_FETCH: "1",
   C3_ANDROID_QA_SIGNING_DIR: signing,
 });
 const run = (command, args, cwd) => {

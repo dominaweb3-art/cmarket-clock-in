@@ -1,12 +1,109 @@
-# C3 Devnet evaluation — incomplete delivery
+# C3 Devnet evaluation — physical lifecycle verified
 
 Checked 2026-10-10. Branch `delivery/c3-devnet-evaluation` only.
-Mainnet and real funds remain disabled. This document is NOT a completed
-hackathon acceptance record.
+Classification: CLOCKIN_ONLY. Mainnet and real funds remain disabled.
+The current physical record below supersedes pending historical records;
+test assets/router pricing are simulated, not real BTC/ETH or Jupiter liquidity.
 
 ## Installed physical QA artifact
 
-Current lifecycle candidate (not yet complete physical acceptance):
+### Current update: 10 October 2026, physical Phantom lifecycle PASS
+
+The historical 0.1.4 records below remain provenance, not the current APK.
+Current signed candidate is 0.1.14 / Android code 15, installed with a matching
+certificate using `adb install -r`; cold launch without Metro passed.
+
+- APK: `apps/c3-pilot/dist/devnet-evaluation-lifecycle-v15/c-market-c3-devnet-evaluation-0.1.14.apk`.
+- SHA-256: `849cff1a4bb5ebf59391353e7c38f91c02c3f1c8e811856b9d9f0e663d438563`.
+- Certificate unchanged: `58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+- Physical ownership-message verification passed, including server Ed25519 proof
+  verification; connection alone was not counted as authentication.
+- Physical wallet-specific provisioning finalized on Devnet:
+  `3JW6feUeZCV19mJQCVN5tQvoqQhdVpwTsHNLVBjvk3XiMVjq93A5FHkiSugeLPzc7VrUYacTRcTRjfGcm7JELWvJ`.
+- Earlier deposit packets were rejected before broadcast because Phantom added
+  compute-budget instructions. Both budget instructions are now pinned before
+  persistence/review/signing: 400,000 units and zero priority price. Exact signed
+  message/signature checks remain mandatory. Reconciliation also validates both
+  budget instruction bytes and rejects altered limits/fees.
+- A subsequent first submission hit Android DNS failure on wallet return; no
+  durable submitted signature was observed. Expired unsigned requests are closed
+  through the original recovery operation, not resent.
+- Version 0.1.14 probes only public HTTPS GET after signing and before its first
+  POST; DNS recovery is limited to three probes with bounded waits. A failed or
+  uncertain POST is never automatically retried. Signed packets remain only in
+  memory; original expiry is not extended. New requests allow 90 seconds for
+  biometric review/network return; plan expiry (110 seconds), blockheight, CAS,
+  custody and signature checks remain enforced independently.
+- Focused service tests: 13 passed. Focused mobile transport/review/proof tests:
+  7 passed. TypeScript, targeted lint, signed Android build and signature checks
+  passed. Physical acceptance was checked separately below, not inferred from
+  these automated tests.
+
+## Physical Seeker lifecycle — 0.1.14
+
+Completed 2026-10-10 at approximately 20:07 UTC using Phantom/MWA on the Seeker,
+the published APK, public HTTPS services and hosted PostgreSQL. No ephemeral
+test-owner signer was substituted for the physical wallet approvals.
+
+- Wallet: `DEHxW5Lz1HB8MAykJ4wa4zgLeKqtf2g11MB63dYLVsej`.
+- Durable intent: `12978439-d76d-48ac-8d94-4f22662a992d`.
+- Wallet-specific vault: `26PpBqkxeQuwbV1zggfWKF4H5XMiYzm3Rh6U5YJziGfG`.
+- Share mint: `B5rqJJVafEU13MFEzEnu4spVCoPnZZqW5Z5XMu4xp2rD`.
+- Physical ownership-message verification: PASS; server Ed25519 verification.
+- Buy inputs: 400,000 / 300,000 / 300,000 TEST USDC base units.
+  Verified acquired TEST balances: 40,000 / 30,000 / 30,000 base units.
+- Issued shares: 1,000,000 base units (1.000000). Force-stop/cold launch,
+  reconnection, physical reauthentication and position query recovered the same
+  shares/intent. Spanish selection persisted. One reauthentication was rejected;
+  a later fresh message succeeded. No economic signature was retried.
+- The sales consumed exactly those acquired TEST balances and returned
+  396,000 / 297,000 / 297,000 TEST USDC base units.
+- Burn/claim finalized: shares decreased from 1,000,000 to zero; owner TEST USDC
+  increased from zero to 990,000 (0.99). Vault TEST USDC decreased to zero.
+  This test-router outcome is not a promise to return 1 USDC or a real-world fee.
+- All six legs are `confirmed` with finalized effect receipts. All four owner
+  operations have semantic effect receipts. Activity physically displayed
+  finalized-effects labels and Devnet Explorer links.
+- Repeat claim is disabled by the recovered position/action policy. The focused
+  backend regression rejects a redeemed position with `NOT_CLAIMABLE`; the
+  earlier hosted technical cycle also rejected a second claim. No deliberately
+  duplicated physical on-chain claim was broadcast.
+- Four-language navigation remains from prior physical QA, with no locale code
+  changes. No new lifecycle video or pitch was created; the owner handles those.
+- Independent-network check: Mac Wi-Fi was verified OFF during a fresh APK
+  hosted-backend diagnostic. The APK returned “Base de datos alojada y Solana
+  Devnet accesibles” before Mac Wi-Fi was restored. No Metro listener or ADB
+  reverse mapping was present; USB was used only for screen/input QA.
+- A display-only backend correction subtracts finalized `usdc_returned` from
+  historical `usdc_claimable`. Redeemed positions show zero available to claim,
+  while preserving the historical 0.99 TEST USDC entitlement/receipt on-chain.
+  Transaction instructions, signatures, permissions and claim semantics did
+  not change; no new APK was needed for this response-only correction.
+  After a new physical message-only authentication, the installed 0.1.14 APK
+  queried the updated hosted service and displayed 0.000000 shares, 0.000000
+  available to claim and 0.990000 already returned. No further transaction ran.
+
+Official `https://api.devnet.solana.com` independently returned `finalized`,
+`err: null` for all ten economic signatures. The claim's parsed token deltas
+independently verified the share burn and 0.99 TEST USDC receipt.
+Explorer URL for every signature is `https://explorer.solana.com/tx/<signature>?cluster=devnet`.
+
+| Operation          | Finalized signature                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| Deposit            | `5BpfgMpA9Z2og8Bi7VUDwZyfLwhoYTAQu6XTYHiD7yErgmJg5QvEWsGushB4LyDAjNwZR8A4C4hsxyzkc3vh8RgU` |
+| Buy TEST BTC       | `2WDD329GtU2yeJXpU9jKkW5HxXGiiWvG6c1GWPeM2TbXgcuoDXdYavHGpUBM5s34KyPUtHWY8t1ixwAyFUGiuD3E` |
+| Buy TEST ETH       | `3ibLGNzHsztRsUWzmDbCinL9kFJ74DD6x14rTsQdFee7BMGYQr9qgepJCezP4rK4qediNLYfLQ1pWjc7Th9eqBDN` |
+| Buy TEST SOL       | `5B22JK82yaaasLPRvwoCjKmrpuptnvt9dx9itRrCffUz2uZVDiPtukUt3t8FhCMhEnTpPTwGmWrDoQCEYs9XRjBx` |
+| Issue shares       | `5zRpxjwSFgtpj47MckHjWxgTyvRELGxnVyQFqeEuHuKaosC458B1XcjzkuoQJFAsdFsvrkMEq5DokgHqVsCc87sy` |
+| Request redemption | `4qoFeX13Rv5xHLnbur9HqC3wP87V5cpTfFM7YSER1vS7CXkNPqyPT5sTyPLkfUL3J5QMvyBW3m1cfHMKTUxpnAaw` |
+| Sell TEST BTC      | `258MpuQsowTweiAFvtfnk64tCWM5HHTtCFSns3iuQwXosw4LjuAggFE9QGp1uocjZvHu6WD1UrUFJRoKoP2jU5GZ` |
+| Sell TEST ETH      | `5MiBktmSnAaRh6a57FZ12kCffYTjYWeX26yMXyjPFhsMgzQRb4foxJ7SekkgehmeBBY6LPr96LotpBPREy3JLriJ` |
+| Sell TEST SOL      | `5x73Ye7qo6zVmyowGWGQxPsYfATMpHJrocCzMKo7Hrg8kz69hbRx1zMkPosgwFFha27J56oLxBztoXrvqQDefKcH` |
+| Burn and claim     | `3wKYHfRWH9n21R29gDKEmdgvksetA4RVDiMziJaCPhmkfEtJZMNFxPioZqo5UqbQHr3wDw3pSNhjnrkxRW1Ayk7H` |
+
+## Historical preparation records (superseded, retained for provenance)
+
+Historical lifecycle candidate (physical acceptance was pending at this stage):
 
 - C Market Devnet 0.1.4, version code 5; same evaluation package below.
 - APK: `apps/c3-pilot/dist/devnet-evaluation-lifecycle-v5/c-market-c3-devnet-evaluation-0.1.4.apk`.

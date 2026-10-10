@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   Keypair,
   SystemProgram,
@@ -90,7 +91,7 @@ function fixture() {
       postBalances,
       innerInstructions: [
         {
-          index: 0,
+          index: 2,
           instructions: [
             inner(
               SystemProgram.programId.toBase58(),
@@ -100,7 +101,7 @@ function fixture() {
           ],
         },
         {
-          index: 1,
+          index: 3,
           instructions: [
             inner(
               EVAL_TOKEN.toBase58(),
@@ -133,6 +134,7 @@ function fixture() {
     approvedHash: compiled.messageHash,
     packet,
     names,
+    wallet,
   };
 }
 test("exact signed owner deposit and complete effect evidence pass only as offline evidence", () => {
@@ -147,6 +149,30 @@ test("exact signed owner deposit and complete effect evidence pass only as offli
   );
   assert.equal(p.slot, 123);
   assert.equal(p.evidenceHash.length, 32);
+});
+test("an approved hash cannot authorize altered compute limits or fees", () => {
+  for (const index of [0, 1]) {
+    const f = fixture();
+    f.packet.message.compiledInstructions[index]!.data[1]! ^= 1;
+    f.packet.sign([f.wallet]);
+    f.signature = encodeBase58(f.packet.signatures[0]!);
+    f.tx.transaction.signatures = [f.signature];
+    f.approvedHash = createHash("sha256")
+      .update(f.packet.message.serialize())
+      .digest();
+    assert.throws(
+      () =>
+        verifyEvaluationOwnerEffects(
+          f.client,
+          "deposit",
+          f.approvedHash,
+          f.signature,
+          f.tx,
+          {},
+        ),
+      /EVAL_EFFECT_COMPUTE_BUDGET/,
+    );
+  }
 });
 test("malicious or incomplete RPC effects fail closed", () => {
   const mutations = [

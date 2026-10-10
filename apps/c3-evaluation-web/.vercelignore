@@ -8,3 +8,4 @@ scripts
 *.password
 *.apk
 !public/downloads/c-market-c3-devnet-evaluation-0.1.4.apk
+!public/downloads/c-market-c3-devnet-evaluation-0.1.14.apk

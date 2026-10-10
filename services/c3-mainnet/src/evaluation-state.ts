@@ -176,6 +176,22 @@ export function evaluationPosition(
     cluster: EVALUATION.cluster,
   };
 }
+/** Public display amount, not the historical gross redemption entitlement.
+ * The verified account retains usdc_claimable after a full claim. */
+export function evaluationAvailableClaim(
+  position: Pick<
+    ReturnType<typeof evaluationPosition>,
+    "claimable" | "returned"
+  >,
+) {
+  check(
+    position.claimable >= 0n &&
+      position.returned >= 0n &&
+      (position.returned === 0n || position.returned === position.claimable),
+    "CLAIM_ACCOUNTING",
+  );
+  return position.claimable - position.returned;
+}
 export function assertEvaluationAction(
   action: EvaluationOwnerAction,
   position: ReturnType<typeof evaluationPosition>,

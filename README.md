@@ -20,14 +20,17 @@ are preserved and do not describe the current evaluation artifact.
 Both evaluation programs have been deployed and finalized on Solana Devnet.
 Their deployed bytes match the prepared binaries. The hosted backend and
 PostgreSQL journal run at <https://cmarket-nine.vercel.app>.
-The 0.1.4 lifecycle candidate is installed on Seeker with the existing
-evaluation certificate, preserving prior artifacts and stable applications.
-The same hosted compiler and PostgreSQL journals completed a technical Devnet
-cycle: 1 test USDC deposited, six test-router swaps finalized, on-chain shares
-issued and burned, and 0.99 test USDC claimed. This used an evaluation test key,
-NOT a physical Phantom signature. A duplicate claim was rejected.
-The complete physical deposit, allocation, shares, sale and claim acceptance
-is still pending. Do not describe this status as a completed investment product.
+The signed **0.1.14 / Android code 15** APK is installed on Seeker with the
+existing evaluation certificate, preserving prior artifacts and stable apps.
+The physical Phantom/MWA cycle passed on 10 October: ownership-message proof,
+1 test USDC deposited, three test buys, 1 on-chain evaluation share, restart
+and position recovery, three test sales, share burn and **0.99 test USDC** returned.
+All ten economic signatures are finalized without errors on official Devnet RPC;
+the hosted semantic verifier checked effects before durable advancement.
+Activity displays verified receipts with Devnet Explorer links. Repeat claim is
+disabled after redemption, with the backend's duplicate-claim guard retained.
+This is a functional test-token evaluation, **not a Mainnet investment product**.
+Download the exact signed APK and SHA-256 at <https://cmarket-nine.vercel.app/>.
 See [current evidence and limitations](docs/C3_DEVNET_EVALUATION_QA.md).
 See [judge instructions and recording script](submission/c3-devnet-delivery.md).
 
@@ -69,9 +72,9 @@ C Market turns a complex multi-asset purchase flow into a focused mobile experie
 
 The product is designed around transparency, mobile-native approval, clear confirmations, and repeatable basket discovery.
 
-## Current prototype status
+## Historical payment prototype (preserved separately)
 
-The repository now contains an initial Expo/React Native mobile foundation with:
+The historical `apps/mobile` Expo/React Native foundation contains:
 
 - Android-first C Market screens.
 - A working C3 prototype with future basket sizes clearly marked as upcoming.
@@ -100,7 +103,7 @@ Reference transaction from the prototype demonstration:
 
 ### Important prototype limitation
 
-The current demonstration proves payment routing and confirmation. It does **not** yet prove a production-ready, atomic distribution of the treasury balance into every underlying basket constituent.
+That historical demonstration proves payment routing and confirmation. It does **not** prove a production-ready, atomic distribution of the treasury balance into every underlying basket constituent. The separate active evaluation described above verifies a TEST-asset vault lifecycle, not Mainnet investment settlement.
 
 The historical Devnet interface must describe that transaction as a recorded
 test payment. It must not call it a purchase of C3 shares or claim a final basket

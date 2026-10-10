@@ -3,6 +3,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import {
   PublicKey,
+  ComputeBudgetProgram,
   SystemProgram,
   type VersionedTransactionResponse,
 } from "@solana/web3.js";
@@ -87,8 +88,28 @@ export function verifyEvaluationOwnerEffects(
                 ? "claim_usdc"
                 : "issue_initial_shares",
           ];
-  check(msg.compiledInstructions.length === outerNames.length, "OUTER_COUNT");
-  msg.compiledInstructions.forEach((ix, i) => {
+  // Preserve verification of historical no-budget receipts. New packets bind
+  // the two exact fixed budget instructions to their immutable approved hash.
+  const budgetOffset = msg.compiledInstructions.length - outerNames.length;
+  check(budgetOffset === 0 || budgetOffset === 2, "OUTER_COUNT");
+  if (budgetOffset === 2) {
+    const budget = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0n }),
+    ];
+    budget.forEach((expected, i) => {
+      const actual = msg.compiledInstructions[i]!;
+      check(
+        msg.staticAccountKeys[actual.programIdIndex]?.equals(
+          expected.programId,
+        ) &&
+          actual.accountKeyIndexes.length === 0 &&
+          Buffer.from(actual.data).equals(expected.data),
+        "COMPUTE_BUDGET",
+      );
+    });
+  }
+  msg.compiledInstructions.slice(budgetOffset).forEach((ix, i) => {
     const definition = client.idl.instructions.find(
       (v) => v.name === outerNames[i],
     )!;
@@ -238,7 +259,7 @@ export function verifyEvaluationOwnerEffects(
   expected.forEach((e, i) => {
     const group = actual[i]!;
     check(
-      group.index === e.index &&
+      group.index === e.index + budgetOffset &&
         group.instructions.length === e.instructions.length,
       "INNER_COUNT",
     );

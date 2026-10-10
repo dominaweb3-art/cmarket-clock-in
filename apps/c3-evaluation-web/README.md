@@ -1,6 +1,7 @@
 # C Market Devnet evaluation — hosted foundation
 
-Classification: SHARED. This is **not a completed C3 delivery**.
+Classification: CLOCKIN_ONLY. Functional **Devnet test-token evaluation**;
+not a production/Mainnet investment product.
 
 Public presentation: https://cmarket-nine.vercel.app
 
@@ -17,12 +18,13 @@ one-attempt submission and read-only finalized-effect reconciliation.
 Authentication tests with ephemeral keys are **not physical Phantom/MWA tests**.
 The effect verifier's offline fixtures are not proof of Devnet execution.
 
-The monetary/lifecycle entry points fail closed with
-`EVAL_OWNER_SETTLEMENT_AND_RECONCILIATION_NOT_CONNECTED`. Keep that guard until
-the hosted keeper, token/vault provisioning, expiry recovery and full Devnet
-lifecycle have been connected and verified. The intended assets and swaps are
-simulated, use worthless Devnet tokens, and must never be described as real
-cbBTC, ETH or Jupiter Devnet liquidity. No evaluation APK is published yet.
+Hosted keeper, per-wallet provisioning, expiry recovery and lifecycle services
+are connected. The physical Seeker/Phantom cycle passed with APK 0.1.14:
+deposit, three TEST buys, on-chain shares, restart recovery, three TEST sales,
+burn and claim of 0.99 test USDC. The assets and router pricing are simulated;
+actual transactions, custody and shares are on Solana Devnet, not database-only
+balances. Never describe them as real cbBTC, ETH or Jupiter Devnet liquidity.
+The signed APK/hash and judge instructions are published at the site above.
 
 ## Reproduction
 
@@ -47,6 +49,7 @@ message signer, never authorizes a wallet or signs/submits a transaction.
 `scripts/c3-evaluation-release-check.mjs` checks public hashes, registered
 syscalls, Devnet genesis and rent without deploying or transferring funds.
 
-Mainnet remains disabled. The full Seeker purchase/share/redemption/claim,
-operation without the Mac, APK signature/hash, video, pitch and submission
-acceptance remain unverified. Do not mark any of them PASS from these checks.
+Mainnet remains disabled. Physical authentication/lifecycle and signed APK/hash
+were verified separately from these automated checks. See
+`docs/C3_DEVNET_EVALUATION_QA.md` for signatures and the precise acceptance scope.
+No new video, pitch or contest-form submission was created in this closeout.

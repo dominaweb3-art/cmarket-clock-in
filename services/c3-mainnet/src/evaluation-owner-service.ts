@@ -18,6 +18,7 @@ import {
 import {
   evaluationConfigFromRow,
   evaluationPosition,
+  evaluationAvailableClaim,
   assertEvaluationAction,
 } from "./evaluation-state.ts";
 import type { OpenAccount } from "./open-state-semantics.ts";
@@ -145,7 +146,7 @@ export class EvaluationOwnerService {
       vault: ctx.client.vault.toBase58(),
       shareMint: ctx.client.config.shareMint,
       shares: ctx.position.shares.toString(),
-      claimable: ctx.position.claimable.toString(),
+      claimable: evaluationAvailableClaim(ctx.position).toString(),
       returned: ctx.position.returned.toString(),
       lifecycle: ctx.position.lifecycle,
       paused: ctx.position.paused,
@@ -377,7 +378,7 @@ export class EvaluationOwnerService {
         request = (
           await c.query(
             `INSERT INTO c3_eval.owner_requests(request_id,intent_id,action,expected_db_revision,expected_chain_revision,message_hash,blockhash,last_valid_height,expires_at,generation,predecessor)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()+interval '45 seconds',$9,$10) RETURNING *`,
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,clock_timestamp()+interval '90 seconds',$9,$10) RETURNING *`,
             [
               id,
               intentId,

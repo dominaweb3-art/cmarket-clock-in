@@ -13,14 +13,15 @@ export type OwnerInstructionReview = Readonly<{
 }>;
 const equal = (a: Uint8Array, b: Uint8Array) =>
   a.length === b.length && a.every((v, i) => v === b[i]);
-const check = (v: unknown) => {
-  if (!v) throw Error("C3_OWNER_TRANSACTION_REVIEW_FAILED");
+const check = (v: unknown, code = "BOUNDS") => {
+  if (!v) throw Error(`C3_OWNER_REVIEW_${code}`);
 };
 export function inspectOwnerTransaction(
   packet: Uint8Array,
   wallet: Uint8Array,
   instructions: readonly OwnerInstructionReview[],
   signed = false,
+  maxInstructions: 3 | 5 = 3,
 ) {
   packet = new Uint8Array(packet); // Buffer.slice must never preserve an alias.
   check(
@@ -28,7 +29,8 @@ export function inspectOwnerTransaction(
       packet.length > 100 &&
       wallet.length === 32 &&
       instructions.length >= 1 &&
-      instructions.length <= 3,
+      instructions.length <= maxInstructions,
+    "SIZE",
   );
   let p = 0;
   const byte = () => {
@@ -48,23 +50,28 @@ export function inspectOwnerTransaction(
     p += n;
     return r;
   };
-  check(count() === 1);
+  check(count() === 1, "SIGNER_COUNT");
   const signature = bytes(64);
   check(
     signed ? signature.some((v) => v !== 0) : signature.every((v) => v === 0),
+    "SIGNATURE",
   );
   const messageOffset = p;
-  check(byte() === 128 && byte() === 1 && byte() === 0);
+  check(byte() === 128 && byte() === 1 && byte() === 0, "HEADER");
   const readonly = byte(),
     n = count();
   check(n >= 2 && n <= 64 && readonly < n);
   const keys = Array.from({ length: n }, () => bytes(32));
-  check(equal(keys[0]!, wallet));
+  check(equal(keys[0]!, wallet), "PAYER");
   for (let i = 0; i < n; i++)
     for (let j = 0; j < i; j++) check(!equal(keys[i]!, keys[j]!));
   const blockhash = bytes(32);
   check(blockhash.some((v) => v !== 0));
-  check(count() === instructions.length);
+  const instructionCount = count();
+  check(
+    instructionCount === instructions.length,
+    `INSTRUCTION_COUNT_${instructionCount}_${instructions.length}`,
+  );
   const used = new Set<number>([0]);
   for (const expected of instructions) {
     const program = byte();
@@ -72,10 +79,11 @@ export function inspectOwnerTransaction(
       program < n &&
         equal(keys[program]!, expected.program) &&
         program >= n - readonly,
+      "PROGRAM",
     );
     used.add(program);
     const indexes = Array.from({ length: count() }, () => byte());
-    check(indexes.length === expected.accounts.length);
+    check(indexes.length === expected.accounts.length, "ACCOUNT_COUNT");
     for (let i = 0; i < indexes.length; i++) {
       const index = indexes[i]!,
         meta = expected.accounts[i]!;
@@ -84,12 +92,13 @@ export function inspectOwnerTransaction(
           equal(keys[index]!, meta.key) &&
           meta.signer === (index === 0) &&
           meta.writable === index < n - readonly,
+        "ACCOUNT_META",
       );
       used.add(index);
     }
-    check(equal(bytes(count()), expected.data));
+    check(equal(bytes(count()), expected.data), "INSTRUCTION_DATA");
   }
-  check(count() === 0 && p === packet.length && used.size === n);
+  check(count() === 0 && p === packet.length && used.size === n, "TRAILING");
   return Object.freeze({
     message: packet.slice(messageOffset),
     signature,

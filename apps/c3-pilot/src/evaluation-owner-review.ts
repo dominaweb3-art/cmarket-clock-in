@@ -305,7 +305,21 @@ export function evaluationOwnerTemplates(
         );
       a.signer = equal(a.key, accounts.owner);
     }
-  return result;
+  // Independently specified Devnet-only budget, byte-equivalent to web3.js.
+  // Never accept a wallet modification or server-provided fee policy.
+  return [
+    {
+      program: key("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: Uint8Array.of(2, 128, 26, 6, 0), // 400,000 units, u32 LE
+    },
+    {
+      program: key("ComputeBudget111111111111111111111111111111"),
+      accounts: [],
+      data: join(Uint8Array.of(3), u64(0n)),
+    },
+    ...result,
+  ];
 }
 export function reviewEvaluationOwnerPacket(
   result: Readonly<Record<string, unknown>>,
@@ -323,7 +337,7 @@ export function reviewEvaluationOwnerPacket(
     Math.abs(Number(time) * 1000 - now) > 60000 ||
     !Number.isFinite(deadline) ||
     deadline <= now ||
-    deadline - now > 46000 ||
+    deadline - now > 91000 ||
     typeof result.packet !== "string" ||
     result.packet.length > 1644 ||
     !/^[a-f0-9]{64}$/.test(String(result.messageHash)) ||
@@ -345,7 +359,7 @@ export function reviewEvaluationOwnerPacket(
   }
   const packet = base64ToUint8Array(result.packet),
     templates = evaluationOwnerTemplates(wallet, action, BigInt(time), renewal),
-    review = inspectOwnerTransaction(packet, key(wallet), templates);
+    review = inspectOwnerTransaction(packet, key(wallet), templates, false, 5);
   if (
     hex(sha256(review.message)) !== result.messageHash ||
     !equal(key(String(result.vault)), evaluationOwnerAccounts(wallet).config)
@@ -363,6 +377,7 @@ export function verifyEvaluationWalletPacket(
     key(wallet),
     prepared.templates,
     true,
+    5,
   );
   if (
     !equal(review.message, prepared.review.message) ||

@@ -21,6 +21,7 @@ const {
   TransactionMessage,
   VersionedTransaction,
   TransactionInstruction,
+  ComputeBudgetProgram,
 } = createRequire(
   new URL("../../../services/c3-mainnet/package.json", import.meta.url),
 )("@solana/web3.js");
@@ -156,11 +157,14 @@ test("six owner packets match official PDA/ATA derivation and exact Borsh bytes"
       }),
       ...original.slice(1),
     ];
-    const rejectRehashed = (instructions: typeof original) => {
+    const rejectRehashed = (
+      instructions: typeof original,
+      budget = build.instructions.slice(0, 2),
+    ) => {
       const hostile = new TransactionMessage({
         payerKey: wallet.publicKey,
         recentBlockhash: build.blockhash,
-        instructions,
+        instructions: [...budget, ...instructions],
       }).compileToV0Message();
       assert.throws(() =>
         reviewEvaluationOwnerPacket(
@@ -179,6 +183,16 @@ test("six owner packets match official PDA/ATA derivation and exact Borsh bytes"
         ),
       );
     };
+    rejectRehashed(original, [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_001 }),
+      build.instructions[1]!,
+    ]);
+    rejectRehashed(original, [
+      build.instructions[0]!,
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1n }),
+    ]);
+    rejectRehashed(original, []);
+    rejectRehashed(original, [...build.instructions.slice(0, 2)].reverse());
     rejectRehashed(replaced);
     // Same digest is not sufficient: server substitution of a destination,
     // authority, mint, ordered account, privilege or extra instruction is hostile.

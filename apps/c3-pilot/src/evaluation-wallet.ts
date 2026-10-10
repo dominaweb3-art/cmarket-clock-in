@@ -1,4 +1,5 @@
 import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol";
+import { evaluationErrorCode } from "./evaluation-errors";
 import {
   base64FromUint8Array,
   base64ToBase58,
@@ -39,30 +40,41 @@ export async function signEvaluationProof(
   challenge: EvaluationChallenge,
   owner: string,
 ) {
-  const message = inspectEvaluationChallenge(challenge, owner);
-  return transact(async (wallet) => {
-    inspectEvaluationChallenge(challenge, owner);
-    const authorization = await wallet.authorize({
-      chain: EVALUATION_CHAIN,
-      identity,
+  let stage = "CHALLENGE";
+  try {
+    const message = inspectEvaluationChallenge(challenge, owner);
+    stage = "SESSION";
+    return await transact(async (wallet) => {
+      inspectEvaluationChallenge(challenge, owner);
+      stage = "AUTHORIZE";
+      const authorization = await wallet.authorize({
+        chain: EVALUATION_CHAIN,
+        identity,
+      });
+      const account = authorization.accounts.find(
+        (a) => base64ToBase58(a.address) === owner,
+      );
+      if (!account) throw Error("EVAL_WALLET_CHANGED");
+      inspectEvaluationChallenge(challenge, owner);
+      stage = "SIGN_MESSAGE";
+      const result = await wallet.signMessages({
+        addresses: [account.address],
+        payloads: [base64FromUint8Array(message)],
+      });
+      if (result.signed_payloads.length !== 1)
+        throw Error("EVAL_WALLET_RESPONSE_INVALID");
+      stage = "VERIFY_MESSAGE";
+      return inspectEvaluationSignedMessage(
+        owner,
+        message,
+        result.signed_payloads[0]!,
+      );
     });
-    const account = authorization.accounts.find(
-      (a) => base64ToBase58(a.address) === owner,
+  } catch (error) {
+    throw Error(
+      `EVAL_PROOF_${stage}_${evaluationErrorCode(error).replace(/^EVAL_/, "")}`,
     );
-    if (!account) throw Error("EVAL_WALLET_CHANGED");
-    inspectEvaluationChallenge(challenge, owner);
-    const result = await wallet.signMessages({
-      addresses: [account.address],
-      payloads: [base64FromUint8Array(message)],
-    });
-    if (result.signed_payloads.length !== 1)
-      throw Error("EVAL_WALLET_RESPONSE_INVALID");
-    return inspectEvaluationSignedMessage(
-      owner,
-      message,
-      result.signed_payloads[0]!,
-    );
-  });
+  }
 }
 /** Called only after the owner reviews the specific Devnet action. It signs,
  * never broadcasts. Backend persists the verified signature before sending. */
@@ -71,7 +83,12 @@ export async function signEvaluationTransaction(
   owner: string,
   action: EvaluationMoneyAction,
 ) {
-  const prepared = reviewEvaluationOwnerPacket(result, owner, action);
+  let prepared: ReturnType<typeof reviewEvaluationOwnerPacket>;
+  try {
+    prepared = reviewEvaluationOwnerPacket(result, owner, action);
+  } catch (error) {
+    throw Error(`EVAL_TX_PRE_${evaluationErrorCode(error)}`);
+  }
   return transact(async (wallet) => {
     const authorization = await wallet.authorize({
       chain: EVALUATION_CHAIN,
@@ -88,10 +105,14 @@ export async function signEvaluationTransaction(
     });
     if (signed.signed_payloads.length !== 1)
       throw Error("EVAL_WALLET_RESPONSE_INVALID");
-    return verifyEvaluationWalletPacket(
-      base64ToUint8Array(signed.signed_payloads[0]!),
-      prepared,
-      owner,
-    );
+    try {
+      return verifyEvaluationWalletPacket(
+        base64ToUint8Array(signed.signed_payloads[0]!),
+        prepared,
+        owner,
+      );
+    } catch (error) {
+      throw Error(`EVAL_TX_RETURN_${evaluationErrorCode(error)}`);
+    }
   });
 }

@@ -4,6 +4,7 @@ import { BorshCoder, BN, type Idl } from "@coral-xyz/anchor";
 import { createHash } from "node:crypto";
 import {
   PublicKey,
+  ComputeBudgetProgram,
   SystemProgram,
   TransactionInstruction,
   TransactionMessage,
@@ -257,7 +258,13 @@ export class EvaluationClient {
     )
       throw Error("EVAL_BLOCK_HEIGHT");
     new PublicKey(blockhash);
-    const instructions = this.ownerInstructions(action, chainTime, renewal);
+    // Pin both budget variants BEFORE persistence/MWA. Phantom must sign this
+    // exact message; wallet-injected instructions are still rejected.
+    const instructions = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0n }),
+      ...this.ownerInstructions(action, chainTime, renewal),
+    ];
     const message = new TransactionMessage({
       payerKey: this.owner,
       recentBlockhash: blockhash,

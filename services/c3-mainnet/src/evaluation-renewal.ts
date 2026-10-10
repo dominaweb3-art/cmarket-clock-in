@@ -255,7 +255,7 @@ export function verifyEvaluationRenewal(
   );
   check(
     expected.messageHash.equals(r.message_hash) &&
-      msg.compiledInstructions.length === 1,
+      msg.compiledInstructions.length === 3,
     "APPROVED_INSTRUCTION",
   );
   check(

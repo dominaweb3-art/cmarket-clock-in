@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  VersionedTransaction,
+  ComputeBudgetProgram,
+} from "@solana/web3.js";
 import type { Idl } from "@coral-xyz/anchor";
 import {
   EvaluationClient,
@@ -12,6 +17,7 @@ import {
 import { EVALUATION, evaluationPdas } from "../src/evaluation-scope.ts";
 import {
   assertEvaluationAction,
+  evaluationAvailableClaim,
   verifyEvaluationConfig,
 } from "../src/evaluation-state.ts";
 import { verifyShareMintForAuthority } from "../src/open-state-semantics.ts";
@@ -24,6 +30,25 @@ const idl = JSON.parse(
   ),
 ) as Idl;
 const owner = Keypair.generate().publicKey; // Public-key derivation only; no wallet callback/signing.
+test("display subtracts finalized returned USDC without changing historical entitlement", () => {
+  assert.equal(
+    evaluationAvailableClaim({ claimable: 990000n, returned: 0n }),
+    990000n,
+  );
+  assert.equal(
+    evaluationAvailableClaim({ claimable: 990000n, returned: 990000n }),
+    0n,
+  );
+  assert.equal(evaluationAvailableClaim({ claimable: 0n, returned: 0n }), 0n);
+  assert.throws(
+    () => evaluationAvailableClaim({ claimable: 990000n, returned: 990001n }),
+    /CLAIM_ACCOUNTING/,
+  );
+  assert.throws(
+    () => evaluationAvailableClaim({ claimable: -1n, returned: 0n }),
+    /CLAIM_ACCOUNTING/,
+  );
+});
 const config = {
   wallet: owner.toBase58(),
   version: 1n,
@@ -54,13 +79,31 @@ test("evaluation owner messages bind exact scope, one signer, atomic deposit/cla
     assert.ok(tx.message.staticAccountKeys[0]!.equals(owner));
     assert.equal(
       tx.message.compiledInstructions.length,
-      ["deposit", "request_redemption"].includes(action) ? 2 : 1,
+      ["deposit", "request_redemption"].includes(action) ? 4 : 3,
     );
     assert.ok(
-      tx.message.compiledInstructions.every((ix) =>
-        tx.message.staticAccountKeys[ix.programIdIndex]!.equals(client.program),
-      ),
+      tx.message.compiledInstructions
+        .slice(2)
+        .every((ix) =>
+          tx.message.staticAccountKeys[ix.programIdIndex]!.equals(
+            client.program,
+          ),
+        ),
     );
+    const expectedBudget = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 0n }),
+    ];
+    expectedBudget.forEach((expected, i) => {
+      const actual = tx.message.compiledInstructions[i]!;
+      assert.ok(
+        tx.message.staticAccountKeys[actual.programIdIndex]!.equals(
+          expected.programId,
+        ),
+      );
+      assert.equal(actual.accountKeyIndexes.length, 0);
+      assert.deepEqual(Buffer.from(actual.data), expected.data);
+    });
     assert.ok(
       compiled.messageHash.equals(
         createHash("sha256").update(tx.message.serialize()).digest(),
