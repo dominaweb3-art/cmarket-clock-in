@@ -7,6 +7,7 @@ import { indicesView, type IndicesAction } from "./evaluation-indices-state";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { CryptoIcon, NavigationGlyph } from "./EvaluationVisuals";
 import { activityGroups, activityScope } from "./evaluation-activity-state";
+import { EvaluationMarketReference } from "./EvaluationMarketReference";
 
 type Props = {
   language: Language;
@@ -106,6 +107,10 @@ export function EvaluationIndices({
               {state.title === "completed" ? (
                 <Text style={s.body}>{t("burnedHistory")}</Text>
               ) : null}
+              <EvaluationMarketReference
+                language={language}
+                position={position}
+              />
             </View>
           ) : null}
           <View style={s.tradeActions}>
@@ -185,8 +190,6 @@ export function EvaluationIndices({
               <Text style={s.state}>{t("purchaseResult")}</Text>
               <Text style={s.caption}>{t("confirmedShares")}</Text>
               <Text style={s.metric}>{displayUnits(position?.shares)} C3</Text>
-              <Text style={s.caption}>{t("marketEquivalent")}</Text>
-              <Text style={s.body}>{t("noMarketValue")}</Text>
             </>
           ) : null}
           {state.title === "completed" ? (

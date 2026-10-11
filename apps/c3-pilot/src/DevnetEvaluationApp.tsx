@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
   Image,
   Pressable,
   SafeAreaView,
@@ -215,6 +216,38 @@ export default function DevnetEvaluationApp() {
     setPosition(value);
     return value;
   };
+  useEffect(() => {
+    if (!wallet || !verified || !position) return;
+    let active = true;
+    const timer = setInterval(() => {
+      if (
+        !session.current ||
+        lock.current ||
+        AppState.currentState !== "active"
+      )
+        return;
+      const owner = wallet;
+      void evaluationRequest({ operation: "position" }, session.current)
+        .then((value) => {
+          if (
+            active &&
+            !lock.current &&
+            value.wallet === owner &&
+            value.cluster === "solana:devnet" &&
+            value.simulatedAssets === true &&
+            value.monetaryValue === false
+          )
+            setPosition((previous) =>
+              previous === position ? value : previous,
+            );
+        })
+        .catch(() => undefined);
+    }, 60_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [wallet, verified, position]);
   const prepareWalletAction = (action: EvaluationMoneyAction) => {
     if (!wallet || !verified || busy) return;
     Alert.alert(

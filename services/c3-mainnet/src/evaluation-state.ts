@@ -145,6 +145,8 @@ export function evaluationPosition(
   let depositStatus: number | null = null;
   let deposited = 0n,
     sharesIssued = 0n;
+  let depositTime: number | null = null,
+    saleTime: number | null = null;
   const depositRaw = accounts.get(client.intent("deposit").toBase58());
   if (depositRaw) {
     const decoded = client.coder.accounts.decode(
@@ -158,6 +160,8 @@ export function evaluationPosition(
       "DEPOSIT_BINDING",
     );
     depositStatus = Number(decoded.status);
+    depositTime = Number(String(decoded.created_at));
+    check(Number.isSafeInteger(depositTime) && depositTime > 0, "DEPOSIT_TIME");
     ({ deposited, sharesIssued } = evaluationDepositHistory(
       decoded,
       config.issued,
@@ -186,6 +190,14 @@ export function evaluationPosition(
     claimable = BigInt(String(decoded.usdc_claimable));
     returned = BigInt(String(decoded.usdc_returned));
     redemptionStatus = Number(decoded.status);
+    saleTime = Number(String(decoded.created_at));
+    check(
+      Number.isSafeInteger(saleTime) &&
+        saleTime > 0 &&
+        depositTime !== null &&
+        saleTime >= depositTime,
+      "SALE_TIME",
+    );
     check(returned === 0n || returned === claimable, "CLAIM_ACCOUNTING");
     if (config.lifecycle !== 4)
       check(inventory[0]! >= claimable, "CLAIM_BACKING");
@@ -198,6 +210,8 @@ export function evaluationPosition(
     depositStatus,
     deposited,
     sharesIssued,
+    depositTime,
+    saleTime,
     redemptionStatus,
     claimable,
     returned,
@@ -225,7 +239,7 @@ export function assertEvaluationAction(
   action: EvaluationOwnerAction,
   position: Omit<
     ReturnType<typeof evaluationPosition>,
-    "deposited" | "sharesIssued"
+    "deposited" | "sharesIssued" | "depositTime" | "saleTime"
   >,
 ) {
   check(!position.paused || action === "claim", "PAUSED");

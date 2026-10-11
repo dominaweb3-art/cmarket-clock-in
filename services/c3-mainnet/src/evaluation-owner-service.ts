@@ -25,6 +25,7 @@ import type { OpenAccount } from "./open-state-semantics.ts";
 import { OpenOwnerJournal } from "./open-owner-journal-core.ts";
 import { verifyEvaluationOwnerEffects } from "./evaluation-owner-effects.ts";
 import { evaluationCanonical } from "./evaluation-canonical.ts";
+import { marketReference } from "./evaluation-market-reference.ts";
 import {
   captureEvaluationRenewal,
   assertRenewalOperationsUnchanged,
@@ -148,6 +149,14 @@ export class EvaluationOwnerService {
       shares: ctx.position.shares.toString(),
       deposited: ctx.position.deposited.toString(),
       sharesIssued: ctx.position.sharesIssued.toString(),
+      marketReference: await marketReference({
+        deposited: ctx.position.deposited,
+        sharesIssued: ctx.position.sharesIssued,
+        shares: ctx.position.shares,
+        depositTime: ctx.position.depositTime,
+        saleTime: ctx.position.saleTime,
+        lifecycle: ctx.position.lifecycle,
+      }),
       claimable: evaluationAvailableClaim(ctx.position).toString(),
       returned: ctx.position.returned.toString(),
       lifecycle: ctx.position.lifecycle,
