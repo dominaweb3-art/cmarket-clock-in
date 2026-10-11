@@ -2,16 +2,17 @@
   "expo": {
     "name": "C Market Devnet",
     "slug": "c-market-c3-devnet-evaluation",
-    "version": "0.1.16",
-    "icon": "../../../mobile/assets/images/icon.png",
+    "version": "0.1.18",
+    "plugins": ["./with-launcher-inset.cjs"],
+    "icon": "../../../mobile/assets/images/splash-icon.png",
     "orientation": "portrait",
     "scheme": "cmarketc3evaluation",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.dominaweb3.cmarket.c3evaluation",
-      "versionCode": 17,
+      "versionCode": 19,
       "adaptiveIcon": {
-        "foregroundImage": "../../../mobile/assets/images/adaptive-icon.png",
+        "foregroundImage": "../../../mobile/assets/images/splash-icon.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": ["android.permission.INTERNET"],
