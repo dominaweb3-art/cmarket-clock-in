@@ -2,6 +2,16 @@ import { languages, type Language } from "./locales.ts";
 import { evalText, type EvaluationKey } from "./evaluation-locales.ts";
 
 const en = {
+  currentPosition: "Current on-chain position",
+  purchaseHistory: "C3 purchase · Devnet",
+  saleHistory: "C3 sale · Devnet",
+  issuedHistory: "Shares issued in that purchase",
+  burnedHistory:
+    "Position redeemed: its shares were burned. Your current balance is zero; the purchase history is preserved.",
+  historyConfirmed: "Completed with verified effects",
+  historyPending: "Awaiting complete verified evidence",
+  tradeAvailability:
+    "Buy requires a verified wallet and an unused vault. Sell requires issued shares and no pending operation. Unavailable actions remain disabled.",
   purchaseHeading: "Buy / manage C3",
   purchaseResult: "Your purchase result",
   marketEquivalent: "Market equivalent",
@@ -99,6 +109,16 @@ const en = {
 } as const;
 type Copy = Record<keyof typeof en, string>;
 const es: Copy = {
+  currentPosition: "Posición on-chain actual",
+  purchaseHistory: "Compra C3 · Devnet",
+  saleHistory: "Venta C3 · Devnet",
+  issuedHistory: "Participaciones emitidas en esa compra",
+  burnedHistory:
+    "Posición rescatada: sus participaciones se quemaron. Tu saldo actual es cero; el historial de compra se conserva.",
+  historyConfirmed: "Completada con efectos verificados",
+  historyPending: "Pendiente de evidencia verificada completa",
+  tradeAvailability:
+    "Comprar requiere wallet verificada y una bóveda sin uso. Vender requiere participaciones emitidas y ninguna operación pendiente. Las acciones no disponibles permanecen deshabilitadas.",
   purchaseHeading: "Comprar / gestionar C3",
   purchaseResult: "Resultado de tu compra",
   marketEquivalent: "Equivalente de mercado",
@@ -196,6 +216,15 @@ const es: Copy = {
   check: "Comprobar conexión alojada",
 };
 const zh: Copy = {
+  currentPosition: "当前链上仓位",
+  purchaseHistory: "C3 买入 · Devnet",
+  saleHistory: "C3 卖出 · Devnet",
+  issuedHistory: "该次买入发行的份额",
+  burnedHistory: "仓位已赎回，份额已销毁。当前余额为零，购买历史保留。",
+  historyConfirmed: "已完成并验证效果",
+  historyPending: "等待完整的已验证证据",
+  tradeAvailability:
+    "买入须验证钱包并使用未用过的金库。卖出须有已发行份额且无待处理操作。不可用操作保持禁用。",
   purchaseHeading: "购买 / 管理 C3",
   purchaseResult: "你的购买结果",
   marketEquivalent: "市场等值",
@@ -285,6 +314,16 @@ const zh: Copy = {
   check: "检查托管连接",
 };
 const pt: Copy = {
+  currentPosition: "Posição atual on-chain",
+  purchaseHistory: "Compra C3 · Devnet",
+  saleHistory: "Venda C3 · Devnet",
+  issuedHistory: "Cotas emitidas nessa compra",
+  burnedHistory:
+    "Posição resgatada: as cotas foram queimadas. Seu saldo atual é zero; o histórico da compra é preservado.",
+  historyConfirmed: "Concluída com efeitos verificados",
+  historyPending: "Aguardando evidência verificada completa",
+  tradeAvailability:
+    "Comprar exige wallet verificada e cofre não utilizado. Vender exige cotas emitidas e nenhuma operação pendente. Ações indisponíveis permanecem desabilitadas.",
   purchaseHeading: "Comprar / gerenciar C3",
   purchaseResult: "Resultado da sua compra",
   marketEquivalent: "Equivalente de mercado",

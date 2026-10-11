@@ -157,11 +157,12 @@ export function activityGroups(
         sellComplete && !unresolved
           ? returned
           : k === "buy"
-            ? (deposit?.input ?? null)
+            ? (deposit?.input ?? activityUnits(p!.deposited))
             : null,
       shares:
-        buyComplete && !unresolved && p!.lifecycle === 2
-          ? activityUnits(p!.shares)
+        buyComplete && !unresolved
+          ? (activityUnits(p!.sharesIssued) ??
+            (p!.lifecycle === 2 ? activityUnits(p!.shares) : null))
           : null,
     });
   }

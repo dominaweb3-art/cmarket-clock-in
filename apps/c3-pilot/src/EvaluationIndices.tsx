@@ -6,6 +6,7 @@ import { indicesText, marketKeys } from "./evaluation-indices-copy";
 import { indicesView, type IndicesAction } from "./evaluation-indices-state";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { CryptoIcon, NavigationGlyph } from "./EvaluationVisuals";
+import { activityGroups, activityScope } from "./evaluation-activity-state";
 
 type Props = {
   language: Language;
@@ -41,6 +42,10 @@ export function EvaluationIndices({
     position?.cluster === "solana:devnet" &&
     position?.simulatedAssets === true &&
     position?.monetaryValue === false;
+  const history = activityGroups(wallet, verified, position);
+  const hasScopedHistory = ownsPosition && activityScope(wallet, position);
+  const canBuy = state.action === "deposit" && !busy;
+  const canSell = state.action === "request_redemption" && !busy;
   return (
     <View testID="evaluation-indices">
       <Text accessibilityRole="header" style={s.title}>
@@ -63,18 +68,88 @@ export function EvaluationIndices({
           {state.action === "deposit" ? (
             <Text style={s.body}>{t("depositNote")}</Text>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(state.label)}
-            accessibilityState={{
-              disabled: busy && state.action !== "activity",
-            }}
-            disabled={busy && state.action !== "activity"}
-            onPress={() => onAction(state.action)}
-            style={s.primary}
-          >
-            <Text style={s.primaryText}>{t(state.label)}</Text>
-          </Pressable>
+          {hasScopedHistory ? (
+            <View style={s.history}>
+              <Text style={s.state}>{t("purchaseResult")}</Text>
+              <Text style={s.caption}>{t("currentPosition")}</Text>
+              <Text style={s.metric}>{displayUnits(position?.shares)} C3</Text>
+              {history.map((group) =>
+                group.kind === "other" ? null : (
+                  <View key={group.kind} style={s.historyRow}>
+                    <Text style={s.state}>
+                      {t(
+                        group.kind === "buy"
+                          ? "purchaseHistory"
+                          : "saleHistory",
+                      )}
+                    </Text>
+                    <Text style={s.caption}>
+                      {t(
+                        group.state === "completed"
+                          ? "historyConfirmed"
+                          : "historyPending",
+                      )}
+                    </Text>
+                    {group.amount !== null ? (
+                      <Text style={s.body}>
+                        {displayUnits(group.amount)} USDC · Devnet
+                      </Text>
+                    ) : null}
+                    {group.shares !== null ? (
+                      <Text style={s.body}>
+                        {t("issuedHistory")}: {displayUnits(group.shares)} C3
+                      </Text>
+                    ) : null}
+                  </View>
+                ),
+              )}
+              {state.title === "completed" ? (
+                <Text style={s.body}>{t("burnedHistory")}</Text>
+              ) : null}
+            </View>
+          ) : null}
+          <View style={s.tradeActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canBuy }}
+              disabled={!canBuy}
+              onPress={() => onAction("deposit")}
+              style={[s.primary, s.tradeButton, !canBuy && s.disabled]}
+            >
+              <Text style={s.primaryText}>{t("buy")}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSell }}
+              disabled={!canSell}
+              onPress={() => onAction("request_redemption")}
+              style={[s.primary, s.tradeButton, !canSell && s.disabled]}
+            >
+              <Text style={s.primaryText}>{t("sell")}</Text>
+            </Pressable>
+          </View>
+          {!canBuy || !canSell ? (
+            <Text style={s.caption}>
+              {t(
+                state.title === "completed" ? "lifetime" : "tradeAvailability",
+              )}
+            </Text>
+          ) : null}
+          {state.action !== "deposit" &&
+          state.action !== "request_redemption" ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t(state.label)}
+              accessibilityState={{
+                disabled: busy && state.action !== "activity",
+              }}
+              disabled={busy && state.action !== "activity"}
+              onPress={() => onAction(state.action)}
+              style={s.primary}
+            >
+              <Text style={s.primaryText}>{t(state.label)}</Text>
+            </Pressable>
+          ) : null}
         </View>
         <View style={s.assets}>
           {evaluationTargets.map((asset) => (
@@ -318,6 +393,20 @@ const s = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     textAlign: "center",
+  },
+  tradeActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  tradeButton: { flex: 1, minWidth: 120 },
+  disabled: { backgroundColor: "#7d8b86" },
+  history: { marginVertical: 8 },
+  historyRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderColor: "#dce9e2",
   },
   secondary: { minHeight: 48, justifyContent: "center", paddingVertical: 12 },
   link: { color: "#075c47", fontSize: 15, fontWeight: "600", lineHeight: 22 },

@@ -122,6 +122,33 @@ test("buy and sale are grouped once, claim uses the actual reconciled result, no
     }),
   );
   assert.equal(active[0]!.shares, "1000000");
+  const redeemed = activityGroups(
+    wallet,
+    true,
+    position({
+      activity,
+      lifecycle: 4,
+      returned: "987654",
+      shares: "0",
+      deposited: "1000000",
+      sharesIssued: "1000000",
+    }),
+  );
+  assert.equal(redeemed[0]!.amount, "1000000");
+  assert.equal(redeemed[0]!.shares, "1000000"); // Historical issuance, not current balance.
+  assert.equal(redeemed[1]!.amount, "987654");
+  const unproven = activityGroups(
+    wallet,
+    true,
+    position({
+      activity: [receipt("issue_shares", 1, false)],
+      lifecycle: 4,
+      deposited: "1000000",
+      sharesIssued: "1000000",
+      shares: "0",
+    }),
+  );
+  assert.equal(unproven[0]!.shares, null);
 });
 test("unclassified keeper receipts are retained, never inferred from unsorted array order", () => {
   const list = [

@@ -146,6 +146,8 @@ export class EvaluationOwnerService {
       vault: ctx.client.vault.toBase58(),
       shareMint: ctx.client.config.shareMint,
       shares: ctx.position.shares.toString(),
+      deposited: ctx.position.deposited.toString(),
+      sharesIssued: ctx.position.sharesIssued.toString(),
       claimable: evaluationAvailableClaim(ctx.position).toString(),
       returned: ctx.position.returned.toString(),
       lifecycle: ctx.position.lifecycle,

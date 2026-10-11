@@ -301,3 +301,44 @@ controller AST hashes. Expo Doctor remains 18/19: installed Expo 57.0.26 versus
 recommended patch 57.0.27. Mainnet, backend transaction logic and protected
 workspaces were unchanged. APK publication on the website was not performed
 in this visual change; installation and local artifact are the new version.
+
+## 11 October 2026 — historical purchase and explicit trading availability
+
+Classification: CLOCKIN_ONLY; scope PARTIALLY_COMPLETED. Backend position now
+returns historical deposit and issued shares from the finalized owner/vault-bound
+DepositIntent, checked against VaultConfig issuance. These are separate from
+the current share balance. Activity and Indices retain the historical purchase
+after burn. Indices renders Buy and Sell explicitly, enabled only by the
+existing reviewed lifecycle controls. No new monetary action was performed.
+
+Official Devnet read-only snapshot at finalized slot 509975891 for the connected
+evaluation wallet verified lifecycle 4, deposited 1000000 base units, historically
+issued shares 1000000, current shares 0 and returned test USDC 990000. This is
+an account-state check, not a new physical wallet or purchase test.
+
+APK 0.1.24/code 25: `apps/c3-pilot/dist/devnet-evaluation-ui-v25/c-market-c3-devnet-evaluation-0.1.24.apk`.
+SHA-256: `4ab62764b98fd14eea9e0d91a29b8791365b6e61cba3ab2bd9c66d3b88fd40ea`.
+Certificate matches the preserved QA certificate. Installed with data-preserving
+update. Standalone cold launch and Indices navigation showed both trading
+buttons and availability explanation in the disconnected state. Connected
+historical presentation requires reconnect/authentication and was not physically
+verified in this execution. No Metro listener was present.
+
+Backend deployment `dpl_ApLVeYY6SwC3foRnAtmqpaGa7gDN` is READY at the existing
+`https://cmarket-nine.vercel.app`; health confirms database and Devnet, Mainnet
+false. Server bundle isolation passed. Mobile TypeScript/lint and 16 focused
+tests passed; service TypeScript/focused lint and 12 focused account/effect/history
+tests passed. Formatting and signed release build passed. No program or database
+schema was changed, and no blockchain transaction was signed or submitted.
+
+The owner authorized repeat Devnet evaluations with separate vaults. This is
+NOT implemented or enabled by this change. Exact remaining code boundary:
+`InitializeVault` in `instructions.rs` accepts only owner-derived vault and
+authority seeds; `constants.rs::vault_seed/authority_seed` have no round identifier.
+The deployed program cannot initialize a second vault for the same wallet.
+The durable database also has a wallet primary key in wallet_vaults and a unique
+lifetime-wallet intent index. The next implementation must add compatible
+round-scoped program accounts and append-only enrollment/session/intent selection,
+then test replay/concurrency and deploy only the reviewed Devnet artifact.
+Do not reset the old vault, erase signatures, reuse its burned shares, or claim
+that visible disabled buttons make repeat purchases functional.

@@ -74,6 +74,27 @@ export function verifyEvaluationConfig(
   };
 }
 export type EvaluationAccounts = ReadonlyMap<string, OpenAccount | null>;
+/** Historical amounts come from the finalized, owner-bound deposit account;
+ * issued shares remain history after burning and are never a current balance. */
+export function evaluationDepositHistory(
+  decoded: Record<string, unknown>,
+  issued: bigint,
+) {
+  const units = (value: unknown) => {
+    const text = String(value);
+    check(/^(0|[1-9][0-9]{0,19})$/.test(text), "DEPOSIT_HISTORY_AMOUNT");
+    return BigInt(text);
+  };
+  const deposited = units(decoded.deposited),
+    sharesIssued = units(decoded.shares_issued);
+  check(
+    deposited === EVALUATION.amount &&
+      sharesIssued === issued &&
+      (sharesIssued === 0n || sharesIssued === EVALUATION.amount),
+    "DEPOSIT_HISTORY_BINDING",
+  );
+  return { deposited, sharesIssued };
+}
 /** Snapshot only; never treated as transaction-effect confirmation by itself. */
 export function evaluationPosition(
   client: EvaluationClient,
@@ -122,6 +143,8 @@ export function evaluationPosition(
     ),
   );
   let depositStatus: number | null = null;
+  let deposited = 0n,
+    sharesIssued = 0n;
   const depositRaw = accounts.get(client.intent("deposit").toBase58());
   if (depositRaw) {
     const decoded = client.coder.accounts.decode(
@@ -135,6 +158,10 @@ export function evaluationPosition(
       "DEPOSIT_BINDING",
     );
     depositStatus = Number(decoded.status);
+    ({ deposited, sharesIssued } = evaluationDepositHistory(
+      decoded,
+      config.issued,
+    ));
   }
   let claimable = 0n,
     returned = 0n,
@@ -169,6 +196,8 @@ export function evaluationPosition(
     shareSupply: share.supply,
     inventory,
     depositStatus,
+    deposited,
+    sharesIssued,
     redemptionStatus,
     claimable,
     returned,
@@ -194,7 +223,10 @@ export function evaluationAvailableClaim(
 }
 export function assertEvaluationAction(
   action: EvaluationOwnerAction,
-  position: ReturnType<typeof evaluationPosition>,
+  position: Omit<
+    ReturnType<typeof evaluationPosition>,
+    "deposited" | "sharesIssued"
+  >,
 ) {
   check(!position.paused || action === "claim", "PAUSED");
   if (action === "deposit")
