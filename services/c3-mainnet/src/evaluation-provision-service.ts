@@ -28,6 +28,7 @@ import {
   evaluationInitializeWallet,
   compileEvaluationProvisioning,
   EVALUATION_MINT_AUTHORITY,
+  EVALUATION_FAUCET_USDC_AMOUNT,
 } from "./evaluation-provisioning.ts";
 import {
   EvaluationServiceJournal,
@@ -611,16 +612,24 @@ export class EvaluationProvisionService {
     });
     steps.push({
       scope: proof.wallet,
-      name: "faucet-usdc",
+      // Stable per-wallet journal identity makes this a one-time 200 TEST USDC
+      // grant. Retries reconcile the same transaction and cannot mint twice.
+      name: "faucet-usdc-200",
       signer: EVALUATION_MINT_AUTHORITY,
-      instructions: [evaluationMintTestTokens(mints[0]!, owner, 1_000_000n)],
+      instructions: [
+        evaluationMintTestTokens(
+          mints[0]!,
+          owner,
+          EVALUATION_FAUCET_USDC_AMOUNT,
+        ),
+      ],
       verify: async () => {
         check(
           (await this.token(
             evaluationAta(mints[0]!, owner),
             owner,
             mints[0]!,
-          )) >= 1_000_000n,
+          )) >= EVALUATION_FAUCET_USDC_AMOUNT,
           "FAUCET_BALANCE",
         );
       },

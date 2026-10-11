@@ -20,6 +20,7 @@ import {
 
 export const EVALUATION_MINT_AUTHORITY =
   "FUfbAJQMsm6fvmdfduNLBDDZajjZTSmjhaKq6Eew3tZq";
+export const EVALUATION_FAUCET_USDC_AMOUNT = 200_000_000n;
 const ATA = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const digest = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest();
@@ -136,7 +137,7 @@ export function evaluationMintTestTokens(
 ) {
   // Inputs to this internal builder must come from the fixed asset config and
   // verified wallet proof. HTTP clients never provide recipient/mint/amount.
-  if (amount <= 0n || amount > 100_000_000n)
+  if (amount <= 0n || amount > EVALUATION_FAUCET_USDC_AMOUNT)
     throw Error("EVAL_PROVISION_MINT_LIMIT");
   return new TransactionInstruction({
     programId: EVAL_TOKEN,

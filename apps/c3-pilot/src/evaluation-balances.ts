@@ -1,8 +1,6 @@
 export const DEVNET_BALANCE_RPC = "https://api.devnet.solana.com";
-export const BALANCE_MINTS = [
-  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  "J4cTKzcwdrkpU1qYxbJ1LpiJivpKcZeHmcyuGj1o1Nza",
-] as const;
+export const EVALUATION_USDC_MINT =
+  "J4cTKzcwdrkpU1qYxbJ1LpiJivpKcZeHmcyuGj1o1Nza";
 const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 export function balanceUnits(amount: bigint, decimals: number): string {
   const base = 10n ** BigInt(decimals);

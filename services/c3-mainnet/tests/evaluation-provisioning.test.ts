@@ -24,6 +24,7 @@ import {
   evaluationInitializeWallet,
   compileEvaluationProvisioning,
   EVALUATION_MINT_AUTHORITY,
+  EVALUATION_FAUCET_USDC_AMOUNT,
 } from "../src/evaluation-provisioning.ts";
 import { inspectEvaluationServicePacket } from "../src/evaluation-service-journal.ts";
 
@@ -32,6 +33,8 @@ test("evaluation mint addresses are deterministic, distinct and per-wallet share
     b = await evaluationAssetMints();
   assert.deepEqual(a.map(String), b.map(String));
   assert.equal(new Set(a.map(String)).size, 4);
+  assert.equal(String(a[0]), "J4cTKzcwdrkpU1qYxbJ1LpiJivpKcZeHmcyuGj1o1Nza");
+  assert.notEqual(String(a[0]), "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
   const wallet = Keypair.generate().publicKey.toBase58();
   assert.equal(
     String(await evaluationShareMint(wallet)),
@@ -108,8 +111,15 @@ test("ATA metas, bounded test minting and initialization cannot add wallet signe
   assert.equal(ata.keys[5]!.pubkey.toBase58(), EVAL_SHARES.toBase58());
   const mint = evaluationMintTestTokens(mints[0]!, owner, 1_000_000n);
   assert.equal(mint.data.readBigUInt64LE(1), 1_000_000n);
+  const faucet = evaluationMintTestTokens(
+    mints[0]!,
+    owner,
+    EVALUATION_FAUCET_USDC_AMOUNT,
+  );
+  assert.equal(EVALUATION_FAUCET_USDC_AMOUNT, 200_000_000n);
+  assert.equal(faucet.data.readBigUInt64LE(1), 200_000_000n);
   assert.throws(
-    () => evaluationMintTestTokens(mints[0]!, owner, 100_000_001n),
+    () => evaluationMintTestTokens(mints[0]!, owner, 200_000_001n),
     /LIMIT/,
   );
   const idl = JSON.parse(

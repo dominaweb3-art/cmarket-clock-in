@@ -15,7 +15,7 @@ const en = {
     "BTC 40% · ETH 30% · SOL 30% is the strategic target, not current market weights, performance or verified holdings. The test router uses simulated assets, not real BTC or ETH or Jupiter liquidity.",
   how: "How to buy and sell",
   howBody:
-    "Connect → verify ownership → receive test tokens → review a deposit of exactly 1 TEST USDC → process three test swaps → approve on-chain shares. To exit: review the sale → process three test swaps → claim realized TEST USDC and burn shares. Each wallet approval is explicit.",
+    "Connect → verify ownership → receive 200 TEST USDC once per wallet → review a deposit of exactly 1 TEST USDC → process three test swaps → approve on-chain shares. To exit: review the sale → process three test swaps → claim realized TEST USDC and burn shares. Each wallet approval is explicit.",
   shares: "What shares represent",
   sharesBody:
     "On-chain shares represent rights over the inventory recorded by the evaluation vault. They are not a guaranteed value or real crypto exposure. Underlying test assets remain in the vault.",
@@ -42,7 +42,7 @@ const en = {
   claim: "Claim TEST USDC",
   depositNote: "Evaluation deposit: exactly 1 TEST USDC.",
   load: "Load my evaluation",
-  provision: "Receive test tokens",
+  provision: "Receive 200 TEST USDC",
   ready: "Ready to evaluate",
   active: "Verified share position",
   processing: "Operation in progress",
@@ -105,7 +105,7 @@ const es: Copy = {
     "BTC 40% · ETH 30% · SOL 30% es el objetivo estratégico, no ponderaciones actuales de mercado, rentabilidad ni tenencias verificadas. El router de prueba usa activos simulados, no BTC o ETH reales ni liquidez Jupiter.",
   how: "Cómo comprar y vender",
   howBody:
-    "Conectar → verificar propiedad → recibir tokens de prueba → revisar un depósito de exactamente 1 TEST USDC → procesar tres swaps de prueba → autorizar participaciones on-chain. Para salir: revisar la venta → procesar tres swaps de prueba → reclamar TEST USDC liquidado y quemar las participaciones. Cada autorización de wallet es explícita.",
+    "Conectar → verificar propiedad → recibir 200 TEST USDC una vez por wallet → revisar un depósito de exactamente 1 TEST USDC → procesar tres swaps de prueba → autorizar participaciones on-chain. Para salir: revisar la venta → procesar tres swaps de prueba → reclamar TEST USDC liquidado y quemar las participaciones. Cada autorización de wallet es explícita.",
   shares: "Qué representan las participaciones",
   sharesBody:
     "Las participaciones on-chain representan derechos sobre el inventario registrado en la bóveda de evaluación. No garantizan valor ni exposición cripto real. Los activos de prueba permanecen en la bóveda.",
@@ -132,7 +132,7 @@ const es: Copy = {
   claim: "Reclamar TEST USDC",
   depositNote: "Depósito de evaluación: exactamente 1 TEST USDC.",
   load: "Consultar mi evaluación",
-  provision: "Recibir tokens de prueba",
+  provision: "Recibir 200 TEST USDC",
   ready: "Lista para evaluar",
   active: "Participaciones verificadas",
   processing: "Operación en curso",
@@ -193,7 +193,7 @@ const zh: Copy = {
     "BTC 40% · ETH 30% · SOL 30% 是战略目标，不是当前市场权重、收益或已验证的持仓。测试路由器使用模拟资产，不是真实 BTC、ETH 或 Jupiter 流动性。",
   how: "如何购买和卖出",
   howBody:
-    "连接 → 验证所有权 → 领取测试代币 → 审阅恰好 1 TEST USDC 的存款 → 处理三笔测试兑换 → 批准链上份额。退出：审阅卖出 → 处理三笔测试兑换 → 领取已结算的 TEST USDC 并销毁份额。每次钱包批准均需明确授权。",
+    "连接 → 验证所有权 → 每个钱包领取一次 200 TEST USDC → 审阅恰好 1 TEST USDC 的存款 → 处理三笔测试兑换 → 批准链上份额。退出：审阅卖出 → 处理三笔测试兑换 → 领取已结算的 TEST USDC 并销毁份额。每次钱包批准均需明确授权。",
   shares: "份额代表什么",
   sharesBody:
     "链上份额代表对评估金库所记录库存的权利。不保证价值，也不代表真实加密资产敞口。底层测试资产保留在金库中。",
@@ -220,7 +220,7 @@ const zh: Copy = {
   claim: "领取 TEST USDC",
   depositNote: "评估存款：恰好 1 TEST USDC。",
   load: "查询我的评估",
-  provision: "领取测试代币",
+  provision: "领取 200 TEST USDC",
   ready: "可开始评估",
   active: "已验证的份额仓位",
   processing: "操作进行中",
@@ -276,7 +276,7 @@ const pt: Copy = {
     "BTC 40% · ETH 30% · SOL 30% é o alvo estratégico, não pesos atuais de mercado, rentabilidade ou posições verificadas. O roteador de teste usa ativos simulados, não BTC ou ETH reais nem liquidez Jupiter.",
   how: "Como comprar e vender",
   howBody:
-    "Conectar → verificar propriedade → receber tokens de teste → revisar um depósito de exatamente 1 TEST USDC → processar três swaps de teste → aprovar cotas on-chain. Para sair: revisar a venda → processar três swaps de teste → resgatar TEST USDC liquidado e queimar cotas. Cada aprovação da carteira é explícita.",
+    "Conectar → verificar propriedade → receber 200 TEST USDC uma vez por wallet → revisar um depósito de exatamente 1 TEST USDC → processar três swaps de teste → aprovar cotas on-chain. Para sair: revisar a venda → processar três swaps de teste → resgatar TEST USDC liquidado e queimar cotas. Cada aprovação da carteira é explícita.",
   shares: "O que as cotas representam",
   sharesBody:
     "As cotas on-chain representam direitos sobre o inventário registrado no cofre de avaliação. Não garantem valor nem exposição cripto real. Os ativos de teste permanecem no cofre.",
@@ -303,7 +303,7 @@ const pt: Copy = {
   claim: "Resgatar TEST USDC",
   depositNote: "Depósito de avaliação: exatamente 1 TEST USDC.",
   load: "Consultar minha avaliação",
-  provision: "Receber tokens de teste",
+  provision: "Receber 200 TEST USDC",
   ready: "Pronta para avaliar",
   active: "Cotas verificadas",
   processing: "Operação em andamento",

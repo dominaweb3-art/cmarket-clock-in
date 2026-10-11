@@ -1,17 +1,10 @@
 import { useEffect, useState } from "react";
-import {
-  AppState,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import type { Language } from "./locales";
 import { nativeEvaluationPost } from "./evaluation-transport";
 import {
-  BALANCE_MINTS,
   DEVNET_BALANCE_RPC,
+  EVALUATION_USDC_MINT,
   balanceUnits,
   tokenBalance,
 } from "./evaluation-balances";
@@ -23,36 +16,32 @@ const copy = {
     "Loading…",
     "Unavailable",
     "Refresh balances",
-    "USDC Devnet",
-    "TEST USDC · C3",
-    "Wallet balances · Devnet only",
+    "TEST USDC · C3 evaluation",
+    "Balances · Devnet only",
   ],
   es: [
     "Conecta tu wallet para ver saldos",
     "Consultando…",
     "No disponible",
     "Actualizar saldos",
-    "USDC Devnet",
-    "TEST USDC · C3",
-    "Saldos de wallet · solo Devnet",
+    "TEST USDC · evaluación C3",
+    "Saldos · solo Devnet",
   ],
   "zh-CN": [
     "连接钱包查看余额",
     "查询中…",
     "不可用",
     "刷新余额",
-    "USDC Devnet",
-    "TEST USDC · C3",
-    "钱包余额 · 仅 Devnet",
+    "TEST USDC · C3 评估",
+    "余额 · 仅 Devnet",
   ],
   "pt-BR": [
     "Conecte a wallet para ver saldos",
     "Consultando…",
     "Indisponível",
     "Atualizar saldos",
-    "USDC Devnet",
-    "TEST USDC · C3",
-    "Saldos da wallet · apenas Devnet",
+    "TEST USDC · avaliação C3",
+    "Saldos · apenas Devnet",
   ],
 } as const;
 type Entry = { wallet: string; values: (string | null)[] };
@@ -100,14 +89,12 @@ export function EvaluationBalances({
         return balanceUnits(BigInt(r.value), 9);
       },
     );
-    const tokens = BALANCE_MINTS.map((mint) =>
-      rpc("getTokenAccountsByOwner", [
-        wallet,
-        { mint },
-        { encoding: "jsonParsed", commitment: "finalized" },
-      ]).then((r) => tokenBalance(r, wallet, mint)),
-    );
-    void Promise.allSettled([sol, ...tokens]).then((results) => {
+    const testUsdc = rpc("getTokenAccountsByOwner", [
+      wallet,
+      { mint: EVALUATION_USDC_MINT },
+      { encoding: "jsonParsed", commitment: "finalized" },
+    ]).then((r) => tokenBalance(r, wallet, EVALUATION_USDC_MINT));
+    void Promise.allSettled([sol, testUsdc]).then((results) => {
       if (cancelled) return;
       setEntry({
         wallet,
@@ -141,24 +128,20 @@ export function EvaluationBalances({
               </View>
             </View>
             <View style={s.cell}>
-              <Image
-                source={require("../assets/evaluation-ui/usdc-official.png")}
-                style={s.icon}
-                accessible={false}
-              />
+              <View accessible={false} style={s.usdcIcon}>
+                <Text style={s.usdcSymbol}>$</Text>
+              </View>
               <View style={s.content}>
-                {[1, 2].map((i) => (
-                  <View key={i}>
-                    <Text style={s.label}>{c[i === 1 ? 4 : 5]}</Text>
-                    <Text style={s.amount}>
-                      {loading ? c[1] : (values?.[i] ?? c[2])}
-                    </Text>
-                    <Text style={s.mint}>
-                      {BALANCE_MINTS[i - 1]?.slice(0, 5)}…
-                      {BALANCE_MINTS[i - 1]?.slice(-4)}
-                    </Text>
-                  </View>
-                ))}
+                <View>
+                  <Text style={s.label}>{c[4]}</Text>
+                  <Text style={s.amount}>
+                    {loading ? c[1] : (values?.[1] ?? c[2])}
+                  </Text>
+                  <Text style={s.mint}>
+                    {EVALUATION_USDC_MINT.slice(0, 5)}…
+                    {EVALUATION_USDC_MINT.slice(-4)}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -169,7 +152,7 @@ export function EvaluationBalances({
             onPress={() => setRefresh((v) => v + 1)}
             style={s.refresh}
           >
-            <Text style={s.note}>{c[6]} · ↻</Text>
+            <Text style={s.note}>{c[5]} · ↻</Text>
           </Pressable>
         </>
       )}
@@ -189,7 +172,15 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   content: { flex: 1, gap: 5 },
-  icon: { width: 32, height: 32 },
+  usdcIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#2775ca",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  usdcSymbol: { color: "#fff", fontSize: 21, fontWeight: "700" },
   solIcon: { width: 32, height: 32, overflow: "hidden" },
   solInner: {
     width: 56,

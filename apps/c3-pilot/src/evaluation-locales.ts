@@ -3,7 +3,7 @@ const en = {
   title: "C Market · C3",
   notice:
     "Devnet evaluation · test tokens and liquidity with no monetary value",
-  provision: "Receive test tokens / prepare my vault",
+  provision: "Receive 200 TEST USDC / prepare my vault",
   deposit: "Deposit exactly 1 test USDC",
   issue_shares: "Issue on-chain evaluation shares",
   request_redemption: "Sell my evaluation shares",
@@ -60,7 +60,7 @@ type Dictionary = Record<keyof typeof en, string>;
 const es: Dictionary = {
   title: "C Market · C3",
   notice: "Evaluación Devnet · tokens y liquidez de prueba sin valor monetario",
-  provision: "Recibir tokens de prueba / preparar mi bóveda",
+  provision: "Recibir 200 TEST USDC / preparar mi bóveda",
   deposit: "Depositar exactamente 1 USDC de prueba",
   issue_shares: "Emitir participaciones de evaluación on-chain",
   request_redemption: "Vender mis participaciones de evaluación",
@@ -116,7 +116,7 @@ const es: Dictionary = {
 const zh: Dictionary = {
   title: "C Market · C3",
   notice: "Devnet 评估 · 测试代币和流动性无货币价值",
-  provision: "领取测试代币 / 准备我的金库",
+  provision: "领取 200 TEST USDC / 准备我的金库",
   deposit: "存入恰好 1 测试 USDC",
   issue_shares: "发行链上评估份额",
   request_redemption: "出售我的评估份额",
@@ -170,7 +170,7 @@ const zh: Dictionary = {
 const pt: Dictionary = {
   title: "C Market · C3",
   notice: "Avaliação Devnet · tokens e liquidez de teste sem valor monetário",
-  provision: "Receber tokens de teste / preparar meu cofre",
+  provision: "Receber 200 TEST USDC / preparar meu cofre",
   deposit: "Depositar exatamente 1 USDC de teste",
   issue_shares: "Emitir cotas de avaliação on-chain",
   request_redemption: "Vender minhas cotas de avaliação",

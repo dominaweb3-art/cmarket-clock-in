@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BALANCE_MINTS,
+  EVALUATION_USDC_MINT,
   balanceUnits,
   tokenBalance,
 } from "../src/evaluation-balances.ts";
 const wallet = "owner";
-const mint = BALANCE_MINTS[0];
+const mint = EVALUATION_USDC_MINT;
 const account = (amount: string) => ({
   account: {
     owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
@@ -39,7 +39,11 @@ test("wrong wallet, mint, owner, malformed amount and missing evidence fail rath
     );
   assert.throws(() => tokenBalance({ value: [account("1")] }, "other", mint));
   assert.throws(() =>
-    tokenBalance({ value: [account("1")] }, wallet, BALANCE_MINTS[1]),
+    tokenBalance(
+      { value: [account("1")] },
+      wallet,
+      "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    ),
   );
   assert.throws(() => tokenBalance({}, wallet, mint));
 });
