@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Linking,
   Pressable,
   SafeAreaView,
@@ -11,7 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { languageLabels, languages, type Language } from "./locales";
+import { languages, type Language } from "./locales";
 import { evalText, type EvaluationKey } from "./evaluation-locales";
 import { evaluationErrorCode } from "./evaluation-errors";
 import { waitForEvaluationNetwork } from "./evaluation-transport";
@@ -36,6 +37,10 @@ import {
   UpcomingIndices,
 } from "./EvaluationVisuals";
 import { visualText, type EvaluationTab } from "./evaluation-visual-copy";
+import { EvaluationIndices } from "./EvaluationIndices";
+import { EvaluationWalletSheet } from "./EvaluationWalletSheet";
+import type { IndicesAction } from "./evaluation-indices-state";
+import { indicesStatus } from "./evaluation-indices-copy";
 
 const STORAGE = "c3-evaluation-language/v1";
 function EvaluationButton({
@@ -64,6 +69,7 @@ export default function DevnetEvaluationApp() {
   const [language, setLanguage] = useState<Language>("en");
   const [tab, setTab] = useState<EvaluationTab>("home");
   const [accountOpen, setAccountOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const scroll = useRef<ScrollView>(null);
   const accountY = useRef(0);
   const scrollToAccount = useRef(false);
@@ -84,6 +90,10 @@ export default function DevnetEvaluationApp() {
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
   const openAccount = () => {
+    if (!wallet || !verified) {
+      setWalletOpen(true);
+      return;
+    }
     scrollToAccount.current = !accountOpen || tab !== "home";
     setAccountOpen(true);
     setTab("home");
@@ -362,30 +372,54 @@ export default function DevnetEvaluationApp() {
   const pending =
     Array.isArray(position?.pendingRequests) &&
     position.pendingRequests.length > 0;
+  const unresolved = pending || !!position?.pendingInitialPlan;
+  const selectLanguage = (value: Language) => {
+    setLanguage(value);
+    void AsyncStorage.setItem(STORAGE, value).catch(() => undefined);
+  };
+  const disconnectApp = () => {
+    if (busy || lock.current || unresolved) return;
+    // Local UI/session reset only. No MWA revocation, backend deletion or
+    // signature cancellation. Original durable history remains recoverable.
+    session.current = undefined;
+    setVerified(false);
+    setPosition(null);
+    setWallet(null);
+    setStatus("");
+    setAccountOpen(false);
+  };
+  const indexAction = (action: IndicesAction) => {
+    if (action === "activity") return changeTab("activity");
+    if (action === "wallet") return setWalletOpen(true);
+    if (busy || !verified || lock.current) return;
+    if (action === "refresh") return void refresh();
+    if (action === "provision") return void provision();
+    if (unresolved || position?.settlementReleased !== true) return;
+    if (action === "advance") return void advance();
+    if (
+      !Array.isArray(position?.allowedActions) ||
+      !position.allowedActions.includes(action)
+    )
+      return;
+    prepareWalletAction(action);
+  };
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <View style={styles.header}>
-        <Text style={styles.title}>C Market</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={u("details")}
-          onPress={openAccount}
-          style={styles.headerLanguage}
-        >
-          <Text style={styles.activeText}>
-            {language === "zh-CN"
-              ? "中文"
-              : language === "pt-BR"
-                ? "PT"
-                : language.toUpperCase()}
-          </Text>
-        </Pressable>
+        <View style={styles.brand}>
+          <Image
+            accessible={false}
+            source={require("../../mobile/assets/images/splash-icon.png")}
+            style={styles.wordmark}
+          />
+          <Text style={styles.title}>C Market</Text>
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={u("account")}
-          accessibilityState={{ expanded: accountOpen && tab === "home" }}
-          onPress={openAccount}
+          accessibilityState={{ expanded: walletOpen }}
+          onPress={() => setWalletOpen(true)}
           style={styles.walletButton}
         >
           <NavigationGlyph name="wallet" color="#0b1221" />
@@ -401,18 +435,20 @@ export default function DevnetEvaluationApp() {
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
-        {(tab === "home" || tab === "indices") && (
+        {tab === "home" && (
           <C3Summary
             language={language}
             onExplore={openAccount}
             disabled={busy}
-            {...(tab === "home"
-              ? { onDetails: () => changeTab("indices") }
-              : {})}
+            onDetails={() => changeTab("indices")}
           />
         )}
         <View
-          style={[styles.card, tab === "home" && !accountOpen && styles.hidden]}
+          style={[
+            styles.card,
+            ((tab === "home" && !accountOpen) || tab === "indices") &&
+              styles.hidden,
+          ]}
           onLayout={(event) => {
             if (tab === "home" && accountOpen) {
               accountY.current = event.nativeEvent.layout.y;
@@ -442,52 +478,6 @@ export default function DevnetEvaluationApp() {
                   <Text style={styles.closeText}>×</Text>
                 </Pressable>
               </View>
-              <Text style={styles.heading}>{t("language")}</Text>
-              <View style={styles.languages}>
-                {languages.map((value) => (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="button"
-                    accessibilityLabel={languageLabels[value]}
-                    accessibilityState={{ selected: language === value }}
-                    onPress={() => {
-                      setLanguage(value);
-                      void AsyncStorage.setItem(STORAGE, value).catch(
-                        () => undefined,
-                      );
-                    }}
-                    style={[styles.chip, value === language && styles.selected]}
-                  >
-                    <Text style={styles.languageText}>
-                      {languageLabels[value]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              {wallet && (
-                <Text style={styles.walletAddress}>
-                  {wallet.slice(0, 6)}…{wallet.slice(-6)}
-                </Text>
-              )}
-              <EvaluationButton
-                label={t("connect")}
-                disabled={busy}
-                onPress={() => {
-                  void connect();
-                }}
-              />
-              <EvaluationButton
-                label={t("authenticate")}
-                disabled={busy || !wallet}
-                onPress={authenticate}
-              />
-              <EvaluationButton
-                label={t("check")}
-                disabled={busy}
-                onPress={() => {
-                  void health();
-                }}
-              />
               {verified && (
                 <EvaluationButton
                   label={t("refresh")}
@@ -575,14 +565,6 @@ export default function DevnetEvaluationApp() {
               <Text style={styles.note}>{t("restart")}</Text>
             </>
           )}
-          {tab === "indices" && (
-            <>
-              <Text style={styles.heading}>{t("target")}</Text>
-              <Text style={styles.note}>{u("goals")}</Text>
-              <Text style={styles.note}>{t("assets")}</Text>
-              <Text style={styles.note}>{t("restriction")}</Text>
-            </>
-          )}
           {tab === "activity" && (
             <>
               <Text style={styles.heading}>{t("activity")}</Text>
@@ -636,7 +618,7 @@ export default function DevnetEvaluationApp() {
               {!verified && (
                 <EvaluationButton
                   label={u("account")}
-                  onPress={openAccount}
+                  onPress={() => setWalletOpen(true)}
                   disabled={busy}
                 />
               )}
@@ -653,12 +635,48 @@ export default function DevnetEvaluationApp() {
             {busy ? t("busy") : status}
           </Text>
         </View>
-        {(tab === "home" || tab === "indices") && (
-          <UpcomingIndices language={language} />
-        )}
+        <View style={tab !== "indices" && styles.hidden}>
+          <EvaluationIndices
+            language={language}
+            wallet={wallet}
+            verified={verified}
+            busy={busy}
+            position={position}
+            status={indicesStatus(language, status)}
+            displayUnits={displayUnits}
+            onAction={indexAction}
+            onRecover={() => {
+              void recover();
+            }}
+          />
+        </View>
+        {tab === "home" && <UpcomingIndices language={language} />}
         <Text style={styles.footer}>{t("mainnet")}</Text>
       </ScrollView>
       <BottomNavigation language={language} tab={tab} onChange={changeTab} />
+      <EvaluationWalletSheet
+        visible={walletOpen}
+        language={language}
+        wallet={wallet}
+        verified={verified}
+        busy={busy}
+        pending={unresolved}
+        status={busy ? t("busy") : indicesStatus(language, status)}
+        onClose={() => setWalletOpen(false)}
+        onLanguage={selectLanguage}
+        onConnect={() => {
+          setWalletOpen(false);
+          void connect();
+        }}
+        onVerify={() => {
+          setWalletOpen(false);
+          authenticate();
+        }}
+        onDisconnect={disconnectApp}
+        onCheck={() => {
+          void health();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -676,12 +694,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 10,
   },
-  headerLanguage: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  brand: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
+  wordmark: { width: 40, height: 40, resizeMode: "contain" },
   walletButton: {
     backgroundColor: "#f3f5f7",
     borderRadius: 16,

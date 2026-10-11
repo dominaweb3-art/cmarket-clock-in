@@ -104,7 +104,7 @@ export function BottomNavigation({
   );
 }
 
-function CryptoIcon({ index }: { index: number }) {
+export function CryptoIcon({ index }: { index: number }) {
   // Crop in the view, not the source: all approved pixels/proportions preserved.
   return (
     <View accessible={false} style={s.crop}>
