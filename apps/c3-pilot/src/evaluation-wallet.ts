@@ -1,4 +1,5 @@
 import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol";
+import type { EvaluationPurchaseReview } from "./evaluation-purchase";
 import { evaluationErrorCode } from "./evaluation-errors";
 import {
   base64FromUint8Array,
@@ -82,10 +83,17 @@ export async function signEvaluationTransaction(
   result: Readonly<Record<string, unknown>>,
   owner: string,
   action: EvaluationMoneyAction,
+  context?: EvaluationPurchaseReview,
 ) {
   let prepared: ReturnType<typeof reviewEvaluationOwnerPacket>;
   try {
-    prepared = reviewEvaluationOwnerPacket(result, owner, action);
+    prepared = reviewEvaluationOwnerPacket(
+      result,
+      owner,
+      action,
+      Date.now(),
+      context,
+    );
   } catch (error) {
     throw Error(`EVAL_TX_PRE_${evaluationErrorCode(error)}`);
   }

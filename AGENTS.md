@@ -2,6 +2,14 @@
 
 ## Active delivery override — Devnet evaluation (5 October 2026)
 
+Evaluation purchase update (11 October 2026): the owner explicitly authorizes
+variable deposits from 1 to 200 test USDC (six decimals), and successive trials
+in separate per-wallet vault rounds after finalized redemption. Preserve every
+old vault, intent, share mint and signature. Round 1 PDA bytes stay unchanged;
+rounds 2–10 are separate one-position evaluation vaults. This does not authorize
+pooled Mainnet deposits, a monetary NAV or redeeming market-reference dollars.
+Displayed real-market BTC/ETH/SOL reference values are informational only.
+
 On `delivery/c3-devnet-evaluation` only, the owner authorizes a functional
 Devnet evaluation with explicitly simulated test assets and settlement. This
 overrides the older Mainnet-only delivery restrictions below, not their custody,
@@ -19,7 +27,6 @@ signature, expiry, reconciliation, replay or durable-state safeguards.
   allocation, shares, redemption, claim and restart recovery, not a disabled APK.
 - Publication is authorized in existing free resources after secret checks;
   submitting the competition form still requires the owner's approval.
-
 
 ## Active C3 open-vault pilot rule (2026-09-28; supersedes older Symmetry execution guidance below)
 

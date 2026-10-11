@@ -162,7 +162,7 @@ export function verifyEvaluationOwnerEffects(
   const shareData = (burn: boolean) => {
     const d = Buffer.alloc(9);
     d[0] = burn ? 8 : 7;
-    d.writeBigUInt64LE(EVALUATION.amount, 1);
+    d.writeBigUInt64LE(client.amount, 1);
     return d;
   };
   let createRent = 0n;
@@ -208,7 +208,7 @@ export function verifyEvaluationOwnerEffects(
             names.vault_usdc!.toBase58(),
             client.owner.toBase58(),
           ],
-          data: transferData(EVALUATION.amount),
+          data: transferData(client.amount),
         },
       ],
     });
@@ -292,13 +292,13 @@ export function verifyEvaluationOwnerEffects(
   });
   const deltas = new Map<string, bigint>();
   if (action === "deposit") {
-    deltas.set(names.owner_usdc!.toBase58(), -EVALUATION.amount);
-    deltas.set(names.vault_usdc!.toBase58(), EVALUATION.amount);
+    deltas.set(names.owner_usdc!.toBase58(), -client.amount);
+    deltas.set(names.vault_usdc!.toBase58(), client.amount);
   }
   if (action === "issue_shares")
-    deltas.set(names.owner_shares!.toBase58(), EVALUATION.amount);
+    deltas.set(names.owner_shares!.toBase58(), client.amount);
   if (action === "claim") {
-    deltas.set(names.owner_shares!.toBase58(), -EVALUATION.amount);
+    deltas.set(names.owner_shares!.toBase58(), -client.amount);
     deltas.set(names.vault_usdc!.toBase58(), -claim);
     deltas.set(names.owner_usdc!.toBase58(), claim);
   }

@@ -4,6 +4,7 @@ import type { IndicesKey } from "./evaluation-indices-copy";
 export type IndicesAction =
   | "wallet"
   | "provision"
+  | "new_purchase"
   | "refresh"
   | "activity"
   | "advance"

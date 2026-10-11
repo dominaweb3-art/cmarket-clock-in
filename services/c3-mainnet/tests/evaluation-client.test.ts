@@ -252,6 +252,48 @@ test("shares stay non-transferable under the evaluation PDA, with no delegate ex
       owner: EVAL_TOKEN.toBase58(),
     }),
   );
+  const variable = Buffer.from(data);
+  variable.writeBigUInt64LE(100_000_000n, 36);
+  assert.throws(
+    () =>
+      verifyShareMintForAuthority(client.authority.toBase58(), raw(variable)),
+    /SHARE_MINT/,
+  );
+  assert.equal(
+    verifyShareMintForAuthority(
+      client.authority.toBase58(),
+      raw(variable),
+      100_000_000n,
+    ).supply,
+    100_000_000n,
+  );
+  assert.throws(
+    () =>
+      verifyShareMintForAuthority(
+        client.authority.toBase58(),
+        raw(variable),
+        99_999_999n,
+      ),
+    /SHARE_MINT/,
+  );
+  assert.throws(
+    () =>
+      verifyShareMintForAuthority(
+        client.authority.toBase58(),
+        raw(variable),
+        200_000_001n,
+      ),
+    /SUPPLY_LIMIT/,
+  );
+  assert.throws(
+    () =>
+      verifyShareMintForAuthority(
+        owner.toBase58(),
+        raw(variable),
+        100_000_000n,
+      ),
+    /SHARE_MINT/,
+  );
 });
 test("unsolicited inventory does not authorize share issuance or another deposit", () => {
   const p = {

@@ -174,7 +174,12 @@ export function verifyOpenShareMint(
 export function verifyShareMintForAuthority(
   authority: string,
   raw: OpenAccount,
+  maximumSupply = 1000000n,
 ) {
+  demand(
+    maximumSupply >= 1000000n && maximumSupply <= 200000000n,
+    "SUPPLY_LIMIT",
+  );
   publicKeyBytes(authority);
   const b = accountBytes(raw, SHARE_TOKEN_PROGRAM);
   demand(
@@ -183,7 +188,7 @@ export function verifyShareMintForAuthority(
       key(b, 4) === authority &&
       b[44] === 6 &&
       b[45] === 1 &&
-      b.readBigUInt64LE(36) <= 1000000n,
+      b.readBigUInt64LE(36) <= maximumSupply,
     "SHARE_MINT",
   );
   const freeze = b.readUInt32LE(46);

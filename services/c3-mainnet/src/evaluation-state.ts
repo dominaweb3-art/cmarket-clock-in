@@ -1,6 +1,5 @@
 /** Finalized Devnet account semantics. Pricing is explicitly simulated and
- * cannot change fixed one-USDC ownership or authorize a larger debit. */
-import { createHash } from "node:crypto";
+ * cannot change verified ownership or authorize any debit. */
 import { PublicKey } from "@solana/web3.js";
 import {
   accountBytes,
@@ -8,7 +7,11 @@ import {
   verifyShareMintForAuthority,
   type OpenAccount,
 } from "./open-state-semantics.ts";
-import { EVALUATION } from "./evaluation-scope.ts";
+import {
+  EVALUATION,
+  evaluationAmount,
+  evaluationSeed,
+} from "./evaluation-scope.ts";
 import {
   EvaluationClient,
   EVAL_SHARES,
@@ -28,14 +31,15 @@ export function verifyEvaluationConfig(
 ) {
   const b = accountBytes(raw, EVALUATION.program, 546, "VaultConfig"),
     c = client.config;
-  const seed = createHash("sha256")
-    .update("c3-authority-v1")
-    .update(client.owner.toBuffer())
-    .digest();
+  const seed = evaluationSeed(
+    "c3-authority-v1",
+    client.config.wallet,
+    client.config.version,
+  );
   const bump = PublicKey.findProgramAddressSync([seed], client.program)[1];
   check(
     b[8] === 1 &&
-      b.readBigUInt64LE(9) === 1n &&
+      b.readBigUInt64LE(9) === c.version &&
       key(b, 17) === EVALUATION.governance &&
       key(b, 49) === EVALUATION.governance &&
       key(b, 81) === EVALUATION.keeper &&
@@ -53,11 +57,12 @@ export function verifyEvaluationConfig(
     [4000, 3000, 3000].every(
       (weight, i) => b.readUInt16LE(434 + i * 2) === weight,
     ) &&
-      b.readBigUInt64LE(440) === EVALUATION.amount &&
-      b.readBigUInt64LE(448) === EVALUATION.amount &&
+      b.readBigUInt64LE(440) ===
+        (c.version === 1n ? EVALUATION.amount : EVALUATION.maximumAmount) &&
+      b.readBigUInt64LE(448) === b.readBigUInt64LE(440) &&
       b.readBigUInt64LE(456) <= 1n &&
       b.readBigUInt64LE(464) <= 1n &&
-      b.readBigUInt64LE(472) <= EVALUATION.amount &&
+      b.readBigUInt64LE(472) <= b.readBigUInt64LE(440) &&
       b[480]! <= 4 &&
       b[481] === bump &&
       [0, 1].includes(b[145]!) &&
@@ -88,9 +93,9 @@ export function evaluationDepositHistory(
   const deposited = units(decoded.deposited),
     sharesIssued = units(decoded.shares_issued);
   check(
-    deposited === EVALUATION.amount &&
+    deposited === evaluationAmount(String(deposited)) &&
       sharesIssued === issued &&
-      (sharesIssued === 0n || sharesIssued === EVALUATION.amount),
+      (sharesIssued === 0n || sharesIssued === deposited),
     "DEPOSIT_HISTORY_BINDING",
   );
   return { deposited, sharesIssued };
@@ -112,6 +117,7 @@ export function evaluationPosition(
   const share = verifyShareMintForAuthority(
     client.authority.toBase58(),
     required(client.config.shareMint),
+    client.amount,
   );
   const named = client.accounts(client.intent("deposit"));
   const shares = verifyOpenToken(
@@ -122,7 +128,7 @@ export function evaluationPosition(
   );
   check(
     shares === share.supply &&
-      (share.supply === 0n || share.supply === EVALUATION.amount),
+      (share.supply === 0n || share.supply === client.amount),
     "SHARE_SUPPLY",
   );
   const inventory = [
@@ -156,7 +162,8 @@ export function evaluationPosition(
     check(
       (decoded.wallet as PublicKey).equals(client.owner) &&
         (decoded.vault as PublicKey).equals(client.vault) &&
-        BigInt(String(decoded.amount)) === EVALUATION.amount,
+        BigInt(String(decoded.amount)) === client.amount &&
+        BigInt(String(decoded.config_version)) === client.config.version,
       "DEPOSIT_BINDING",
     );
     depositStatus = Number(decoded.status);
@@ -261,7 +268,8 @@ export function assertEvaluationAction(
   else if (action === "request_redemption")
     check(
       position.lifecycle === 2 &&
-        position.shares === EVALUATION.amount &&
+        position.shares > 0n &&
+        position.shares === position.issued &&
         position.redemptions === 0n,
       "NOT_ACTIVE",
     );
@@ -271,7 +279,8 @@ export function assertEvaluationAction(
         position.redemptionStatus === 4 &&
         position.claimable > 0n &&
         position.returned === 0n &&
-        position.shares === EVALUATION.amount,
+        position.shares > 0n &&
+        position.shares === position.issued,
       "NOT_CLAIMABLE",
     );
   else if (action === "recover_deposit_plan")
@@ -303,7 +312,8 @@ export function evaluationConfigFromRow(
   );
   return {
     wallet,
-    version: 1n,
+    version: BigInt(String(row.round ?? "1")),
+    depositAmount: evaluationAmount(String(row.deposit_amount ?? "1000000")),
     usdcMint: String(row.usdc_mint),
     btcMint: String(row.btc_mint),
     ethMint: String(row.eth_mint),

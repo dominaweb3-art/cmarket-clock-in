@@ -342,3 +342,93 @@ round-scoped program accounts and append-only enrollment/session/intent selectio
 then test replay/concurrency and deploy only the reviewed Devnet artifact.
 Do not reset the old vault, erase signatures, reuse its burned shares, or claim
 that visible disabled buttons make repeat purchases functional.
+
+## 11 October 2026 — variable purchases and separate evaluation vaults
+
+Classification: CLOCKIN_ONLY. The prior exact-one-unit/lifetime-wallet
+restriction above is historical. This update permits 1–200 test USDC with six
+decimals in rounds 2–10, one active position at a time and one position per
+vault. Round 1 remains byte-compatible and restricted to its original limit.
+Each new trial requires explicit action after finalized redemption; previous
+vaults, shares, signatures and journal generations remain immutable.
+
+Devnet vault upgrade finalized at slot 510026902, signature
+`2t2gzkVmAKdcXhFCkzvtGpLGoLa3CpcWBzSHPErGDmMAdo6sjspkSP3Uo2mZ3SnACCLwGTMo46mZh6ZeWWWzZHds`.
+Program `2rZgxofn8kTsahAHPiaLTw7FZcw4MxzLK9cKowZ5HPcg` has verified
+928400-byte code SHA-256
+`a582571274157d7486e69a8bc89fd36abdc40fb52bf7430f28115343d885a703`;
+existing allocation padding remains zero. Test router and Mainnet artifacts
+were not upgraded. Migrations 0005/0006 preserve private row-level security,
+append-only round enrollment and explicit, bounded expired-empty-vault recovery.
+The same immutable recovery journal supports an explicitly requested replacement
+of a missing vault ATA during setup only: original signature absent, finalized
+blockhash expired, target ATA absent, vault not yet initialized, exact derived
+ATA instruction and at most three generations. Funded/initialized vaults, token
+minting and arbitrary instructions cannot use this setup-only recovery.
+
+### Hosted technical acceptance, not physical MWA acceptance
+
+The existing separate evaluation identity completed a second vault through the
+same HTTPS preparation, signing journals, reconciliation and PostgreSQL used
+by the APK. This is actual Devnet custody/shares/transactions with simulated
+test assets and liquidity, not real BTC/ETH/SOL acquisition or Jupiter swaps.
+The owner Phantom private key was never loaded by the technical script.
+
+Vault `6tKv2mjsLtWuxirSmfap35dZgxdf5CK1bovSkhuCnPn3`, round 2:
+
+| Verified action                        | Devnet signature                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Deposit 100 test USDC                  | `5FSz3ab4WWC1wGsPmKfhzKjPQSZnLv3XiBE12gdVGi7RoBNGNnqdukbh3jpEfGooBz9AtECacgiXWVDbV53wWhUT` |
+| BTC test buy                           | `rFKxnyzjE8CviU8NYWJ1rWDbDrB8xz1uGnh27CFUUvpFCEtzSLZGWEVFgrp7sJa8t858QTZCEVuVk75GQvc4F5f`  |
+| ETH test buy                           | `3F4zwGfhohhWBdSBhjzgN6s1eLYgkiWyVYgLCdN9dENRdPx35GqtKi9UNzRdYDtPLAq7LhGLhsZNV429sLaAz9mH` |
+| SOL test buy                           | `3SPPAYsJBjyiY122zzCirzeXgw54ksSx8Q2L76xoYb1LDJGqSpkYBFKzrh4S917YeZQgTRo8tHBgNUZMM9qNfXxP` |
+| Issue 100 C3 shares                    | `BMmo2wKcgA2Eph9XV6DCAPaoRPmkpaEJtPsrnPmBKhqEUNeiGMnST78692Hf5XDksjQM9ncjTaMk8PAsv3gcHLS`  |
+| Request full sale                      | `5EwsJU48e54trJCrEdAPL84F9VJA2JS4wkHFnmkWu9uEWSmPh8AAUrYrY3ykKabVajUy8UGcHkFTj7oVd61hjN8q` |
+| BTC test sale                          | `5yxmCiFkxvHF7p6DNeHpyKRyA4nWbGcF29KVmW9dMbRkHGX1jKT19VT14rXeUwrZMoAgGXw3exHFUSNs5bZafE8Q` |
+| ETH test sale                          | `4NmVQKGa7UxsX6vufKRr7u81TFjjZEEQ5r1icxqEcEzaGyBC62bZdxAvgQb3wQfimYZzgyUwuLkAr9cZJfEWeGL`  |
+| SOL test sale                          | `3ThMcuTrJYTW537iGo4XmY2wLeB4VR1bsvRZsYya7seEL5Upfj8o96KGdwAVDwYgXSXDjsD7iQCYrDWg1YTPr3S8` |
+| Burn 100 shares and claim 99 test USDC | `3urvoYBoMDjSaRJMkWPo7BPom1tMAtDCLc3DoL15qFHrZe7qeNr7jCqDNjj7a57F6yPU6kzbktyWD67bju5W73sd` |
+
+All listed economic effects were verified before promotion; a second claim
+was rejected. Previous round-1 receipts remained visible. Missing/expired
+service signatures were preserved, reconciled and explicitly renewed without
+repeating the deposit or successful legs. Restart after share issuance
+reconciled the original signature; it did not mint another set of shares.
+The public RPC did not record several accepted requests; the exact transport
+cause is unproven. The app retains uncertain states and requires explicit
+renewal rather than silently resending. The 30-second signed quote policy and
+minimum output safeguards remain enforced.
+
+The live informational reference at 21:46:05Z was 99.642540 USD for the
+100-unit illustration, using Coinbase Exchange BTC/USD, ETH/USD and SOL/USD
+40/30/30 returns from closed pre-deposit candles. At sale it froze at
+99.644243 USD. Actual redeemable proceeds were separately 99 test USDC.
+Neither reference value authorized a transaction or changed shares/proceeds.
+Missing or stale prices display unavailable, never an invented monetary NAV.
+
+### Android artifact and physical scope
+
+APK 0.1.27/code 28: `apps/c3-pilot/dist/devnet-evaluation-variable-v28/c-market-c3-devnet-evaluation-0.1.27.apk`.
+SHA-256 `ad2a2c278aa87d218a594d9b6ace5820030502144bb1f21b4ca89a61785c6ae5`.
+Certificate SHA-256 `58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+Installed with data-preserving update on Seeker; stable app unchanged. Cold
+launch, navigation, balances, historical results and Phantom connection/owner
+proof were observed. The new variable purchase/sale cycle from physical
+Phantom is still unverified; technical signing is not a substitute.
+Published at the existing website; downloaded APK hash independently matches.
+The physical wallet's second round was requested from the APK, but one setup
+ATA creation did not arrive on Devnet. Its original signature remains stored.
+The explicit setup recovery above is implemented and adversarially tested;
+physical continuation additionally needs telephone Internet restored. The APK
+reported `EVAL_AUTH_CHALLENGE_REQUEST_NETWORK_DNS_ERROR` when resolving its
+hosted authentication endpoint. No variable purchase was signed by Phantom in
+this execution. Reconnect, verify ownership and explicitly resume New purchase;
+do not treat the server test identity's 100-unit cycle as the user's purchase.
+
+Validation: Devnet Rust 13 tests/default Rust 12 tests passed; service/mobile
+TypeScript, targeted effect/custody/renewal/price/amount tests, changed-file lint,
+formatting, signed Android build and bundle boundary checks passed. Expo
+Doctor retains the existing 18/19 patch-version warning (57.0.26 versus
+57.0.27); dependencies were not upgraded. Shared Mainnet share-layout checks
+retain their default one-unit cap; only validated evaluation calls supply the
+bounded variable cap. Mainnet remains disabled; no real funds were used.

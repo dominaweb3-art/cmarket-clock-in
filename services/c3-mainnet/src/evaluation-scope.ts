@@ -20,22 +20,46 @@ export const EVALUATION = Object.freeze({
   // or Mainnet capability. Never selected through an environment value.
   lifecycleReady: true,
   amount: 1_000_000n,
+  maximumAmount: 200_000_000n,
+  maximumRounds: 10n,
   weights: Object.freeze([4000, 3000, 3000]),
 });
 
-export function evaluationPdas(wallet: string) {
+export function evaluationAmount(value: unknown): bigint {
+  if (typeof value !== "string" || !/^[1-9][0-9]{0,8}$/.test(value))
+    throw Error("EVAL_PURCHASE_AMOUNT");
+  const amount = BigInt(value);
+  if (amount < EVALUATION.amount || amount > EVALUATION.maximumAmount)
+    throw Error("EVAL_PURCHASE_AMOUNT");
+  return amount;
+}
+export function evaluationBudgets(amount: bigint): readonly bigint[] {
+  evaluationAmount(String(amount));
+  const btc = (amount * 4000n) / 10000n,
+    eth = (amount * 3000n) / 10000n;
+  return [btc, eth, amount - btc - eth];
+}
+export function evaluationSeed(name: string, wallet: string, version = 1n) {
+  if (version < 1n || version > EVALUATION.maximumRounds)
+    throw Error("EVAL_CONFIG_VERSION");
+  const hash = createHash("sha256")
+    .update(name)
+    .update(new PublicKey(wallet).toBytes());
+  if (version > 1n) {
+    const bytes = Buffer.alloc(8);
+    bytes.writeBigUInt64LE(version);
+    hash.update(bytes);
+  }
+  return hash.digest();
+}
+export function evaluationPdas(wallet: string, version = 1n) {
   const owner = new PublicKey(wallet);
   if (!PublicKey.isOnCurve(owner.toBytes()))
     throw Error("EVAL_WALLET_NOT_ON_CURVE");
   const program = new PublicKey(EVALUATION.program);
   const derive = (name: string) =>
     PublicKey.findProgramAddressSync(
-      [
-        createHash("sha256")
-          .update(Buffer.from(name))
-          .update(owner.toBytes())
-          .digest(),
-      ],
+      [evaluationSeed(name, wallet, version)],
       program,
     )[0];
   return Object.freeze({

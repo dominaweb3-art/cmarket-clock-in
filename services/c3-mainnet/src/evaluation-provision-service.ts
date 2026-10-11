@@ -12,7 +12,11 @@ import {
 import { evaluationRpc } from "./evaluation-rpc.ts";
 import type { Pool } from "pg";
 import { EvaluationAuth } from "./evaluation-auth.ts";
-import { EVALUATION, assertEvaluationDatabase } from "./evaluation-scope.ts";
+import {
+  EVALUATION,
+  evaluationAmount,
+  assertEvaluationDatabase,
+} from "./evaluation-scope.ts";
 import {
   EvaluationClient,
   EVAL_TOKEN,
@@ -42,6 +46,7 @@ import {
   type OpenAccount,
 } from "./open-state-semantics.ts";
 import { evaluationPosition } from "./evaluation-state.ts";
+import { EvaluationOwnerService } from "./evaluation-owner-service.ts";
 const digest = (v: Uint8Array | string) =>
   createHash("sha256").update(v).digest();
 const check = (v: unknown, code: string): void => {
@@ -64,6 +69,7 @@ const raw = (
       }
     : null;
 type Step = {
+  operationId?: string;
   name: string;
   scope: string;
   signer: string;
@@ -155,7 +161,8 @@ export class EvaluationProvisionService {
         : step.name.startsWith("faucet")
           ? "faucet"
           : "wallet";
-    const id = evaluationOperationId(step.scope, purpose, step.name);
+    const id =
+      step.operationId ?? evaluationOperationId(step.scope, purpose, step.name);
     const receipt = (
       await this.pool.query(
         "SELECT * FROM c3_eval.service_receipts WHERE operation_id=$1",
@@ -237,14 +244,117 @@ export class EvaluationProvisionService {
       state: result.state,
     };
   }
-  async advance(token: string) {
+  private async round(
+    token: string,
+    proof: { wallet: string; challengeId: string },
+    newPurchase: boolean,
+  ) {
+    const c = await this.pool.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL lock_timeout='3s'");
+      await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,7421))", [
+        proof.wallet,
+      ]);
+      const last = (
+        await c.query(
+          "SELECT round FROM c3_eval.evaluation_round_requests WHERE wallet=$1 ORDER BY round DESC LIMIT 1",
+          [proof.wallet],
+        )
+      ).rows[0];
+      const current = (
+        await c.query(
+          "SELECT * FROM c3_eval.current_wallet_vaults WHERE wallet=$1",
+          [proof.wallet],
+        )
+      ).rows[0];
+      let round = BigInt(String(last?.round ?? current?.round ?? "1"));
+      // Reconcile/resume a reservation, never allocate a second one concurrently.
+      if (last && (!current || round > BigInt(String(current.round)))) {
+        await c.query("COMMIT");
+        return round;
+      }
+      if (!newPurchase && current) {
+        await c.query("COMMIT");
+        return BigInt(String(current.round));
+      }
+      let predecessor: string | null = null,
+        evidence: Buffer | null = null;
+      if (current) {
+        const ctx = await new EvaluationOwnerService(
+          this.pool,
+          this.idl,
+        ).context(token);
+        if (ctx.position.lifecycle === 0 && round >= 2n) {
+          await c.query("COMMIT");
+          return round;
+        }
+        check(
+          ctx.position.lifecycle === 4 &&
+            ctx.position.shares === 0n &&
+            ctx.position.returned > 0n,
+          "FINISH_CURRENT_POSITION_FIRST",
+        );
+        check(
+          !(
+            await c.query(
+              `SELECT 1 FROM c3_eval.owner_requests r JOIN c3_eval.intents i USING(intent_id)
+          WHERE i.wallet=$1 AND NOT EXISTS(SELECT 1 FROM c3_eval.owner_effect_receipts e WHERE e.request_id=r.request_id)
+          AND NOT EXISTS(SELECT 1 FROM c3_eval.owner_request_outcomes o WHERE o.request_id=r.request_id) LIMIT 1`,
+              [proof.wallet],
+            )
+          ).rowCount,
+          "UNCERTAIN_OWNER_OPERATION",
+        );
+        check(
+          !(
+            await c.query(
+              "SELECT 1 FROM c3_eval.intents WHERE wallet=$1 AND state NOT IN ('redeemed','expired','cancelled') LIMIT 1",
+              [proof.wallet],
+            )
+          ).rowCount,
+          "FINISH_DURABLE_POSITION_FIRST",
+        );
+        predecessor = String(ctx.client.vault);
+        evidence = digest(
+          JSON.stringify({
+            vault: predecessor,
+            slot: ctx.slot,
+            lifecycle: ctx.position.lifecycle,
+            shares: String(ctx.position.shares),
+            returned: String(ctx.position.returned),
+          }),
+        );
+      }
+      round += 1n;
+      check(round <= EVALUATION.maximumRounds, "ROUND_LIMIT");
+      await c.query(
+        "INSERT INTO c3_eval.evaluation_round_requests(wallet,round,challenge_id,predecessor_vault,predecessor_evidence_hash) VALUES($1,$2,$3,$4,$5)",
+        [
+          proof.wallet,
+          round.toString(),
+          proof.challengeId,
+          predecessor,
+          evidence,
+        ],
+      );
+      await c.query("COMMIT");
+      return round;
+    } catch (error) {
+      await c.query("ROLLBACK");
+      throw error;
+    } finally {
+      c.release();
+    }
+  }
+  async advance(token: string, newPurchase = false) {
     const proof = await new EvaluationAuth(this.pool).authorize(token);
     await assertEvaluationDatabase(this.pool);
     check((await this.rpc.getGenesisHash()) === EVALUATION.genesis, "NETWORK");
     await this.program(
       EVALUATION.program,
-      "26ab2530ed0d986e6f938cae9253312727226dadee9774b01584dc567729261a",
-      959032,
+      "a582571274157d7486e69a8bc89fd36abdc40fb52bf7430f28115343d885a703",
+      928400,
     );
     await this.program(
       EVALUATION.router,
@@ -285,8 +395,10 @@ export class EvaluationProvisionService {
     } finally {
       reservation.release();
     }
+    const round = await this.round(token, proof, newPurchase);
+    const scope = round === 1n ? proof.wallet : proof.wallet + ":" + round;
     const mints = await evaluationAssetMints(),
-      share = await evaluationShareMint(proof.wallet);
+      share = await evaluationShareMint(proof.wallet, round);
     const mintAuthority = new PublicKey(EVALUATION_MINT_AUTHORITY),
       governance = new PublicKey(EVALUATION.governance),
       owner = new PublicKey(proof.wallet);
@@ -294,6 +406,12 @@ export class EvaluationProvisionService {
       [Buffer.from("liquidity")],
       new PublicKey(EVALUATION.router),
     )[0];
+    const currentAmount = (
+      await this.pool.query(
+        "SELECT deposit_amount FROM c3_eval.current_wallet_vaults WHERE wallet=$1 AND round=$2",
+        [proof.wallet, round.toString()],
+      )
+    ).rows[0]?.deposit_amount;
     const client = new EvaluationClient(this.idl, {
       wallet: proof.wallet,
       shareMint: share.toBase58(),
@@ -301,8 +419,17 @@ export class EvaluationProvisionService {
       btcMint: String(mints[1]),
       ethMint: String(mints[2]),
       solMint: String(mints[3]),
-      version: 1n,
+      version: round,
+      depositAmount: evaluationAmount(
+        String(currentAmount ?? EVALUATION.amount),
+      ),
     });
+    const unpauseOperation = await this.unpauseOperation(
+      client,
+      scope,
+      proof.challengeId,
+      newPurchase,
+    );
     const mintRent = await this.rpc.getMinimumBalanceForRentExemption(82),
       shareRent = await this.rpc.getMinimumBalanceForRentExemption(170);
     const steps: Step[] = [
@@ -396,6 +523,7 @@ export class EvaluationProvisionService {
         proof.wallet,
         client.authority,
         shareRent,
+        round,
       ),
       verify: async () => {
         verifyShareMintForAuthority(
@@ -487,7 +615,7 @@ export class EvaluationProvisionService {
       Buffer.concat([
         Buffer.from("c3-route-registry-v1"),
         client.vault.toBuffer(),
-        bytes(1n),
+        bytes(round),
         bytes(activation),
         bytes(expiry),
         Buffer.from([2]),
@@ -541,8 +669,8 @@ export class EvaluationProvisionService {
           r.enabled === true &&
             r.schema_version === 1 &&
             q.schema_version === 1 &&
-            String(r.config_version) === "1" &&
-            String(q.config_version) === "1" &&
+            String(r.config_version) === String(round) &&
+            String(q.config_version) === String(round) &&
             String(r.vault) === String(client.vault) &&
             String(q.vault) === String(client.vault) &&
             String(r.governance) === EVALUATION.governance &&
@@ -582,7 +710,7 @@ export class EvaluationProvisionService {
           Buffer.concat([
             Buffer.from("c3-route-registry-v1"),
             client.vault.toBuffer(),
-            bytes(1n),
+            bytes(round),
             bytes(registeredActivation),
             bytes(registeredExpiry),
             Buffer.from([2]),
@@ -598,6 +726,7 @@ export class EvaluationProvisionService {
     steps.push({
       scope: proof.wallet,
       name: "unpause",
+      operationId: unpauseOperation,
       signer: EVALUATION.governance,
       instructions: [
         client.instruction(
@@ -653,12 +782,22 @@ export class EvaluationProvisionService {
       },
     });
     for (const step of steps) {
+      if (step.scope === proof.wallet && !step.name.startsWith("faucet"))
+        step.scope = scope;
       if (step.name === "unpause" && !EVALUATION.lifecycleReady)
         return {
           ready: false,
           stage: "SETTLEMENT_RELEASE_VERIFICATION_REQUIRED",
           simulatedAssets: true,
         };
+      if (step.name.startsWith("vault-ata-") && step.scope === scope)
+        step.operationId = await this.unpauseOperation(
+          client,
+          scope,
+          proof.challengeId,
+          newPurchase,
+          step,
+        );
       const result = await this.run(step);
       // A new transaction may finalize during this request. Return rather than
       // unboundedly dispatching subsequent operations within a Function.
@@ -683,7 +822,7 @@ export class EvaluationProvisionService {
     const finalReceipt = (
       await this.pool.query(
         "SELECT s.signature FROM c3_eval.service_submissions s WHERE operation_id=$1",
-        [evaluationOperationId(proof.wallet, "wallet", "unpause")],
+        [unpauseOperation],
       )
     ).rows[0];
     await this.pool.query(
@@ -696,7 +835,9 @@ export class EvaluationProvisionService {
     );
     const inserted = (
       await this.pool.query(
-        `INSERT INTO c3_eval.wallet_vaults(wallet,vault,share_mint,challenge_id,provisioning_signature,provisioning_evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(wallet) DO NOTHING RETURNING wallet`,
+        round === 1n
+          ? `INSERT INTO c3_eval.wallet_vaults(wallet,vault,share_mint,challenge_id,provisioning_signature,provisioning_evidence_hash) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(wallet) DO NOTHING RETURNING wallet`
+          : `INSERT INTO c3_eval.evaluation_wallet_rounds(wallet,vault,share_mint,challenge_id,provisioning_signature,provisioning_evidence_hash,round) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(wallet,round) DO NOTHING RETURNING wallet`,
         [
           proof.wallet,
           String(client.vault),
@@ -704,6 +845,7 @@ export class EvaluationProvisionService {
           proof.challengeId,
           finalReceipt.signature,
           evidence,
+          ...(round === 1n ? [] : [round.toString()]),
         ],
       )
     ).rowCount;
@@ -712,9 +854,150 @@ export class EvaluationProvisionService {
       wallet: proof.wallet,
       vault: String(client.vault),
       shareMint: String(share),
+      round: round.toString(),
       newlyEnrolled: !!inserted,
       simulatedAssets: true,
     };
+  }
+  private async unpauseOperation(
+    client: EvaluationClient,
+    scope: string,
+    challenge: string,
+    explicitRecovery: boolean,
+    missingAta?: Step,
+  ) {
+    const name = missingAta?.name ?? "unpause";
+    const base = evaluationOperationId(scope, "wallet", name);
+    const latest = (
+      await this.pool.query(
+        "SELECT operation_id,generation FROM c3_eval.evaluation_provision_attempts WHERE base_operation=$1 ORDER BY generation DESC LIMIT 1",
+        [base],
+      )
+    ).rows[0];
+    const previousId = latest?.operation_id ?? base;
+    const previous = (
+      await this.pool.query(
+        "SELECT p.last_valid_height,s.signature,r.outcome FROM c3_eval.service_packets p LEFT JOIN c3_eval.service_submissions s USING(operation_id) LEFT JOIN c3_eval.service_receipts r USING(operation_id) WHERE p.operation_id=$1",
+        [previousId],
+      )
+    ).rows[0];
+    if (
+      !previous ||
+      previous.outcome === "effects_verified" ||
+      !explicitRecovery
+    )
+      return previousId;
+    check(!previous.outcome, "UNPAUSE_FINALIZED_FAILURE");
+    const height = await this.rpc.getBlockHeight("finalized");
+    if (height <= Number(previous.last_valid_height)) return previousId;
+    const status = previous.signature
+      ? (
+          await this.rpc.getSignatureStatuses([previous.signature], {
+            searchTransactionHistory: true,
+          })
+        ).value[0]
+      : null;
+    const transaction = previous.signature
+      ? await this.rpc.getTransaction(previous.signature, {
+          commitment: "finalized",
+          maxSupportedTransactionVersion: 0,
+        })
+      : null;
+    check(!status && !transaction, "UNPAUSE_ORIGINAL_RECONCILE_FIRST");
+    if (missingAta) {
+      const ix = missingAta.instructions[0];
+      check(
+        missingAta.name.startsWith("vault-ata-") &&
+          missingAta.scope === scope &&
+          missingAta.signer === EVALUATION.governance &&
+          missingAta.instructions.length === 1 &&
+          ix?.programId.toBase58() ===
+            "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" &&
+          ix.keys.length === 6 &&
+          ix.data.length === 1 &&
+          ix.data[0] === 1 &&
+          ix.keys[0]?.pubkey.toBase58() === EVALUATION.governance &&
+          ix.keys[2]?.pubkey.equals(client.authority) &&
+          ix.keys[3]?.pubkey.toBase58() ===
+            missingAta.name.slice("vault-ata-".length) &&
+          ix.keys[1]?.pubkey.equals(
+            evaluationAta(ix.keys[3]!.pubkey, client.authority),
+          ) &&
+          ix.keys[4]?.pubkey.equals(SystemProgram.programId) &&
+          ix.keys[5]?.pubkey.equals(EVAL_TOKEN),
+        "ATA_RECOVERY_SCOPE",
+      );
+      const target = ix!.keys[1]!.pubkey;
+      check(
+        !(await this.rpc.getAccountInfo(target, "finalized")),
+        "ATA_ORIGINAL_EFFECT_PRESENT",
+      );
+      // Only a pre-vault setup account may be rebuilt. A funded or initialized
+      // vault must use its monetary recovery flow, never this provision path.
+      check(
+        !(await this.rpc.getAccountInfo(client.vault, "finalized")),
+        "ATA_RECOVERY_VAULT_ALREADY_EXISTS",
+      );
+    } else {
+      const pos = await this.position(client);
+      check(
+        pos.paused &&
+          pos.lifecycle === 0 &&
+          pos.shares === 0n &&
+          pos.deposited === 0n,
+        "UNPAUSE_RECOVERY_EMPTY_VAULT",
+      );
+    }
+    const generation = Number(latest?.generation ?? 1) + 1;
+    check(generation <= 3, "UNPAUSE_RECOVERY_LIMIT");
+    const next = evaluationOperationId(
+      scope,
+      "wallet",
+      name + ":" + generation,
+    );
+    const evidence = digest(
+      JSON.stringify({
+        previousId,
+        signature: previous.signature ?? null,
+        height,
+        lastValid: Number(previous.last_valid_height),
+        vault: String(client.vault),
+        operation: name,
+        missingAta:
+          missingAta?.instructions[0]?.keys[1]?.pubkey.toBase58() ?? null,
+        paused: true,
+        lifecycle: 0,
+      }),
+    );
+    const c = await this.pool.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL lock_timeout='3s'");
+      await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,7430))", [
+        base,
+      ]);
+      const current = (
+        await c.query(
+          "SELECT operation_id FROM c3_eval.evaluation_provision_attempts WHERE base_operation=$1 ORDER BY generation DESC LIMIT 1",
+          [base],
+        )
+      ).rows[0];
+      check(
+        (current?.operation_id ?? base) === previousId,
+        "UNPAUSE_RECOVERY_CAS",
+      );
+      await c.query(
+        "INSERT INTO c3_eval.evaluation_provision_attempts(base_operation,generation,operation_id,predecessor,challenge_id,evidence_hash) VALUES($1,$2,$3,$4,$5,$6)",
+        [base, generation, next, previousId, challenge, evidence],
+      );
+      await c.query("COMMIT");
+      return next;
+    } catch (error) {
+      await c.query("ROLLBACK");
+      throw error;
+    } finally {
+      c.release();
+    }
   }
   private decode(name: string, a: OpenAccount) {
     return new BorshCoder(this.idl).accounts.decode(

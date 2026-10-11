@@ -1,4 +1,12 @@
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { purchaseCopy, purchaseUnits } from "./evaluation-purchase";
 import type { Language } from "./locales";
 import { evalText } from "./evaluation-locales";
 import { evaluationTargets } from "./evaluation-visual-copy";
@@ -19,6 +27,8 @@ type Props = {
   onAction: (action: IndicesAction) => void;
   onRecover: () => void;
   displayUnits: (value: unknown) => string;
+  purchaseAmount: string;
+  onPurchaseAmount: (value: string) => void;
   onCatalogLayout?: (y: number) => void;
 };
 export function EvaluationIndices({
@@ -31,6 +41,8 @@ export function EvaluationIndices({
   onAction,
   onRecover,
   displayUnits,
+  purchaseAmount,
+  onPurchaseAmount,
   onCatalogLayout,
 }: Props) {
   const t = (key: Parameters<typeof indicesText>[1]) =>
@@ -45,7 +57,17 @@ export function EvaluationIndices({
     position?.monetaryValue === false;
   const history = activityGroups(wallet, verified, position);
   const hasScopedHistory = ownsPosition && activityScope(wallet, position);
-  const canBuy = state.action === "deposit" && !busy;
+  let validAmount = false;
+  try {
+    const amount = purchaseUnits(purchaseAmount);
+    validAmount =
+      typeof position?.availableUsdc === "string" &&
+      /^\d+$/.test(position.availableUsdc) &&
+      amount <= BigInt(position.availableUsdc);
+  } catch {
+    /* No signing for invalid amounts. */
+  }
+  const canBuy = state.action === "deposit" && !busy && validAmount;
   const canSell = state.action === "request_redemption" && !busy;
   return (
     <View testID="evaluation-indices">
@@ -67,7 +89,30 @@ export function EvaluationIndices({
             {t(state.title)}
           </Text>
           {state.action === "deposit" ? (
-            <Text style={s.body}>{t("depositNote")}</Text>
+            <View>
+              <Text style={s.caption}>{purchaseCopy[language].amount}</Text>
+              <TextInput
+                accessibilityLabel={purchaseCopy[language].amount}
+                value={purchaseAmount}
+                onChangeText={onPurchaseAmount}
+                keyboardType="decimal-pad"
+                maxLength={10}
+                editable={!busy}
+                style={[
+                  s.body,
+                  {
+                    borderWidth: 1,
+                    borderColor: "#dce8e4",
+                    borderRadius: 12,
+                    padding: 12,
+                  },
+                ]}
+              />
+              <Text style={s.caption}>{purchaseCopy[language].range}</Text>
+              {!validAmount ? (
+                <Text style={s.caption}>{purchaseCopy[language].invalid}</Text>
+              ) : null}
+            </View>
           ) : null}
           {hasScopedHistory ? (
             <View style={s.history}>
@@ -133,12 +178,17 @@ export function EvaluationIndices({
               <Text style={s.primaryText}>{t("sell")}</Text>
             </Pressable>
           </View>
+          {state.title === "completed" && !busy ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onAction("new_purchase")}
+              style={s.primary}
+            >
+              <Text style={s.primaryText}>{purchaseCopy[language].next}</Text>
+            </Pressable>
+          ) : null}
           {!canBuy || !canSell ? (
-            <Text style={s.caption}>
-              {t(
-                state.title === "completed" ? "lifetime" : "tradeAvailability",
-              )}
-            </Text>
+            <Text style={s.caption}>{t("tradeAvailability")}</Text>
           ) : null}
           {state.action !== "deposit" &&
           state.action !== "request_redemption" ? (

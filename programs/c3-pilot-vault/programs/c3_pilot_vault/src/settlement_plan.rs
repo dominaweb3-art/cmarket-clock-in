@@ -9,6 +9,7 @@ pub fn initialize(
     intent: Pubkey,
     wallet: Pubkey,
     direction: u8,
+    amount: u64,
     inputs: [Pubkey; 3],
     outputs: [Pubkey; 3],
     sources: [Pubkey; 3],
@@ -72,7 +73,8 @@ pub fn initialize(
     plan.wallet = wallet;
     plan.share_mint = config.share_mint;
     plan.direction = direction;
-    plan.amount = ONE_USDC;
+    purchase_amount(amount, config.max_deposit)?;
+    plan.amount = amount;
     plan.weights = [BTC_BPS, ETH_BPS, SOL_BPS];
     plan.input_mints = inputs;
     plan.output_mints = outputs;
@@ -96,7 +98,7 @@ pub fn initialize(
     plan.idempotency = idempotency;
     plan.actual_inputs = [0; 3];
     plan.input_budgets = if direction == plan_direction::DEPOSIT {
-        [400_000, 300_000, 300_000]
+        deposit_budgets(amount)?
     } else {
         // Caller binds this immediately from the verified redemption intent.
         [0; 3]

@@ -8,6 +8,10 @@ import {
 } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
 import { EVALUATION_PROGRAM } from "./evaluation-protocol.ts";
 import {
+  validatePurchaseReview,
+  type EvaluationPurchaseReview,
+} from "./evaluation-purchase.ts";
+import {
   inspectOwnerTransaction,
   type OwnerInstructionReview,
 } from "./owner-transaction-review.ts";
@@ -66,7 +70,8 @@ const u64 = (v: bigint) => {
 };
 const hex = (b: Uint8Array) =>
   Array.from(b, (v) => v.toString(16).padStart(2, "0")).join("");
-export function evaluationOwnerAccounts(wallet: string) {
+export function evaluationOwnerAccounts(wallet: string, round = 1n) {
+  validatePurchaseReview({ amount: 1_000_000n, round });
   const owner = key(wallet),
     program = key(EVALUATION_PROGRAM),
     token = key("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
@@ -80,9 +85,22 @@ export function evaluationOwnerAccounts(wallet: string) {
   const mints = ["usdc", "btc", "eth", "sol"].map((n) =>
     sha256(join(mintAuthority, seed("test:" + n), token)),
   );
-  const share = sha256(join(governance, seed("shares:" + wallet), shareToken));
-  const vault = pda([sha256(join(text("c3-vault-v1"), owner))], program),
-    authority = pda([sha256(join(text("c3-authority-v1"), owner))], program);
+  const share = sha256(
+    join(
+      governance,
+      seed("shares:" + wallet + (round === 1n ? "" : ":" + round)),
+      shareToken,
+    ),
+  );
+  const roundBytes = round === 1n ? new Uint8Array() : u64(round);
+  const vault = pda(
+      [sha256(join(text("c3-vault-v1"), owner, roundBytes))],
+      program,
+    ),
+    authority = pda(
+      [sha256(join(text("c3-authority-v1"), owner, roundBytes))],
+      program,
+    );
   const intent = (s: string) => pda([text(s), vault, owner, u64(1n)], program);
   const associated = (mint: Uint8Array, o: Uint8Array, t = token) =>
     pda([o, t, mint], ata);
@@ -200,8 +218,10 @@ export function evaluationOwnerTemplates(
   action: EvaluationMoneyAction,
   chainTime: bigint,
   renewal?: RenewalReview,
+  context: EvaluationPurchaseReview = { amount: 1_000_000n, round: 1n },
 ): OwnerInstructionReview[] {
-  const accounts = evaluationOwnerAccounts(wallet);
+  validatePurchaseReview(context);
+  const accounts = evaluationOwnerAccounts(wallet, context.round);
   const methods: (keyof typeof definitions)[] =
     action === "deposit"
       ? ["create_deposit_intent", "deposit_usdc"]
@@ -217,7 +237,12 @@ export function evaluationOwnerTemplates(
                 ? ["create_deposit_settlement_plan"]
                 : [];
   if (!methods.length) throw Error("EVAL_OWNER_ACTION");
-  const args = join(u64(1n), u64(1_000_000n), u64(1n), u64(chainTime + 300n));
+  const args = join(
+    u64(1n),
+    u64(context.amount),
+    u64(context.round),
+    u64(chainTime + 300n),
+  );
   const intent =
     action === "request_redemption" || action === "claim"
       ? accounts.redemption
@@ -242,7 +267,9 @@ export function evaluationOwnerTemplates(
             accounts.program,
           )
         : undefined;
-  const budgets = [400000n, 300000n, 300000n];
+  const btc = (context.amount * 4000n) / 10000n,
+    eth = (context.amount * 3000n) / 10000n;
+  const budgets = [btc, eth, context.amount - btc - eth];
   const minimums = budgets.map((n) => n / 10n);
   const routeHashes = budgets.map((budget, i) =>
     sha256(
@@ -326,6 +353,7 @@ export function reviewEvaluationOwnerPacket(
   wallet: string,
   action: EvaluationMoneyAction,
   now = Date.now(),
+  context: EvaluationPurchaseReview = { amount: 1_000_000n, round: 1n },
 ) {
   const deadline = Date.parse(String(result.expiresAt)),
     time = String(result.chainTime);
@@ -358,11 +386,26 @@ export function reviewEvaluationOwnerPacket(
     renewal = { direction: r.direction as 1 | 2, revision: BigInt(r.revision) };
   }
   const packet = base64ToUint8Array(result.packet),
-    templates = evaluationOwnerTemplates(wallet, action, BigInt(time), renewal),
+    templates = evaluationOwnerTemplates(
+      wallet,
+      action,
+      BigInt(time),
+      renewal,
+      context,
+    ),
     review = inspectOwnerTransaction(packet, key(wallet), templates, false, 5);
   if (
     hex(sha256(review.message)) !== result.messageHash ||
-    !equal(key(String(result.vault)), evaluationOwnerAccounts(wallet).config)
+    !equal(
+      key(String(result.vault)),
+      evaluationOwnerAccounts(wallet, context.round).config,
+    ) ||
+    (result.round !== undefined && result.round !== context.round.toString()) ||
+    (result.shareBaseUnits !== undefined &&
+      result.shareBaseUnits !== context.amount.toString()) ||
+    (result.debitBaseUnits !== undefined &&
+      result.debitBaseUnits !==
+        (action === "deposit" ? context.amount.toString() : "0"))
   )
     throw Error("EVAL_OWNER_REVIEW_BINDING");
   return { packet, templates, review, expiresAt: deadline };

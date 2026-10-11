@@ -418,7 +418,7 @@ export class EvaluationSettlementService {
         String(p.vault) === String(client.vault) &&
         String(p.share_mint) === client.config.shareMint &&
         p.direction === context.direction &&
-        String(p.config_version) === "1" &&
+        String(p.config_version) === String(client.config.version) &&
         String(p.router_program) === EVALUATION.router,
       "PROMOTION_PLAN",
     );
@@ -578,6 +578,7 @@ export class EvaluationSettlementService {
     }
   }
   private async process(token: string, client: EvaluationClient, id: string) {
+    let submissionDiagnostic: string | undefined;
     const op = (
       await this.pool.query(
         "SELECT p.*,c.intent_id,c.db_revision,c.chain_revision,c.context,c.context_hash,s.signature FROM c3_eval.service_packets p JOIN c3_eval.service_contexts c USING(operation_id) LEFT JOIN c3_eval.service_submissions s USING(operation_id) WHERE operation_id=$1",
@@ -693,6 +694,8 @@ export class EvaluationSettlementService {
         provider,
       );
       op.signature = dispatched.signature;
+      submissionDiagnostic =
+        "diagnostic" in dispatched ? dispatched.diagnostic : undefined;
     }
     if (!receipt) {
       const result = await this.journal.reconcile(id, async (tx) =>
@@ -705,6 +708,7 @@ export class EvaluationSettlementService {
           stage: result.state,
           signature: op.signature,
           automaticallyResubmitted: false,
+          submissionDiagnostic,
         };
     }
     const r =
@@ -734,9 +738,10 @@ export class EvaluationSettlementService {
     check(EVALUATION.lifecycleReady, "RUNTIME_NOT_RELEASED");
     const ctx = await this.owner.context(token);
     const row = (
-      await this.pool.query("SELECT * FROM c3_eval.intents WHERE wallet=$1", [
-        ctx.proof.wallet,
-      ])
+      await this.pool.query(
+        "SELECT * FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)",
+        [ctx.proof.wallet],
+      )
     ).rows[0];
     check(
       row && ["funded", "redemption_requested"].includes(row.state),
@@ -851,9 +856,10 @@ export class EvaluationSettlementService {
     check(EVALUATION.lifecycleReady, "RUNTIME_NOT_RELEASED");
     const ctx = await this.owner.context(token);
     const row = (
-      await this.pool.query("SELECT * FROM c3_eval.intents WHERE wallet=$1", [
-        ctx.proof.wallet,
-      ])
+      await this.pool.query(
+        "SELECT * FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)",
+        [ctx.proof.wallet],
+      )
     ).rows[0];
     check(row, "INTENT");
     // Process original signatures/messages before building a new quote.
@@ -882,9 +888,10 @@ export class EvaluationSettlementService {
         ),
       ) as Record<string, unknown>;
       const acquired = ["btc", "eth", "wsol"].map(
-        (n) =>
-          BigInt(String(deposit[n + "_after"])) -
-          BigInt(String(deposit[n + "_before"])),
+        // *_after records credited swap outputs, not total ATA balances.
+        // *_before is a donation snapshot; subtracting it again destroys
+        // the owner's acquired-asset entitlement.
+        (n) => BigInt(String(deposit[n + "_after"])),
       );
       const build = evaluationCreatePlan(
         ctx.client,

@@ -39,9 +39,10 @@ export class EvaluationQuoteService {
   private async capture(token: string) {
     const ctx = await this.owner.context(token);
     const row = (
-      await this.pool.query("SELECT * FROM c3_eval.intents WHERE wallet=$1", [
-        ctx.proof.wallet,
-      ])
+      await this.pool.query(
+        "SELECT * FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)",
+        [ctx.proof.wallet],
+      )
     ).rows[0];
     check(
       row && ["buying", "selling"].includes(row.state),

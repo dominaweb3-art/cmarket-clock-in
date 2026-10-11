@@ -43,7 +43,7 @@ test("all four locales cover every new key; catalog stays informational", () => 
     ) as (keyof typeof indicesCopy.en)[])
       assert.ok(indicesText(language, key).trim().length, `${language}/${key}`);
     assert.match(indicesText(language, "testNote"), /test|prueba|测试|teste/);
-    assert.match(indicesText(language, "conditionsBody"), /1 TEST USDC/);
+    assert.match(indicesText(language, "conditionsBody"), /1–200 USDC Devnet/);
     assert.match(indicesText(language, "conditionsBody"), /Mainnet/);
     assert.match(indicesText(language, "compositionBody"), /40%.*30%.*30%/);
     assert.match(indicesText(language, "europe"), /region|región|地区|região/);
@@ -237,22 +237,15 @@ test("accordions and wallet opening are passive; bottom navigation is fixed; no 
   );
   // Structural checks are not a rendered-device accessibility or layout test.
 });
-test("previous reviewed auth, transaction, provisioning and recovery controllers are byte-equivalent after AST printing", () => {
+test("unchanged connection, reconciliation and recovery controllers remain byte-equivalent after AST printing", () => {
   // Canonical AST-printer SHA-256 digests captured from original commit 804c3d8.
   // No whitespace/formatting changes can masquerade as a behavioral change.
   const hashes: Record<string, string> = {
-    run: "ce0bdd4de70c4248296579112bdfb60d5077b2e23e1c707ba248ae0c44612e64",
     connect: "19933683344e64428c8a1605d3b6b8c66a8691b1360ae12a85fdeed2bfefd737",
-    authenticate:
-      "fef8da3967fad188c8f6885d807efda5138b819b8fabaa87a6c3ce6d47f6c773",
     refresh: "c78b3725ebd330352d5678d70cb848d19063c1f344a74739ab7b1612ea4566d9",
     health: "d9067e2d888360430b33fa605a0bba10ea54ab85e5e3d90159521d21d50467b6",
     updatePosition:
       "17a795837ad753dd8109a8565b33072ba9c242b1d4c4b4929fe144254e89b0ca",
-    prepareWalletAction:
-      "6b68ae9dcbf6abc91c6531f6d4a7b18d4d6d9ef6eba0fdfe360a8a2e1ff1ab74",
-    provision:
-      "7368f28808155a20b5fffd6b8fa41435750b74868712eebc60e09b728b8635e4",
     advance: "fe2a2dcdf8aee6ac742337e63f9ae38e8f14c323b0df946ef04f8041cceb2585",
     recover: "a19a5139f3bfba4bdb1de4bd63c5cf34fae9c152ad6a38a195f129a356d0537f",
     displayUnits:

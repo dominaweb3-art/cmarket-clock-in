@@ -8,12 +8,14 @@ import type { Pool } from "pg";
 import { EvaluationAuth, EVALUATION_ORIGIN } from "./evaluation-auth.ts";
 import {
   EvaluationClient,
+  EVAL_TOKEN,
   type EvaluationOwnerAction,
 } from "./evaluation-client.ts";
 import {
   EVALUATION,
   assertEvaluationDatabase,
   evaluationJournalPool,
+  evaluationAmount,
 } from "./evaluation-scope.ts";
 import {
   evaluationConfigFromRow,
@@ -21,7 +23,7 @@ import {
   evaluationAvailableClaim,
   assertEvaluationAction,
 } from "./evaluation-state.ts";
-import type { OpenAccount } from "./open-state-semantics.ts";
+import { verifyOpenToken, type OpenAccount } from "./open-state-semantics.ts";
 import { OpenOwnerJournal } from "./open-owner-journal-core.ts";
 import { verifyEvaluationOwnerEffects } from "./evaluation-owner-effects.ts";
 import { evaluationCanonical } from "./evaluation-canonical.ts";
@@ -72,8 +74,8 @@ export class EvaluationOwnerService {
     );
     const row = (
       await this.pool.query(
-        `SELECT a.*,v.share_mint,v.vault FROM c3_eval.asset_configuration a
-      JOIN c3_eval.wallet_vaults v ON v.wallet=$1 WHERE a.singleton=true`,
+        `SELECT a.*,v.share_mint,v.vault,v.round,v.deposit_amount FROM c3_eval.asset_configuration a
+      JOIN c3_eval.current_wallet_vaults v ON v.wallet=$1 WHERE a.singleton=true`,
         [proof.wallet],
       )
     ).rows[0];
@@ -116,13 +118,28 @@ export class EvaluationOwnerService {
       );
     }
     const position = evaluationPosition(client, accounts);
-    return { proof, client, position, accounts, slot: result.context.slot };
+    const ownerToken = accounts.get(names.owner_usdc!.toBase58());
+    check(ownerToken, "OWNER_USDC_ACCOUNT");
+    const availableUsdc = verifyOpenToken(
+      ownerToken!,
+      client.config.wallet,
+      client.config.usdcMint,
+      EVAL_TOKEN.toBase58(),
+    );
+    return {
+      proof,
+      client,
+      position,
+      availableUsdc,
+      accounts,
+      slot: result.context.slot,
+    };
   }
   async position(token: string) {
     const ctx = await this.context(token);
     const intent = (
       await this.pool.query(
-        "SELECT intent_id,state,db_revision,chain_revision FROM c3_eval.intents WHERE wallet=$1",
+        "SELECT intent_id,state,db_revision,chain_revision FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)",
         [ctx.proof.wallet],
       )
     ).rows[0];
@@ -145,8 +162,12 @@ export class EvaluationOwnerService {
       monetaryValue: false,
       wallet: ctx.proof.wallet,
       vault: ctx.client.vault.toBase58(),
+      round: ctx.client.config.version.toString(),
+      minimumPurchase: EVALUATION.amount.toString(),
+      maximumPurchase: EVALUATION.maximumAmount.toString(),
       shareMint: ctx.client.config.shareMint,
       shares: ctx.position.shares.toString(),
+      availableUsdc: ctx.availableUsdc.toString(),
       deposited: ctx.position.deposited.toString(),
       sharesIssued: ctx.position.sharesIssued.toString(),
       marketReference: await marketReference({
@@ -193,15 +214,48 @@ export class EvaluationOwnerService {
         ...r,
         explorer: `https://explorer.solana.com/tx/${r.signature}?cluster=devnet`,
       })),
+      // Historical finalized receipts, not a current position or invented NAV.
+      previousTrials: (
+        await this.pool.query(
+          `SELECT i.vault,i.deposit_amount::text AS amount,i.state,
+        COALESCE(jsonb_agg(jsonb_build_object('action',r.action,'signature',s.signature,'effects_verified',e.request_id IS NOT NULL,'created_at',s.created_at)) FILTER(WHERE s.signature IS NOT NULL),'[]'::jsonb) AS activity
+        FROM c3_eval.intents i LEFT JOIN c3_eval.owner_requests r USING(intent_id)
+        LEFT JOIN c3_eval.owner_submissions s USING(request_id)
+        LEFT JOIN c3_eval.owner_effect_receipts e USING(request_id)
+        WHERE i.wallet=$1 AND i.vault<>$2 GROUP BY i.intent_id ORDER BY i.created_at DESC LIMIT 10`,
+          [ctx.proof.wallet, ctx.client.vault.toBase58()],
+        )
+      ).rows,
     };
   }
-  async prepare(token: string, action: EvaluationOwnerAction) {
+  async prepare(
+    token: string,
+    action: EvaluationOwnerAction,
+    requestedAmount?: unknown,
+  ) {
     check(
       EVALUATION.lifecycleReady,
       "SETTLEMENT_AND_RECONCILIATION_NOT_CONNECTED",
     );
     check(actions.includes(action), "ACTION");
     const ctx = await this.context(token);
+    const amount =
+      action === "deposit" && requestedAmount !== undefined
+        ? evaluationAmount(requestedAmount)
+        : ctx.client.amount;
+    if (action !== "deposit" && requestedAmount !== undefined)
+      throw Error("EVAL_OWNER_AMOUNT_ACTION");
+    const client = new EvaluationClient(this.idl, {
+      ...ctx.client.config,
+      depositAmount: amount,
+    });
+    if (action === "deposit") {
+      check(amount <= ctx.availableUsdc, "INSUFFICIENT_TEST_USDC");
+      check(
+        amount <= ctx.position.bytes.readBigUInt64LE(448),
+        "VAULT_DEPOSIT_LIMIT",
+      );
+    }
     assertEvaluationAction(action, ctx.position);
     if (action === "recover_deposit_plan") {
       const plan = ctx.client.pda("c3-plan-v1", ctx.client.intent("deposit"));
@@ -214,7 +268,7 @@ export class EvaluationOwnerService {
       check(
         !(
           await this.pool.query(
-            "SELECT 1 FROM c3_eval.service_contexts c WHERE c.intent_id=(SELECT intent_id FROM c3_eval.intents WHERE wallet=$1) AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations e WHERE e.operation_id=c.operation_id) LIMIT 1",
+            "SELECT 1 FROM c3_eval.service_contexts c WHERE c.intent_id=(SELECT intent_id FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)) AND NOT EXISTS(SELECT 1 FROM c3_eval.initial_plan_expirations e WHERE e.operation_id=c.operation_id) LIMIT 1",
             [ctx.proof.wallet],
           )
         ).rowCount,
@@ -223,8 +277,15 @@ export class EvaluationOwnerService {
     }
     const configurationHash = hash(
       JSON.stringify({
-        ...ctx.client.config,
-        version: "1",
+        ...Object.fromEntries(
+          Object.entries(client.config).filter(
+            ([key]) => key !== "depositAmount",
+          ),
+        ),
+        ...(client.config.version > 1n
+          ? { depositAmount: amount.toString() }
+          : {}),
+        version: client.config.version.toString(),
         program: EVALUATION.program,
         genesis: EVALUATION.genesis,
         router: EVALUATION.router,
@@ -242,7 +303,7 @@ export class EvaluationOwnerService {
       action === "renew_plan"
         ? (
             await this.pool.query(
-              "SELECT * FROM c3_eval.intents WHERE wallet=$1",
+              "SELECT * FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1)",
               [ctx.proof.wallet],
             )
           ).rows[0]
@@ -274,7 +335,7 @@ export class EvaluationOwnerService {
       ]);
       let intent = (
         await c.query(
-          "SELECT *,clock_timestamp() AS now FROM c3_eval.intents WHERE wallet=$1 FOR UPDATE",
+          "SELECT *,clock_timestamp() AS now FROM c3_eval.intents WHERE wallet=$1 AND vault=(SELECT vault FROM c3_eval.current_wallet_vaults WHERE wallet=$1) FOR UPDATE",
           [ctx.proof.wallet],
         )
       ).rows[0];
@@ -285,7 +346,7 @@ export class EvaluationOwnerService {
         intent = (
           await c.query(
             `INSERT INTO c3_eval.intents(intent_id,wallet,vault,share_mint,deposit_plan,configuration_hash,deposit_amount,expires_at)
-          VALUES($1,$2,$3,$4,$5,$6,1000000,clock_timestamp()+interval '1 hour') RETURNING *,clock_timestamp() AS now`,
+          VALUES($1,$2,$3,$4,$5,$6,$7,clock_timestamp()+interval '1 hour') RETURNING *,clock_timestamp() AS now`,
             [
               intentId,
               ctx.proof.wallet,
@@ -293,6 +354,7 @@ export class EvaluationOwnerService {
               ctx.client.config.shareMint,
               plan.toBase58(),
               configurationHash,
+              amount.toString(),
             ],
           )
         ).rows[0];
@@ -314,6 +376,21 @@ export class EvaluationOwnerService {
         ]);
       }
       intentId = intent.intent_id;
+      check(
+        BigInt(String(intent.deposit_amount)) === amount,
+        "IMMUTABLE_AMOUNT",
+      );
+      // A proof used for an earlier vault cannot silently authorize a new intent.
+      const linked = (
+        await c.query(
+          "SELECT intent_id FROM c3_eval.owner_challenges WHERE challenge_id=$1",
+          [ctx.proof.challengeId],
+        )
+      ).rows[0];
+      check(
+        !linked || linked.intent_id === intentId,
+        "FRESH_WALLET_PROOF_REQUIRED",
+      );
       if (renewal) {
         check(
           String(intent.db_revision) === String(beforeIntent.db_revision) &&
@@ -378,7 +455,7 @@ export class EvaluationOwnerService {
         );
         request = prior;
       } else {
-        const compiled = ctx.client.compileOwner(
+        const compiled = client.compileOwner(
             action,
             BigInt(clock!),
             latest.blockhash,
@@ -446,7 +523,7 @@ export class EvaluationOwnerService {
     } finally {
       c.release();
     }
-    const compiled = ctx.client.compileOwner(
+    const compiled = client.compileOwner(
       action,
       BigInt(String(request.chain_time)),
       String(request.blockhash),
@@ -468,8 +545,9 @@ export class EvaluationOwnerService {
       packet: compiled.packet.toString("base64"),
       chainTime: String(request.chain_time),
       expiresAt: request.expires_at,
-      debitBaseUnits: action === "deposit" ? "1000000" : "0",
-      shareBaseUnits: "1000000",
+      debitBaseUnits: action === "deposit" ? amount.toString() : "0",
+      shareBaseUnits: amount.toString(),
+      round: client.config.version.toString(),
       vault: ctx.client.vault.toBase58(),
       ...(renewal
         ? {
@@ -822,10 +900,10 @@ export class EvaluationOwnerService {
     check(
       action === "deposit" || action === "recover_deposit_plan"
         ? ctx.position.shares === 0n &&
-            ctx.position.inventory[0]! >= EVALUATION.amount
+            ctx.position.inventory[0]! >= ctx.client.amount
         : action === "claim"
           ? ctx.position.shares === 0n && ctx.position.returned === effect.claim
-          : ctx.position.shares === EVALUATION.amount,
+          : ctx.position.shares === ctx.client.amount,
       "POST_SHARES_OR_RESERVES",
     );
     if (action === "recover_deposit_plan") {

@@ -43,13 +43,13 @@ export async function evaluationAssetMints() {
     ),
   );
 }
-export async function evaluationShareMint(wallet: string) {
+export async function evaluationShareMint(wallet: string, round = 1n) {
   const owner = new PublicKey(wallet);
   if (!PublicKey.isOnCurve(owner.toBytes()))
     throw Error("EVAL_PROVISION_OWNER");
   return PublicKey.createWithSeed(
     new PublicKey(EVALUATION.governance),
-    seed("shares:" + wallet),
+    seed("shares:" + wallet + (round === 1n ? "" : ":" + round)),
     EVAL_SHARES,
   );
 }
@@ -59,6 +59,7 @@ export function evaluationCreateMint(
   wallet: string | undefined,
   mintAuthority: PublicKey,
   rent: number,
+  round = 1n,
 ) {
   const shares = kind === "shares";
   if (shares !== !!wallet || !Number.isSafeInteger(rent) || rent <= 0)
@@ -67,7 +68,11 @@ export function evaluationCreateMint(
     shares ? EVALUATION.governance : EVALUATION_MINT_AUTHORITY,
   );
   const program = shares ? EVAL_SHARES : EVAL_TOKEN;
-  const name = seed(shares ? "shares:" + wallet : "test:" + kind);
+  const name = seed(
+    shares
+      ? "shares:" + wallet + (round === 1n ? "" : ":" + round)
+      : "test:" + kind,
+  );
   const expected = digest(
     Buffer.concat([payer.toBuffer(), Buffer.from(name), program.toBuffer()]),
   );
@@ -162,9 +167,9 @@ export function evaluationInitializeWallet(client: EvaluationClient) {
     "initialize_vault",
     {
       keeper: new PublicKey(EVALUATION.keeper),
-      config_version: new BN(1),
+      config_version: new BN(client.config.version.toString()),
       weights: [4000, 3000, 3000],
-      max_tvl: new BN(1_000_000),
+      max_tvl: new BN(client.config.version === 1n ? 1_000_000 : 200_000_000),
     },
     {
       ...client.accounts(client.intent("deposit")),

@@ -10,9 +10,13 @@ import {
   reviewEvaluationOwnerPacket,
   verifyEvaluationWalletPacket,
 } from "../apps/c3-pilot/src/evaluation-owner-review.ts";
+import { purchaseUnits } from "../apps/c3-pilot/src/evaluation-purchase.ts";
 if (process.argv[2] !== "--authorized-devnet-evaluation")
   throw Error("EXPLICIT_DEVNET_EVALUATION_REQUIRED");
 const root = new URL("../", import.meta.url);
+const purchaseAmount = purchaseUnits(
+  process.argv.find((v) => v.startsWith("--amount="))?.slice(9) ?? "1",
+);
 const bytes = Buffer.from(
   JSON.parse(
     readFileSync(
@@ -91,8 +95,22 @@ async function ownerAction(action) {
     "ORIGINAL_OWNER_REQUEST_REQUIRES_RECONCILIATION",
   );
   assert.ok(position.allowedActions.includes(action));
-  const packet = await call({ operation: "prepare", action });
-  const prepared = reviewEvaluationOwnerPacket(packet, wallet, action);
+  const packet = await call({
+    operation: "prepare",
+    action,
+    ...(action === "deposit" ? { amount: String(purchaseAmount) } : {}),
+  });
+  const prepared = reviewEvaluationOwnerPacket(
+    packet,
+    wallet,
+    action,
+    Date.now(),
+    {
+      amount:
+        action === "deposit" ? purchaseAmount : BigInt(position.deposited),
+      round: BigInt(position.round),
+    },
+  );
   const signed = prepared.packet.slice();
   assert.equal(signed[0], 1);
   signed.set(sign(null, prepared.review.message, key), 1);
@@ -129,6 +147,7 @@ async function ownerAction(action) {
   throw Error("ORIGINAL_SIGNATURE_UNCERTAIN_NO_RESEND");
 }
 async function settlement(expected) {
+  let uncertainReads = 0;
   for (let i = 0; i < 55; i++) {
     const p = await call({ operation: "position" });
     if (p.allowedActions.includes(expected)) return;
@@ -139,14 +158,19 @@ async function settlement(expected) {
         stage: value.stage,
         state: value.state,
         signature: value.signature,
+        diagnostic: value.submissionDiagnostic,
       }),
     );
     if (value.stage === "failed") throw Error("FINALIZED_SERVICE_FAILURE");
+    if (value.stage === "uncertain") {
+      if (++uncertainReads >= 6)
+        throw Error("ORIGINAL_SERVICE_SIGNATURE_UNCERTAIN_NO_RESEND");
+    } else uncertainReads = 0;
     if (!value.stage?.endsWith("effects_verified")) await wait();
   }
   throw Error("BOUNDED_SETTLEMENT_INCOMPLETE");
 }
-try {
+async function authenticate() {
   const q = await call({ operation: "challenge", wallet });
   token = (
     await call({
@@ -156,6 +180,11 @@ try {
       signature: sign(null, Buffer.from(q.message), key).toString("base64"),
     })
   ).sessionToken;
+}
+try {
+  await authenticate();
+  if (process.argv.includes("--new-purchase"))
+    await call({ operation: "new_purchase" });
   let provisioned = false;
   for (let i = 0; i < 15; i++) {
     const p = await call({ operation: "provision" });
@@ -173,6 +202,34 @@ try {
     await wait();
   }
   assert.ok(provisioned, "PROVISIONING_INCOMPLETE");
+  // A fresh proof binds only this new intent, never a historical purchase.
+  await authenticate();
+  // Read-only restart recovery: preserve and reconcile the original signature.
+  // This cannot call prepare, sign or submit a replacement owner packet.
+  for (const original of (await call({ operation: "position" }))
+    .pendingRequests) {
+    if (!original.signature) continue;
+    let verified = false;
+    for (let i = 0; i < 6; i++) {
+      const recovered = await call({
+        operation: "reconcile",
+        requestId: original.request_id,
+      });
+      if (
+        ["effects_verified", "already_reconciled"].includes(recovered.status)
+      ) {
+        verified = true;
+        report.operations.push({
+          action: "restart_reconcile_original",
+          signature: original.signature,
+          status: recovered.status,
+        });
+        break;
+      }
+      await wait();
+    }
+    assert.ok(verified, "ORIGINAL_OWNER_SIGNATURE_UNCERTAIN_NO_RESEND");
+  }
   if (process.argv.includes("--close-expired-original-plan")) {
     const recovered = await call({ operation: "recover_initial_plan" });
     assert.equal(recovered.status, "closed_unexecuted");
@@ -216,10 +273,15 @@ try {
   }
   if (state === "active") {
     const position = await call({ operation: "position" });
-    assert.equal(position.shares, "1000000");
+    assert.equal(position.shares, position.deposited);
+    assert.equal(position.deposited, String(purchaseAmount));
     report.activePosition = {
+      round: position.round,
+      vault: position.vault,
+      deposited: position.deposited,
       shares: position.shares,
       inventory: position.inventory,
+      marketReference: position.marketReference,
     };
     await ownerAction("request_redemption");
     state = "redemption_requested";

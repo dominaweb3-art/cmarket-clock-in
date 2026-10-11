@@ -807,7 +807,10 @@ pub fn execute<'info>(
         data: instruction_data,
     };
     let bump = [ctx.accounts.config.authority_bump];
-    let owner_scope = crate::constants::authority_seed(ctx.accounts.config.allowlisted_owner);
+    let owner_scope = crate::constants::authority_round_seed(
+        ctx.accounts.config.allowlisted_owner,
+        ctx.accounts.config.config_version,
+    );
     let seeds: &[&[u8]] = &[owner_scope.as_ref(), &bump];
     let mut infos = router_accounts.to_vec();
     infos.push(ctx.accounts.router_program.to_account_info());

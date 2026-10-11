@@ -7,7 +7,7 @@ import {
   evaluationAta,
   EVAL_TOKEN,
 } from "./evaluation-client.ts";
-import { EVALUATION } from "./evaluation-scope.ts";
+import { EVALUATION, evaluationBudgets } from "./evaluation-scope.ts";
 import {
   encodeQuoteSealV1,
   quoteContextHash,
@@ -89,10 +89,7 @@ export function evaluationTestRoute(
   const destination = direction === 1 ? vaultAssets[leg]! : names.vault_usdc!;
   const input = context.inputBudget;
   check(input > 0n);
-  if (direction === 1)
-    check(
-      input === (EVALUATION.amount * BigInt(EVALUATION.weights[leg]!)) / 10000n,
-    );
+  if (direction === 1) check(input === evaluationBudgets(client.amount)[leg]);
   // Sale uses ONLY the plan's acquired-asset budget, never total ATA balance.
   const output = direction === 1 ? input / 10n : (input * 99n) / 10n;
   check(output > 0n && output <= (1n << 64n) - 1n);
@@ -152,7 +149,7 @@ export function evaluationTestRoute(
     contextHash: quoteContextHash({
       genesisHash: new PublicKey(EVALUATION.genesis).toBytes(),
       vault: client.vault.toBase58(),
-      configVersion: 1n,
+      configVersion: client.config.version,
       registry: registry.toBase58(),
       registryRevision: context.registryRevision,
       registryHash: context.registryHash,

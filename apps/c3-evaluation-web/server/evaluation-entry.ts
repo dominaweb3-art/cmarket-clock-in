@@ -100,6 +100,7 @@ export default async function handler(req: Request, res: Response) {
     const service = new EvaluationOwnerService(pool, idl);
     if (
       body.operation === "provision" ||
+      body.operation === "new_purchase" ||
       body.operation === "advance" ||
       body.operation === "recover_initial_plan"
     ) {
@@ -109,12 +110,12 @@ export default async function handler(req: Request, res: Response) {
       return res
         .status(200)
         .json(
-          body.operation === "provision"
+          body.operation === "provision" || body.operation === "new_purchase"
             ? await new EvaluationProvisionService(
                 pool,
                 idl,
                 identities,
-              ).advance(token)
+              ).advance(token, body.operation === "new_purchase")
             : body.operation === "recover_initial_plan"
               ? await new EvaluationSettlementService(
                   pool,
@@ -133,7 +134,12 @@ export default async function handler(req: Request, res: Response) {
       return res.status(200).json(await service.position(token));
     }
     if (body.operation === "prepare") {
-      exactKeys(body, ["operation", "action"]);
+      exactKeys(
+        body,
+        body.amount === undefined
+          ? ["operation", "action"]
+          : ["operation", "action", "amount"],
+      );
       check(
         [
           "deposit",
@@ -148,7 +154,11 @@ export default async function handler(req: Request, res: Response) {
       return res
         .status(200)
         .json(
-          await service.prepare(token, body.action as EvaluationOwnerAction),
+          await service.prepare(
+            token,
+            body.action as EvaluationOwnerAction,
+            body.amount,
+          ),
         );
     }
     if (body.operation === "submit") {

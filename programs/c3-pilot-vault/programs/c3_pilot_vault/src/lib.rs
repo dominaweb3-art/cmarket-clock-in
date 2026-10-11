@@ -67,6 +67,12 @@ pub mod c3_pilot_vault {
                 && ctx.accounts.owner.key() != Pubkey::default(),
             VaultError::InvalidConfig
         );
+        #[cfg(feature = "devnet-evaluation")]
+        require!(
+            (1..=10).contains(&config_version),
+            VaultError::InvalidConfig
+        );
+        #[cfg(not(feature = "devnet-evaluation"))]
         require_eq!(config_version, CONFIG_VERSION, VaultError::InvalidConfig);
         require!(
             weights == [BTC_BPS, ETH_BPS, SOL_BPS],
@@ -77,7 +83,7 @@ pub mod c3_pilot_vault {
             TOTAL_BPS as u32,
             VaultError::InvalidConfig
         );
-        require_eq!(max_tvl, ONE_USDC, VaultError::InvalidConfig);
+        purchase_amount(max_tvl, 200 * ONE_USDC)?;
         let a = ctx.accounts.vault_authority.key();
         let mints = [
             ctx.accounts.usdc_mint.key(),
@@ -102,7 +108,7 @@ pub mod c3_pilot_vault {
         // accounts only for the six validated legs, never the whole balance.
         let c = &mut ctx.accounts.config;
         c.schema_version = SCHEMA_VERSION;
-        c.config_version = CONFIG_VERSION;
+        c.config_version = config_version;
         c.governance = ctx.accounts.governance.key();
         c.emergency = ctx.accounts.emergency.key();
         c.keeper = keeper;
@@ -120,8 +126,8 @@ pub mod c3_pilot_vault {
         c.btc_bps = BTC_BPS;
         c.eth_bps = ETH_BPS;
         c.sol_bps = SOL_BPS;
-        c.max_tvl = ONE_USDC;
-        c.max_deposit = ONE_USDC;
+        c.max_tvl = max_tvl;
+        c.max_deposit = max_tvl;
         c.deposit_counter = 0;
         c.redemption_counter = 0;
         c.total_shares_issued = 0;
@@ -353,7 +359,12 @@ pub mod c3_pilot_vault {
             VaultError::InvalidState
         );
         c.keeper = next;
-        c.config_version = add(c.config_version, 1)?;
+        // Evaluation config_version is the immutable per-wallet vault round.
+        // Mainnet preserves its existing governance revision semantics.
+        #[cfg(not(feature = "devnet-evaluation"))]
+        {
+            c.config_version = add(c.config_version, 1)?;
+        }
         emit_state(c.key(), Pubkey::default(), next, kind::KEEPER_CHANGED, 0)
     }
 
@@ -409,7 +420,7 @@ pub mod c3_pilot_vault {
             VaultError::Unauthorized
         );
         require_eq!(c.config_version, config_version, VaultError::InvalidConfig);
-        require_eq!(amount, ONE_USDC, VaultError::InvalidAmount);
+        purchase_amount(amount, c.max_deposit)?;
         require_eq!(c.deposit_counter, 0, VaultError::PilotLimit);
         require_eq!(c.lifecycle, 0, VaultError::PilotLimit);
         expiry(expires_at)?;
@@ -456,14 +467,14 @@ pub mod c3_pilot_vault {
         );
         at(d.status, deposit_status::DRAFT)?;
         live(d.expires_at)?;
-        require_eq!(d.amount, ONE_USDC, VaultError::InvalidAmount);
+        purchase_amount(d.amount, c.max_deposit)?;
         ata(
             ctx.accounts.owner_usdc.key(),
             d.wallet,
             c.usdc_mint,
             anchor_spl::token::ID,
         )?;
-        // Record unsolicited balances, but the intent purchases exactly ONE_USDC.
+        // Donations are excluded; only the explicitly authorized deposit belongs to this position.
         d.usdc_before = ctx.accounts.vault_usdc.amount;
         d.btc_before = ctx.accounts.vault_btc.amount;
         d.eth_before = ctx.accounts.vault_eth.amount;
@@ -478,13 +489,13 @@ pub mod c3_pilot_vault {
                     authority: ctx.accounts.owner.to_account_info(),
                 },
             ),
-            ONE_USDC,
+            d.amount,
             6,
         )?;
-        d.deposited = ONE_USDC;
+        d.deposited = d.amount;
         d.status = deposit_status::USDC_DEPOSITED;
         d.status = deposit_status::SETTLEMENT_PENDING;
-        emit_state(c.key(), d.key(), d.wallet, kind::USDC_DEPOSITED, ONE_USDC)
+        emit_state(c.key(), d.key(), d.wallet, kind::USDC_DEPOSITED, d.amount)
     }
 
     pub fn record_deposit_settlement(
@@ -520,7 +531,7 @@ pub mod c3_pilot_vault {
         );
         require!(p.revision >= 3, VaultError::InvalidState);
         require!(
-            p.actual_inputs == [400_000, 300_000, 300_000],
+            p.actual_inputs == deposit_budgets(d.deposited)?,
             VaultError::Settlement
         );
         require!(
@@ -539,22 +550,22 @@ pub mod c3_pilot_vault {
         }
         require_eq!(
             d.btc_input_usdc,
-            portion(ONE_USDC, BTC_BPS)?,
+            deposit_budgets(d.deposited)?[0],
             VaultError::Settlement
         );
         require_eq!(
             d.eth_input_usdc,
-            portion(ONE_USDC, ETH_BPS)?,
+            deposit_budgets(d.deposited)?[1],
             VaultError::Settlement
         );
         require_eq!(
             d.wsol_input_usdc,
-            portion(ONE_USDC, SOL_BPS)?,
+            deposit_budgets(d.deposited)?[2],
             VaultError::Settlement
         );
         require_eq!(
             add(add(d.btc_input_usdc, d.eth_input_usdc)?, d.wsol_input_usdc)?,
-            ONE_USDC,
+            d.deposited,
             VaultError::Settlement
         );
         backed(ctx.accounts.vault_usdc.amount, d.usdc_before)?;
@@ -573,7 +584,13 @@ pub mod c3_pilot_vault {
         // Only independently measured CPI credits belong to this position.
         [d.btc_after, d.eth_after, d.wsol_after] = p.actual_outputs;
         d.status = deposit_status::SETTLEMENT_RECORDED;
-        emit_state(c.key(), d.key(), d.wallet, kind::DEPOSIT_SETTLED, ONE_USDC)
+        emit_state(
+            c.key(),
+            d.key(),
+            d.wallet,
+            kind::DEPOSIT_SETTLED,
+            d.deposited,
+        )
     }
 
     pub fn create_deposit_settlement_plan(
@@ -599,7 +616,7 @@ pub mod c3_pilot_vault {
         if ctx.accounts.keeper.key() != d.wallet {
             live(d.expires_at)?;
         }
-        require_eq!(d.deposited, ONE_USDC, VaultError::InvalidAmount);
+        purchase_amount(d.deposited, c.max_deposit)?;
         require_eq!(
             d.config_version,
             c.config_version,
@@ -612,6 +629,7 @@ pub mod c3_pilot_vault {
             d.key(),
             d.wallet,
             plan_direction::DEPOSIT,
+            d.deposited,
             [c.usdc_mint; 3],
             [c.btc_mint, c.eth_mint, c.wsol_mint],
             [c.vault_usdc; 3],
@@ -643,7 +661,11 @@ pub mod c3_pilot_vault {
             VaultError::Unauthorized
         );
         at(r.status, redemption_status::LIQUIDATION_PENDING)?;
-        require_eq!(r.share_amount, SHARE_UNITS, VaultError::InvalidAmount);
+        require_eq!(
+            r.share_amount,
+            c.total_shares_issued,
+            VaultError::InvalidAmount
+        );
         require_eq!(
             r.config_version,
             c.config_version,
@@ -656,6 +678,7 @@ pub mod c3_pilot_vault {
             r.key(),
             r.wallet,
             plan_direction::REDEMPTION,
+            r.share_amount,
             [c.btc_mint, c.eth_mint, c.wsol_mint],
             [c.usdc_mint; 3],
             [c.vault_btc, c.vault_eth, c.vault_wsol],
@@ -719,7 +742,7 @@ pub mod c3_pilot_vault {
         )?;
         share_mint(&ctx.accounts.share_mint, ctx.accounts.vault_authority.key())?;
         let bump = [c.authority_bump];
-        let owner_scope = authority_seed(c.allowlisted_owner);
+        let owner_scope = authority_round_seed(c.allowlisted_owner, c.config_version);
         let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         token_2022::mint_to(
             CpiContext::new_with_signer(
@@ -731,14 +754,20 @@ pub mod c3_pilot_vault {
                 },
                 &[signer],
             ),
-            SHARE_UNITS,
+            d.deposited,
         )?;
-        d.shares_issued = SHARE_UNITS;
+        d.shares_issued = d.deposited;
         d.status = deposit_status::SHARES_ISSUED;
-        c.total_shares_issued = SHARE_UNITS;
+        c.total_shares_issued = d.deposited;
         c.lifecycle = 2;
         d.status = deposit_status::ACTIVE;
-        emit_state(c.key(), d.key(), d.wallet, kind::SHARES_ISSUED, SHARE_UNITS)
+        emit_state(
+            c.key(),
+            d.key(),
+            d.wallet,
+            kind::SHARES_ISSUED,
+            d.shares_issued,
+        )
     }
 
     pub fn create_redemption_intent(
@@ -759,7 +788,10 @@ pub mod c3_pilot_vault {
         require_eq!(c.config_version, config_version, VaultError::InvalidConfig);
         require_eq!(c.lifecycle, 2, VaultError::InvalidState);
         require_eq!(c.redemption_counter, 0, VaultError::PilotLimit);
-        require_eq!(shares, SHARE_UNITS, VaultError::InvalidAmount);
+        require!(
+            shares > 0 && shares == c.total_shares_issued,
+            VaultError::InvalidAmount
+        );
         require_eq!(
             ctx.accounts.owner_shares.amount,
             shares,
@@ -834,15 +866,19 @@ pub mod c3_pilot_vault {
         );
         at(r.status, redemption_status::REQUESTED)?;
         live(r.expires_at)?;
-        require_eq!(r.share_amount, SHARE_UNITS, VaultError::InvalidAmount);
+        require_eq!(
+            r.share_amount,
+            c.total_shares_issued,
+            VaultError::InvalidAmount
+        );
         require_eq!(
             ctx.accounts.owner_shares.amount,
-            SHARE_UNITS,
+            r.share_amount,
             VaultError::InvalidAmount
         );
         require_eq!(
             ctx.accounts.share_mint.supply,
-            SHARE_UNITS,
+            r.share_amount,
             VaultError::InvalidAmount
         );
         ata(
@@ -854,7 +890,13 @@ pub mod c3_pilot_vault {
         // Non-transferable shares remain with the owner until liquidation is proven.
         // The single-position vault lifecycle and this intent prevent a second redemption.
         r.status = redemption_status::LIQUIDATION_PENDING;
-        emit_state(c.key(), r.key(), r.wallet, kind::SHARES_LOCKED, SHARE_UNITS)
+        emit_state(
+            c.key(),
+            r.key(),
+            r.wallet,
+            kind::SHARES_LOCKED,
+            r.share_amount,
+        )
     }
 
     pub fn record_redemption_settlement(
@@ -939,12 +981,12 @@ pub mod c3_pilot_vault {
         backed(ctx.accounts.vault_usdc.amount, r.usdc_claimable)?;
         require_eq!(
             ctx.accounts.owner_shares.amount,
-            SHARE_UNITS,
+            r.share_amount,
             VaultError::InvalidAmount
         );
         require_eq!(
             ctx.accounts.share_mint.supply,
-            SHARE_UNITS,
+            r.share_amount,
             VaultError::InvalidAmount
         );
         ata(
@@ -960,7 +1002,7 @@ pub mod c3_pilot_vault {
             anchor_spl::token::ID,
         )?;
         let bump = [c.authority_bump];
-        let owner_scope = authority_seed(c.allowlisted_owner);
+        let owner_scope = authority_round_seed(c.allowlisted_owner, c.config_version);
         let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         // Burn and USDC transfer are atomic: if either fails, neither effect survives.
         token_2022::burn(
@@ -972,7 +1014,7 @@ pub mod c3_pilot_vault {
                     authority: ctx.accounts.owner.to_account_info(),
                 },
             ),
-            SHARE_UNITS,
+            r.share_amount,
         )?;
         token::transfer_checked(
             CpiContext::new_with_signer(
@@ -992,7 +1034,13 @@ pub mod c3_pilot_vault {
         r.status = redemption_status::USDC_RECEIVED;
         r.status = redemption_status::COMPLETED;
         c.lifecycle = 4;
-        emit_state(c.key(), r.key(), r.wallet, kind::SHARES_BURNED, SHARE_UNITS)?;
+        emit_state(
+            c.key(),
+            r.key(),
+            r.wallet,
+            kind::SHARES_BURNED,
+            r.share_amount,
+        )?;
         emit_state(
             c.key(),
             r.key(),
@@ -1115,7 +1163,9 @@ pub mod c3_pilot_vault {
             c.lifecycle == 1
                 && c.total_shares_issued == 0
                 && d.shares_issued == 0
-                && d.deposited == ONE_USDC,
+                && d.deposited == d.amount
+                && d.deposited >= ONE_USDC
+                && d.deposited <= c.max_deposit,
             VaultError::InvalidState
         );
         if ctx.accounts.plan.lamports() > 0 && !ctx.accounts.plan.data_is_empty() {
@@ -1160,7 +1210,7 @@ pub mod c3_pilot_vault {
             add(d.usdc_before, d.deposited)?,
         )?;
         let bump = [c.authority_bump];
-        let owner_scope = authority_seed(c.allowlisted_owner);
+        let owner_scope = authority_round_seed(c.allowlisted_owner, c.config_version);
         let signer: &[&[u8]] = &[owner_scope.as_ref(), &bump];
         token::transfer_checked(
             CpiContext::new_with_signer(

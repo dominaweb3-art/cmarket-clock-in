@@ -74,6 +74,52 @@ pub fn vault_seed(owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
 pub fn authority_seed(owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
     scoped_seed(AUTHORITY_SEED, owner)
 }
+// Round 1 preserves every deployed PDA. Additional evaluation purchases get
+// separate immutable inventories/share mints, never a reset of an old vault.
+pub fn vault_round_seed(owner: anchor_lang::prelude::Pubkey, round: u64) -> Vec<u8> {
+    round_seed(VAULT_SEED, owner, round)
+}
+pub fn authority_round_seed(owner: anchor_lang::prelude::Pubkey, round: u64) -> Vec<u8> {
+    round_seed(AUTHORITY_SEED, owner, round)
+}
+fn round_seed(prefix: &[u8], owner: anchor_lang::prelude::Pubkey, round: u64) -> Vec<u8> {
+    #[cfg(feature = "devnet-evaluation")]
+    if round > 1 {
+        return anchor_lang::solana_program::hash::hashv(&[
+            prefix,
+            owner.as_ref(),
+            &round.to_le_bytes(),
+        ])
+        .to_bytes()
+        .to_vec();
+    }
+    #[cfg(not(feature = "devnet-evaluation"))]
+    let _ = round;
+    scoped_seed(prefix, owner)
+}
+pub fn purchase_amount(amount: u64, maximum: u64) -> anchor_lang::prelude::Result<()> {
+    use anchor_lang::prelude::*;
+    #[cfg(feature = "devnet-evaluation")]
+    require!(
+        amount >= ONE_USDC && amount <= maximum && maximum <= 200 * ONE_USDC,
+        crate::errors::VaultError::InvalidAmount
+    );
+    #[cfg(not(feature = "devnet-evaluation"))]
+    {
+        let _ = maximum;
+        require_eq!(amount, ONE_USDC, crate::errors::VaultError::InvalidAmount);
+    }
+    Ok(())
+}
+pub fn deposit_budgets(amount: u64) -> anchor_lang::prelude::Result<[u64; 3]> {
+    let btc = crate::arithmetic::portion(amount, BTC_BPS)?;
+    let eth = crate::arithmetic::portion(amount, ETH_BPS)?;
+    let sol = amount
+        .checked_sub(btc)
+        .and_then(|n| n.checked_sub(eth))
+        .ok_or(crate::errors::VaultError::InvalidAmount)?;
+    Ok([btc, eth, sol])
+}
 fn scoped_seed(prefix: &[u8], _owner: anchor_lang::prelude::Pubkey) -> Vec<u8> {
     #[cfg(feature = "devnet-evaluation")]
     {
@@ -107,6 +153,33 @@ mod scope_tests {
             assert_eq!(vault_seed(a), VAULT_SEED);
             assert_eq!(vault_seed(b), VAULT_SEED);
             assert_eq!(authority_seed(a), AUTHORITY_SEED);
+        }
+    }
+    #[test]
+    fn amounts_rounding_and_legacy_round_are_explicit() {
+        let owner = Pubkey::new_unique();
+        assert_eq!(vault_round_seed(owner, 1), vault_seed(owner));
+        assert_eq!(authority_round_seed(owner, 1), authority_seed(owner));
+        for amount in [1_000_000, 1_000_001, 10_234_567, 100_000_000, 200_000_000] {
+            let legs = deposit_budgets(amount).unwrap();
+            assert_eq!(legs.iter().sum::<u64>(), amount);
+            #[cfg(feature = "devnet-evaluation")]
+            assert!(purchase_amount(amount, 200_000_000).is_ok());
+        }
+        #[cfg(feature = "devnet-evaluation")]
+        {
+            assert_ne!(vault_round_seed(owner, 1), vault_round_seed(owner, 2));
+            assert_ne!(
+                authority_round_seed(owner, 2),
+                authority_round_seed(owner, 3)
+            );
+            assert!(purchase_amount(999_999, 200_000_000).is_err());
+            assert!(purchase_amount(200_000_001, 200_000_000).is_err());
+        }
+        #[cfg(not(feature = "devnet-evaluation"))]
+        {
+            assert_eq!(vault_round_seed(owner, 2), VAULT_SEED);
+            assert!(purchase_amount(100_000_000, 200_000_000).is_err());
         }
     }
 }

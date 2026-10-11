@@ -24,6 +24,7 @@ import {
 import { activityText, type ActivityKey } from "./evaluation-activity-copy";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { NavigationGlyph } from "./EvaluationVisuals";
+import { purchaseCopy } from "./evaluation-purchase";
 
 const ownerStages = new Set([
   "deposit",
@@ -366,6 +367,51 @@ export function EvaluationActivity({
         >
           <Text style={s.link}>{t("refresh")}</Text>
         </Pressable>
+      ) : null}
+      {verified &&
+      scoped &&
+      Array.isArray(position?.previousTrials) &&
+      position.previousTrials.length ? (
+        <EvaluationAccordion title={purchaseCopy[language].history}>
+          {position.previousTrials.map((trial: Record<string, unknown>) => {
+            if (
+              typeof trial.vault !== "string" ||
+              !Array.isArray(trial.activity)
+            )
+              return null;
+            const receipts = trial.activity.filter(
+              (r: Record<string, unknown>) =>
+                r.effects_verified === true && activityExplorer(r.signature),
+            );
+            const deposited = receipts.some(
+              (r: Record<string, unknown>) => r.action === "deposit",
+            );
+            return (
+              <View key={trial.vault} style={s.receipt}>
+                <Text style={s.groupTitle}>
+                  C3 · {deposited ? displayUnits(trial.amount) : "—"} USDC ·
+                  Devnet
+                </Text>
+                {receipts.map((r: Record<string, unknown>) => (
+                  <Pressable
+                    key={String(r.signature)}
+                    accessibilityRole="link"
+                    style={s.linkButton}
+                    onPress={() => {
+                      void Linking.openURL(
+                        activityExplorer(r.signature)!,
+                      ).catch(() => undefined);
+                    }}
+                  >
+                    <Text style={s.link}>
+                      {stage(language, String(r.action))} · {t("confirmed")}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            );
+          })}
+        </EvaluationAccordion>
       ) : null}
       <EvaluationAccordion title={t("help")}>
         <Text style={s.body}>{t("helpBody")}</Text>

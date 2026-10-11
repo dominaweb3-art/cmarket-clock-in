@@ -38,6 +38,7 @@ import { indicesStatus } from "./evaluation-indices-copy";
 import { EvaluationHome } from "./EvaluationHome";
 import { EvaluationActivity } from "./EvaluationActivity";
 import { EvaluationBalances } from "./EvaluationBalances";
+import { purchaseUnits, purchaseCopy } from "./evaluation-purchase";
 
 const STORAGE = "c3-evaluation-language/v1";
 export default function DevnetEvaluationApp() {
@@ -51,6 +52,7 @@ export default function DevnetEvaluationApp() {
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [purchaseAmount, setPurchaseAmount] = useState("1");
   const [position, setPosition] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -91,6 +93,13 @@ export default function DevnetEvaluationApp() {
       await action();
     } catch (error) {
       const code = evaluationErrorCode(error);
+      if (code === "EVAL_AUTH_SESSION" || code === "EVAL_SESSION_REQUIRED") {
+        // A stale HTTPS session must never masquerade as verified ownership.
+        // Preserve the position and every signature; request a fresh message.
+        session.current = undefined;
+        setVerified(false);
+        setWalletOpen(true);
+      }
       setStatus(code);
       Alert.alert(t("status"), `${t("error")}\n${code}`);
     } finally {
@@ -139,6 +148,11 @@ export default function DevnetEvaluationApp() {
               session.current = result.sessionToken;
               setVerified(true);
               setStatus(t("authenticated"));
+              try {
+                await updatePosition();
+              } catch {
+                /* Fresh wallets provision explicitly. */
+              }
             } catch (error) {
               throw Error(
                 `EVAL_AUTH_${stage}_${evaluationErrorCode(error).replace(/^EVAL_/, "")}`,
@@ -250,9 +264,20 @@ export default function DevnetEvaluationApp() {
   }, [wallet, verified, position]);
   const prepareWalletAction = (action: EvaluationMoneyAction) => {
     if (!wallet || !verified || busy) return;
+    let amount: bigint, round: bigint;
+    try {
+      amount =
+        action === "deposit"
+          ? purchaseUnits(purchaseAmount)
+          : BigInt(String(position?.deposited ?? "1000000"));
+      round = BigInt(String(position?.round ?? "1"));
+    } catch {
+      Alert.alert(t("status"), purchaseCopy[language].invalid);
+      return;
+    }
     Alert.alert(
       t("transactionTitle"),
-      `${t(action)}\n\n${t(action === "renew_plan" ? "renewalNotice" : "transactionNotice")}`,
+      `${t(action)}${action === "deposit" ? " · " + displayUnits(amount.toString()) + " USDC · Devnet" : ""}\n\n${t(action === "renew_plan" ? "renewalNotice" : "transactionNotice")}`,
       [
         { text: t("cancel"), style: "cancel" },
         {
@@ -260,13 +285,20 @@ export default function DevnetEvaluationApp() {
           onPress: () => {
             void run(async () => {
               const prepared = await evaluationRequest(
-                { operation: "prepare", action },
+                {
+                  operation: "prepare",
+                  action,
+                  ...(action === "deposit"
+                    ? { amount: amount.toString() }
+                    : {}),
+                },
                 session.current,
               );
               const signed = await signEvaluationTransaction(
                 prepared,
                 wallet,
                 action,
+                { amount, round },
               );
               await waitForEvaluationNetwork(
                 Date.parse(String(prepared.expiresAt)),
@@ -297,19 +329,27 @@ export default function DevnetEvaluationApp() {
       ],
     );
   };
-  const provision = () =>
+  const provision = (newPurchase = false) =>
     run(async () => {
       if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
       // Bounded bootstrap. Each call consults its original durable signature and
       // never resends an uncertain packet. Only evaluation identities are used.
       for (let step = 0; step < 80; step++) {
         const value = await evaluationRequest(
-          { operation: "provision" },
+          {
+            operation: newPurchase && step === 0 ? "new_purchase" : "provision",
+          },
           session.current,
         );
         setStatus(String(value.stage ?? ""));
         if (value.ready === true) {
           await updatePosition();
+          if (newPurchase) {
+            session.current = undefined;
+            setVerified(false);
+            setStatus(purchaseCopy[language].reverify);
+            setWalletOpen(true);
+          }
           return;
         }
         if (value.stage === "SETTLEMENT_RELEASE_VERIFICATION_REQUIRED") return;
@@ -394,6 +434,7 @@ export default function DevnetEvaluationApp() {
     if (busy || !verified || lock.current) return;
     if (action === "refresh") return void refresh();
     if (action === "provision") return void provision();
+    if (action === "new_purchase") return void provision(true);
     if (unresolved || position?.settlementReleased !== true) return;
     if (action === "advance") return void advance();
     if (
@@ -482,6 +523,8 @@ export default function DevnetEvaluationApp() {
             position={position}
             status={indicesStatus(language, status)}
             displayUnits={displayUnits}
+            purchaseAmount={purchaseAmount}
+            onPurchaseAmount={setPurchaseAmount}
             onAction={indexAction}
             onRecover={() => {
               void recover();

@@ -89,17 +89,17 @@ test("Home copy is complete in four languages and preserves truthful test restri
     for (const key of Object.keys(homeCopy.en) as (keyof typeof homeCopy.en)[])
       assert.ok(homeText(language, key).trim().length, `${language}/${key}`);
     assert.match(homeText(language, "note"), /Devnet/);
-    assert.match(homeText(language, "buyBody"), /1 TEST USDC/);
+    assert.match(homeText(language, "buyBody"), /1.*200 USDC Devnet/);
     assert.match(
       homeText(language, "methodologyBody"),
       /BTC 40%.*ETH 30%.*SOL 30%/,
     );
     assert.match(homeText(language, "realBody"), /Devnet/);
     const lifetimeRestriction = {
-      en: /one lifetime position.*no reset is promised/,
-      es: /una sola posición por vida.*no se prometen reinicios/,
-      "zh-CN": /终身仅允许一个仓位.*不承诺重置/,
-      "pt-BR": /única posição vitalícia.*não se promete reinício/,
+      en: /ten.*history preserved.*one active/,
+      es: /diez.*historial.*una posición activa/,
+      "zh-CN": /十.*历史.*一个活跃/,
+      "pt-BR": /dez.*histórico.*uma posição ativa/,
     };
     assert.match(
       homeText(language, "repeatBody"),

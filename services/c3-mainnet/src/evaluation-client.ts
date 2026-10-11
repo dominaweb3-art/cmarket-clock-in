@@ -10,7 +10,11 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { EVALUATION, evaluationPdas } from "./evaluation-scope.ts";
+import {
+  EVALUATION,
+  evaluationPdas,
+  evaluationAmount,
+} from "./evaluation-scope.ts";
 import { evaluationCreatePlan } from "./evaluation-settlement-client.ts";
 
 export const EVAL_TOKEN = new PublicKey(
@@ -49,6 +53,7 @@ export type EvaluationConfig = Readonly<{
   ethMint: string;
   solMint: string;
   version: bigint;
+  depositAmount?: bigint;
 }>;
 const integer = (n: bigint) => {
   if (typeof n !== "bigint" || n < 0n || n > (1n << 64n) - 1n)
@@ -68,10 +73,11 @@ export class EvaluationClient {
     this.idl = idl;
     this.config = Object.freeze({ ...config });
     if (idl.address !== EVALUATION.program) throw Error("EVAL_IDL_PROGRAM");
-    if (config.version !== 1n) throw Error("EVAL_CONFIG_VERSION");
+    evaluationAmount(String(config.depositAmount ?? EVALUATION.amount));
     this.owner = new PublicKey(config.wallet);
     ({ vault: this.vault, authority: this.authority } = evaluationPdas(
       config.wallet,
+      config.version,
     ));
     const mints = [
       config.shareMint,
@@ -83,6 +89,9 @@ export class EvaluationClient {
     if (new Set(mints).size !== 5) throw Error("EVAL_DISTINCT_MINTS");
     for (const mint of mints) new PublicKey(mint);
     this.coder = new BorshCoder(idl);
+  }
+  get amount() {
+    return this.config.depositAmount ?? EVALUATION.amount;
   }
   intent(direction: "deposit" | "redemption", nonce = 1n) {
     integer(nonce);
@@ -214,8 +223,8 @@ export class EvaluationClient {
             "create_deposit_intent",
             {
               nonce: integer(1n),
-              amount: integer(EVALUATION.amount),
-              config_version: integer(1n),
+              amount: integer(this.amount),
+              config_version: integer(this.config.version),
               expires_at: expiry,
             },
             deposit,
@@ -230,8 +239,8 @@ export class EvaluationClient {
             "create_redemption_intent",
             {
               nonce: integer(1n),
-              shares: integer(EVALUATION.amount),
-              config_version: integer(1n),
+              shares: integer(this.amount),
+              config_version: integer(this.config.version),
               expires_at: expiry,
             },
             redemption,

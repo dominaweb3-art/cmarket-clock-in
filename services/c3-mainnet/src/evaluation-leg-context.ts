@@ -7,7 +7,7 @@ import {
   evaluationAta,
   EVAL_TOKEN,
 } from "./evaluation-client.ts";
-import { EVALUATION } from "./evaluation-scope.ts";
+import { EVALUATION, evaluationBudgets } from "./evaluation-scope.ts";
 import {
   evaluationPosition,
   type EvaluationAccounts,
@@ -107,7 +107,7 @@ export function verifiedEvaluationLegContext(
   check(
     !position.paused &&
       position.lifecycle === (direction === 1 ? 1 : 3) &&
-      position.shares === (direction === 1 ? 0n : EVALUATION.amount),
+      position.shares === (direction === 1 ? 0n : client.amount),
     "LIFECYCLE",
   );
   const intent = client.intent(direction === 1 ? "deposit" : "redemption");
@@ -115,13 +115,13 @@ export function verifiedEvaluationLegContext(
   const p = decode(plan.toBase58(), "SettlementPlan");
   check(
     p.schema_version === 2 &&
-      number(p.config_version) === 1n &&
+      number(p.config_version) === client.config.version &&
       key(p.vault) === client.vault.toBase58() &&
       key(p.wallet) === client.owner.toBase58() &&
       key(p.share_mint) === client.config.shareMint &&
       key(p.intent) === intent.toBase58() &&
       p.direction === direction &&
-      number(p.amount) === EVALUATION.amount &&
+      number(p.amount) === client.amount &&
       number(p.revision) === expectedRevision &&
       key(p.router_program) === EVALUATION.router,
     "PLAN_BINDING",
@@ -191,17 +191,14 @@ export function verifiedEvaluationLegContext(
   check(budgets.every((n) => n > 0n) && mins.every((n) => n > 0n), "BUDGETS");
   if (direction === 1)
     check(
-      budgets.every(
-        (n, i) =>
-          n === (EVALUATION.amount * BigInt(EVALUATION.weights[i]!)) / 10000n,
-      ),
+      budgets.every((n, i) => n === evaluationBudgets(client.amount)[i]),
       "EXACT_ALLOCATION",
     );
   else {
     const d = decode(client.intent("deposit").toBase58(), "DepositIntent");
     check(
       d.status === 5 &&
-        number(d.shares_issued) === EVALUATION.amount &&
+        number(d.shares_issued) === client.amount &&
         key(d.wallet) === client.config.wallet &&
         key(d.vault) === client.vault.toBase58(),
       "ACQUISITION_EVIDENCE",
@@ -210,7 +207,7 @@ export function verifiedEvaluationLegContext(
       ["btc", "eth", "wsol"].every((asset, i) => {
         const before = number(d[asset + "_before"]),
           after = number(d[asset + "_after"]);
-        return after > before && budgets[i] === after - before;
+        return before >= 0n && after > 0n && budgets[i] === after;
       }),
       "ACQUIRED_NOT_DONATED_BUDGETS",
     );
@@ -236,7 +233,7 @@ export function verifiedEvaluationLegContext(
     check(
       item.schema_version === 1 &&
         item.enabled === true &&
-        number(item.config_version) === 1n &&
+        number(item.config_version) === client.config.version &&
         key(item.vault) === client.vault.toBase58() &&
         key(item.governance) === EVALUATION.governance &&
         number(item.revision) > 0n,
@@ -268,7 +265,7 @@ export function verifiedEvaluationLegContext(
       Buffer.concat([
         Buffer.from("c3-route-registry-v1"),
         client.vault.toBuffer(),
-        u64(1n),
+        u64(client.config.version),
         u64(activation),
         u64(expiresSlot),
         Buffer.from([2]),

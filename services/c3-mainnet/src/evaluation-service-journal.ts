@@ -30,6 +30,17 @@ const hash = (v: Uint8Array | string) =>
 const check = (v: unknown, code: string): void => {
   if (!v) throw Error("EVAL_SERVICE_" + code);
 };
+/** Fixed public codes only; never return RPC text, URLs, logs or packet bytes. */
+export function evaluationDispatchDiagnostic(error: unknown): string {
+  const text = error instanceof Error ? error.message : "";
+  if (text.includes("429") || text.includes("EVAL_RPC_RATE_LIMIT"))
+    return "RPC_RATE_LIMIT";
+  const custom = /custom program error: 0x([0-9a-f]{1,8})/i.exec(text);
+  if (custom?.[1]) return "PROGRAM_0X_" + custom[1].toUpperCase();
+  if (text.includes("Blockhash not found")) return "BLOCKHASH_NOT_FOUND";
+  if (text.includes("insufficient funds")) return "INSUFFICIENT_FEE_OR_RENT";
+  return "SEND_OR_PREFLIGHT_UNCERTAIN";
+}
 export function evaluationOperationId(
   scope: string,
   purpose: string,
@@ -270,20 +281,18 @@ export class EvaluationServiceJournal {
     } catch (error) {
       // No raw logs/error text or signed bytes. This is NOT a finalized failure
       // receipt: the original signature still requires read-only reconciliation.
-      const text = error instanceof Error ? error.message : "";
+      const diagnostic = evaluationDispatchDiagnostic(error);
       console.error(
         JSON.stringify({
           event: "EVAL_SAFE_DISPATCH_UNCERTAIN",
-          reason: text.includes("429") ? "RPC_RATE_LIMIT" : "SEND_OR_PREFLIGHT",
-          instructionCode: /custom program error: 0x([0-9a-f]{1,8})/i.exec(
-            text,
-          )?.[1],
+          reason: diagnostic,
         }),
       );
       return {
         signature: signature!,
         state: "uncertain" as const,
         dispatched: true,
+        diagnostic,
       };
     }
   }

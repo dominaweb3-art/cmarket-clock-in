@@ -12,7 +12,7 @@ import {
   type TransactionInstruction,
 } from "@solana/web3.js";
 import { EvaluationClient, EVAL_TOKEN } from "./evaluation-client.ts";
-import { EVALUATION } from "./evaluation-scope.ts";
+import { EVALUATION, evaluationBudgets } from "./evaluation-scope.ts";
 import { evaluationTestRoute } from "./evaluation-route.ts";
 
 type Route = ReturnType<typeof evaluationTestRoute>;
@@ -74,7 +74,9 @@ export function evaluationCreatePlan(
   )
     throw Error("EVAL_SETTLEMENT_ACQUIRED_BUDGET_REQUIRED");
   const budgets =
-    direction === 1 ? [400000n, 300000n, 300000n] : [...acquiredBudgets!];
+    direction === 1
+      ? [...evaluationBudgets(client.amount)]
+      : [...acquiredBudgets!];
   const minimums = budgets.map((n) =>
     direction === 1 ? n / 10n : (n * 99n) / 10n,
   );

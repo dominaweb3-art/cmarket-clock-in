@@ -32,13 +32,13 @@ const en = {
     "BTC 40% · ETH 30% · SOL 30% is the strategic target, not current market weights, performance or verified holdings. The test router uses simulated assets, not real BTC or ETH or Jupiter liquidity.",
   how: "How to buy and sell",
   howBody:
-    "Connect → verify ownership → receive 200 TEST USDC once per wallet → review a deposit of exactly 1 TEST USDC → process three test swaps → approve on-chain shares. To exit: review the sale → process three test swaps → claim realized TEST USDC and burn shares. Each wallet approval is explicit.",
+    "Connect → verify ownership → receive 200 TEST USDC once per wallet → review a deposit of 1–200 USDC Devnet → process three test swaps → approve on-chain shares. To exit: review the sale → process three test swaps → claim realized TEST USDC and burn shares. Each wallet approval is explicit.",
   shares: "What shares represent",
   sharesBody:
     "On-chain shares represent rights over the inventory recorded by the evaluation vault. They are not a guaranteed value or real crypto exposure. Underlying test assets remain in the vault.",
   conditions: "Test conditions",
   conditionsBody:
-    "Solana Devnet only. Test tokens and liquidity have no monetary value. Exactly 1 TEST USDC per deposit, one lifetime position per wallet/vault. A sale returns only reconciled TEST USDC, not a guaranteed deposit amount. Mainnet is disabled.",
+    "Solana Devnet only. Test tokens and liquidity have no monetary value. 1–200 USDC Devnet per deposit, one position per vault and separate vaults for later trials. A sale returns only reconciled TEST USDC, not a guaranteed deposit amount. Mainnet is disabled.",
   more: "More crypto indices · Coming soon",
   planned: "Planned basket · {count} crypto assets",
   markets: "Global markets · Coming soon",
@@ -57,7 +57,7 @@ const en = {
   buy: "Buy C3",
   sell: "Sell C3",
   claim: "Claim TEST USDC",
-  depositNote: "Evaluation deposit: exactly 1 TEST USDC.",
+  depositNote: "Choose 1–200 USDC Devnet within your available test balance.",
   load: "Load my evaluation",
   provision: "Receive 200 TEST USDC",
   ready: "Ready to evaluate",
@@ -70,7 +70,7 @@ const en = {
   activity: "View activity",
   receipts: "View receipts",
   lifetime:
-    "This wallet/vault allows only one lifetime position. A new purchase is not available after redemption.",
+    "One position per vault. After finalized redemption, start a separate trial; up to ten rounds per wallet, with history preserved. Only one active position at a time.",
   connect: "Connect wallet",
   verify: "Verify ownership",
   wallet: "Your wallet",
@@ -139,13 +139,13 @@ const es: Copy = {
     "BTC 40% · ETH 30% · SOL 30% es el objetivo estratégico, no ponderaciones actuales de mercado, rentabilidad ni tenencias verificadas. El router de prueba usa activos simulados, no BTC o ETH reales ni liquidez Jupiter.",
   how: "Cómo comprar y vender",
   howBody:
-    "Conectar → verificar propiedad → recibir 200 TEST USDC una vez por wallet → revisar un depósito de exactamente 1 TEST USDC → procesar tres swaps de prueba → autorizar participaciones on-chain. Para salir: revisar la venta → procesar tres swaps de prueba → reclamar TEST USDC liquidado y quemar las participaciones. Cada autorización de wallet es explícita.",
+    "Conectar → verificar propiedad → recibir 200 TEST USDC una vez por wallet → revisar un depósito de 1–200 USDC Devnet → procesar tres swaps de prueba → autorizar participaciones on-chain. Para salir: revisar la venta → procesar tres swaps de prueba → reclamar TEST USDC liquidado y quemar las participaciones. Cada autorización de wallet es explícita.",
   shares: "Qué representan las participaciones",
   sharesBody:
     "Las participaciones on-chain representan derechos sobre el inventario registrado en la bóveda de evaluación. No garantizan valor ni exposición cripto real. Los activos de prueba permanecen en la bóveda.",
   conditions: "Condiciones de la prueba",
   conditionsBody:
-    "Solo Solana Devnet. Tokens y liquidez de prueba sin valor monetario. Depósito de exactamente 1 TEST USDC y una posición por vida de wallet/bóveda. La venta devuelve únicamente TEST USDC conciliado, no garantiza el importe depositado. Mainnet está deshabilitado.",
+    "Solo Solana Devnet. Tokens y liquidez de prueba sin valor monetario. Depósito de 1–200 USDC Devnet y una posición por bóveda y bóvedas separadas para pruebas posteriores. La venta devuelve únicamente TEST USDC conciliado, no garantiza el importe depositado. Mainnet está deshabilitado.",
   more: "Más índices cripto · Próximamente",
   planned: "Cesta prevista · {count} criptoactivos",
   markets: "Mercados globales · Próximamente",
@@ -164,7 +164,7 @@ const es: Copy = {
   buy: "Comprar C3",
   sell: "Vender C3",
   claim: "Reclamar TEST USDC",
-  depositNote: "Depósito de evaluación: exactamente 1 TEST USDC.",
+  depositNote: "Elige de 1 a 200 USDC Devnet dentro de tu saldo de prueba.",
   load: "Consultar mi evaluación",
   provision: "Recibir 200 TEST USDC",
   ready: "Lista para evaluar",
@@ -177,7 +177,7 @@ const es: Copy = {
   activity: "Ver actividad",
   receipts: "Ver comprobantes",
   lifetime:
-    "Esta wallet/bóveda admite una sola posición por vida. Tras el rescate no hay otra compra disponible.",
+    "Una posición por bóveda. Tras el rescate confirmado, inicia una prueba separada; hasta diez bóvedas por wallet, conservando el historial. Solo una posición activa a la vez.",
   connect: "Conectar wallet",
   verify: "Verificar propiedad",
   wallet: "Tu wallet",
@@ -242,13 +242,13 @@ const zh: Copy = {
     "BTC 40% · ETH 30% · SOL 30% 是战略目标，不是当前市场权重、收益或已验证的持仓。测试路由器使用模拟资产，不是真实 BTC、ETH 或 Jupiter 流动性。",
   how: "如何购买和卖出",
   howBody:
-    "连接 → 验证所有权 → 每个钱包领取一次 200 TEST USDC → 审阅恰好 1 TEST USDC 的存款 → 处理三笔测试兑换 → 批准链上份额。退出：审阅卖出 → 处理三笔测试兑换 → 领取已结算的 TEST USDC 并销毁份额。每次钱包批准均需明确授权。",
+    "连接 → 验证所有权 → 每个钱包领取一次 200 TEST USDC → 审阅1–200 USDC Devnet 的存款 → 处理三笔测试兑换 → 批准链上份额。退出：审阅卖出 → 处理三笔测试兑换 → 领取已结算的 TEST USDC 并销毁份额。每次钱包批准均需明确授权。",
   shares: "份额代表什么",
   sharesBody:
     "链上份额代表对评估金库所记录库存的权利。不保证价值，也不代表真实加密资产敞口。底层测试资产保留在金库中。",
   conditions: "测试条件",
   conditionsBody:
-    "仅限 Solana Devnet。测试代币和流动性没有货币价值。每次存款恰好 1 TEST USDC，每个钱包/金库终身仅一个仓位。卖出仅返还已核对的 TEST USDC，不保证存款金额。Mainnet 已禁用。",
+    "仅限 Solana Devnet。测试代币和流动性没有货币价值。每次存款1–200 USDC Devnet，每金库一个仓位，后续测试使用独立金库。卖出仅返还已核对的 TEST USDC，不保证存款金额。Mainnet 已禁用。",
   more: "更多加密指数 · 即将推出",
   planned: "计划篮子 · {count} 种加密资产",
   markets: "全球市场 · 即将推出",
@@ -267,7 +267,7 @@ const zh: Copy = {
   buy: "购买 C3",
   sell: "卖出 C3",
   claim: "领取 TEST USDC",
-  depositNote: "评估存款：恰好 1 TEST USDC。",
+  depositNote: "选择测试余额范围内的 1–200 USDC Devnet。",
   load: "查询我的评估",
   provision: "领取 200 TEST USDC",
   ready: "可开始评估",
@@ -279,7 +279,8 @@ const zh: Copy = {
   view: "查看操作",
   activity: "查看活动",
   receipts: "查看凭证",
-  lifetime: "此钱包/金库终身仅允许一个仓位。赎回后无法再次购买。",
+  lifetime:
+    "每金库一个仓位。赎回确认后开始独立测试，每钱包最多十轮，保留历史，同时只能有一个活跃仓位。",
   connect: "连接钱包",
   verify: "验证所有权",
   wallet: "你的钱包",
@@ -342,13 +343,13 @@ const pt: Copy = {
     "BTC 40% · ETH 30% · SOL 30% é o alvo estratégico, não pesos atuais de mercado, rentabilidade ou posições verificadas. O roteador de teste usa ativos simulados, não BTC ou ETH reais nem liquidez Jupiter.",
   how: "Como comprar e vender",
   howBody:
-    "Conectar → verificar propriedade → receber 200 TEST USDC uma vez por wallet → revisar um depósito de exatamente 1 TEST USDC → processar três swaps de teste → aprovar cotas on-chain. Para sair: revisar a venda → processar três swaps de teste → resgatar TEST USDC liquidado e queimar cotas. Cada aprovação da carteira é explícita.",
+    "Conectar → verificar propriedade → receber 200 TEST USDC uma vez por wallet → revisar um depósito de 1–200 USDC Devnet → processar três swaps de teste → aprovar cotas on-chain. Para sair: revisar a venda → processar três swaps de teste → resgatar TEST USDC liquidado e queimar cotas. Cada aprovação da carteira é explícita.",
   shares: "O que as cotas representam",
   sharesBody:
     "As cotas on-chain representam direitos sobre o inventário registrado no cofre de avaliação. Não garantem valor nem exposição cripto real. Os ativos de teste permanecem no cofre.",
   conditions: "Condições do teste",
   conditionsBody:
-    "Apenas Solana Devnet. Tokens e liquidez de teste sem valor monetário. Depósito de exatamente 1 TEST USDC, uma posição vitalícia por carteira/cofre. A venda devolve apenas TEST USDC reconciliado, sem garantir o valor depositado. Mainnet está desativada.",
+    "Apenas Solana Devnet. Tokens e liquidez de teste sem valor monetário. Depósito de 1–200 USDC Devnet, uma posição por cofre, com cofres separados para testes posteriores. A venda devolve apenas TEST USDC reconciliado, sem garantir o valor depositado. Mainnet está desativada.",
   more: "Mais índices cripto · Em breve",
   planned: "Cesta prevista · {count} criptoativos",
   markets: "Mercados globais · Em breve",
@@ -367,7 +368,7 @@ const pt: Copy = {
   buy: "Comprar C3",
   sell: "Vender C3",
   claim: "Resgatar TEST USDC",
-  depositNote: "Depósito de avaliação: exatamente 1 TEST USDC.",
+  depositNote: "Escolha de 1 a 200 USDC Devnet dentro do saldo de teste.",
   load: "Consultar minha avaliação",
   provision: "Receber 200 TEST USDC",
   ready: "Pronta para avaliar",
@@ -380,7 +381,7 @@ const pt: Copy = {
   activity: "Ver atividade",
   receipts: "Ver comprovantes",
   lifetime:
-    "Esta carteira/cofre permite uma única posição vitalícia. Após o resgate, outra compra não está disponível.",
+    "Uma posição por cofre. Após o resgate confirmado, inicie um teste separado; até dez cofres por carteira, com histórico preservado. Apenas uma posição ativa por vez.",
   connect: "Conectar carteira",
   verify: "Verificar propriedade",
   wallet: "Sua carteira",

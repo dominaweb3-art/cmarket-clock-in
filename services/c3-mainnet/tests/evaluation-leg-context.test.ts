@@ -96,6 +96,7 @@ export async function evaluationContextFixture(
     config_version: new BN(1),
     vault: c.vault,
     wallet: c.owner,
+    created_at: new BN(1000),
   };
   const deposit = await encode(c.intent("deposit"), "DepositIntent", {
     ...common,
