@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   EVALUATION_USDC_MINT,
   balanceUnits,
@@ -46,4 +47,21 @@ test("wrong wallet, mint, owner, malformed amount and missing evidence fail rath
     ),
   );
   assert.throws(() => tokenBalance({}, wallet, mint));
+});
+
+test("balance card is concise while its query remains pinned to the evaluation mint", () => {
+  const source = readFileSync(
+    new URL("../src/EvaluationBalances.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /EVALUATION_USDC_MINT/);
+  assert.match(source, /usdc-official\.png/);
+  assert.doesNotMatch(
+    source,
+    /EVALUATION_USDC_MINT\.slice|TEST USDC|evaluación C3/,
+  );
+  assert.equal(
+    EVALUATION_USDC_MINT,
+    "J4cTKzcwdrkpU1qYxbJ1LpiJivpKcZeHmcyuGj1o1Nza",
+  );
 });

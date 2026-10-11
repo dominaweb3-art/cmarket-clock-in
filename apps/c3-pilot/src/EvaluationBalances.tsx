@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  AppState,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import type { Language } from "./locales";
 import { nativeEvaluationPost } from "./evaluation-transport";
 import {
@@ -16,32 +23,36 @@ const copy = {
     "Loading…",
     "Unavailable",
     "Refresh balances",
-    "TEST USDC · C3 evaluation",
+    "USDC",
     "Balances · Devnet only",
+    "Devnet",
   ],
   es: [
     "Conecta tu wallet para ver saldos",
     "Consultando…",
     "No disponible",
     "Actualizar saldos",
-    "TEST USDC · evaluación C3",
+    "USDC",
     "Saldos · solo Devnet",
+    "Devnet",
   ],
   "zh-CN": [
     "连接钱包查看余额",
     "查询中…",
     "不可用",
     "刷新余额",
-    "TEST USDC · C3 评估",
+    "USDC",
     "余额 · 仅 Devnet",
+    "Devnet",
   ],
   "pt-BR": [
     "Conecte a wallet para ver saldos",
     "Consultando…",
     "Indisponível",
     "Atualizar saldos",
-    "TEST USDC · avaliação C3",
+    "USDC",
     "Saldos · apenas Devnet",
+    "Devnet",
   ],
 } as const;
 type Entry = { wallet: string; values: (string | null)[] };
@@ -128,18 +139,19 @@ export function EvaluationBalances({
               </View>
             </View>
             <View style={s.cell}>
-              <View accessible={false} style={s.usdcIcon}>
-                <Text style={s.usdcSymbol}>$</Text>
-              </View>
+              <Image
+                source={require("../assets/evaluation-ui/usdc-official.png")}
+                style={s.icon}
+                accessible={false}
+              />
               <View style={s.content}>
-                <View>
+                <View style={s.tokenHeading}>
                   <Text style={s.label}>{c[4]}</Text>
+                  <Text style={s.network}>{c[6]}</Text>
+                </View>
+                <View>
                   <Text style={s.amount}>
                     {loading ? c[1] : (values?.[1] ?? c[2])}
-                  </Text>
-                  <Text style={s.mint}>
-                    {EVALUATION_USDC_MINT.slice(0, 5)}…
-                    {EVALUATION_USDC_MINT.slice(-4)}
                   </Text>
                 </View>
               </View>
@@ -172,15 +184,21 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   content: { flex: 1, gap: 5 },
-  usdcIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#2775ca",
+  icon: { width: 32, height: 32 },
+  tokenHeading: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
   },
-  usdcSymbol: { color: "#fff", fontSize: 21, fontWeight: "700" },
+  network: {
+    fontSize: 9,
+    color: "#006d50",
+    backgroundColor: "#e5f3ed",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    overflow: "hidden",
+    borderRadius: 5,
+  },
   solIcon: { width: 32, height: 32, overflow: "hidden" },
   solInner: {
     width: 56,
@@ -192,7 +210,6 @@ const s = StyleSheet.create({
   },
   label: { fontSize: 11, color: "#526c61", fontWeight: "600" },
   amount: { fontSize: 15, fontWeight: "700", color: "#124b3d", flexShrink: 1 },
-  mint: { fontSize: 9, color: "#76808d" },
   note: { fontSize: 10, color: "#526c61", textAlign: "center" },
   refresh: { minHeight: 44, justifyContent: "center" },
 });
