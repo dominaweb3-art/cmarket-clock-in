@@ -2,6 +2,13 @@ import { languages, type Language } from "./locales.ts";
 import { evalText, type EvaluationKey } from "./evaluation-locales.ts";
 
 const en = {
+  purchaseHeading: "Buy / manage C3",
+  purchaseResult: "Your purchase result",
+  marketEquivalent: "Market equivalent",
+  noMarketValue:
+    "Not applicable on Devnet: simulated assets have no real market value. Shares are not dollars. The USDC test proceeds appear after the sale is reconciled.",
+  realizedOnly:
+    "Actual reconciled test USDC, not a market estimate or real dollars.",
   title: "Indices",
   subtitle: "Explore available baskets",
   available: "Available on Devnet",
@@ -92,6 +99,13 @@ const en = {
 } as const;
 type Copy = Record<keyof typeof en, string>;
 const es: Copy = {
+  purchaseHeading: "Comprar / gestionar C3",
+  purchaseResult: "Resultado de tu compra",
+  marketEquivalent: "Equivalente de mercado",
+  noMarketValue:
+    "No aplica en Devnet: los activos simulados no tienen valor de mercado real. Las participaciones no son dólares. El USDC de prueba aparece al conciliar la venta.",
+  realizedOnly:
+    "USDC de prueba realmente conciliado, no una estimación de mercado ni dólares reales.",
   title: "Índices",
   subtitle: "Explora las cestas disponibles",
   available: "Disponible en Devnet",
@@ -182,6 +196,12 @@ const es: Copy = {
   check: "Comprobar conexión alojada",
 };
 const zh: Copy = {
+  purchaseHeading: "购买 / 管理 C3",
+  purchaseResult: "你的购买结果",
+  marketEquivalent: "市场等值",
+  noMarketValue:
+    "Devnet 不适用：模拟资产没有真实市场价值。份额不是美元。卖出核对完成后显示测试 USDC 所得。",
+  realizedOnly: "实际核对的测试 USDC，并非市场估值或真实美元。",
   title: "指数",
   subtitle: "探索可用的资产篮子",
   available: "可在 Devnet 使用",
@@ -265,6 +285,13 @@ const zh: Copy = {
   check: "检查托管连接",
 };
 const pt: Copy = {
+  purchaseHeading: "Comprar / gerenciar C3",
+  purchaseResult: "Resultado da sua compra",
+  marketEquivalent: "Equivalente de mercado",
+  noMarketValue:
+    "Não se aplica na Devnet: ativos simulados não têm valor de mercado real. Cotas não são dólares. O USDC de teste aparece após a reconciliação da venda.",
+  realizedOnly:
+    "USDC de teste efetivamente reconciliado, não uma estimativa de mercado nem dólares reais.",
   title: "Índices",
   subtitle: "Explore as cestas disponíveis",
   available: "Disponível na Devnet",

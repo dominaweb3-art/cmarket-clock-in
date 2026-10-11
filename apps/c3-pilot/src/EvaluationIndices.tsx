@@ -34,6 +34,13 @@ export function EvaluationIndices({
   const t = (key: Parameters<typeof indicesText>[1]) =>
     indicesText(language, key);
   const state = indicesView(wallet, verified, busy, position);
+  const ownsPosition =
+    verified &&
+    !!wallet &&
+    position?.wallet === wallet &&
+    position?.cluster === "solana:devnet" &&
+    position?.simulatedAssets === true &&
+    position?.monetaryValue === false;
   return (
     <View testID="evaluation-indices">
       <Text accessibilityRole="header" style={s.title}>
@@ -46,6 +53,29 @@ export function EvaluationIndices({
           <Text style={s.index}>{t("index")}</Text>
         </View>
         <Text style={s.badge}>{t("available")}</Text>
+        <Text accessibilityRole="header" style={s.state}>
+          {t("purchaseHeading")}
+        </Text>
+        <View style={s.operation}>
+          <Text accessibilityRole="header" style={s.state}>
+            {t(state.title)}
+          </Text>
+          {state.action === "deposit" ? (
+            <Text style={s.body}>{t("depositNote")}</Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t(state.label)}
+            accessibilityState={{
+              disabled: busy && state.action !== "activity",
+            }}
+            disabled={busy && state.action !== "activity"}
+            onPress={() => onAction(state.action)}
+            style={s.primary}
+          >
+            <Text style={s.primaryText}>{t(state.label)}</Text>
+          </Pressable>
+        </View>
         <View style={s.assets}>
           {evaluationTargets.map((asset) => (
             <View
@@ -74,19 +104,23 @@ export function EvaluationIndices({
           <Text accessibilityRole="header" style={s.state}>
             {t(state.title)}
           </Text>
-          {state.action === "deposit" ? (
-            <Text style={s.body}>{t("depositNote")}</Text>
-          ) : null}
-          {state.title === "active" ? (
+          {ownsPosition &&
+          (state.title === "active" || position?.lifecycle === 3) ? (
             <>
+              <Text style={s.state}>{t("purchaseResult")}</Text>
               <Text style={s.caption}>{t("confirmedShares")}</Text>
-              <Text style={s.metric}>{displayUnits(position?.shares)}</Text>
+              <Text style={s.metric}>{displayUnits(position?.shares)} C3</Text>
+              <Text style={s.caption}>{t("marketEquivalent")}</Text>
+              <Text style={s.body}>{t("noMarketValue")}</Text>
             </>
           ) : null}
           {state.title === "completed" ? (
             <>
               <Text style={s.caption}>{t("returned")}</Text>
-              <Text style={s.metric}>{displayUnits(position?.returned)}</Text>
+              <Text style={s.metric}>
+                {displayUnits(position?.returned)} USDC · Devnet
+              </Text>
+              <Text style={s.body}>{t("realizedOnly")}</Text>
               <Text style={s.body}>{t("lifetime")}</Text>
             </>
           ) : null}
@@ -94,22 +128,11 @@ export function EvaluationIndices({
             <>
               <Text style={s.caption}>{evalText(language, "claimable")}</Text>
               <Text style={s.metric}>
-                {displayUnits(position?.claimable)} TEST USDC
+                {displayUnits(position?.claimable)} USDC · Devnet
               </Text>
+              <Text style={s.body}>{t("realizedOnly")}</Text>
             </>
           ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(state.label)}
-            accessibilityState={{
-              disabled: busy && state.action !== "activity",
-            }}
-            disabled={busy && state.action !== "activity"}
-            onPress={() => onAction(state.action)}
-            style={s.primary}
-          >
-            <Text style={s.primaryText}>{t(state.label)}</Text>
-          </Pressable>
           {/* Pending signatures and recovery are deliberately never collapsed. */}
           {state.recover ? (
             <>

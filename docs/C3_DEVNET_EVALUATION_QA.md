@@ -276,3 +276,28 @@ Expo Doctor: 18/19 checks; pinned Expo 57.0.26 versus recommended patch 57.0.27
 remains a warning. The parent npm graph has build-tool advisories; those modules
 were absent from the inspected Android release source map. This is not an
 audit-clean claim and does not replace a protocol review.
+
+## 11 October 2026 — purchase action and result visibility
+
+Classification: CLOCKIN_ONLY. Version 0.1.23/code 24 moves the existing
+state-authorized action above the composition. It does not enable another
+deposit after lifetime redemption. Active/redemption states show verified C3
+shares; claim and completed states show reconciled test-USDC amounts with units.
+All four locales explain that synthetic Devnet holdings have no real market
+value; shares are not dollars and no real NAV or profit is inferred.
+
+APK: `apps/c3-pilot/dist/devnet-evaluation-ui-v24/c-market-c3-devnet-evaluation-0.1.23.apk`.
+SHA-256: `5fcb1e21128c58ce256037104c72a32dd6d0a825f45a59aa0461efac52ea4bfe`.
+Certificate SHA-256: `58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+Installed certificate matched; installation preserved data. ADB cold launch
+with no Metro listener and Indices navigation passed on Seeker. The visible
+disconnected state displayed the purchase/manage heading and connect button.
+Connected position/result rendering was not physically reverified in this run;
+no authentication, deposit, sale or claim was requested.
+
+TypeScript, lint, formatting, eight focused Indices tests and signed Android
+release build passed. Tests verified unchanged reviewed wallet/payment/recovery
+controller AST hashes. Expo Doctor remains 18/19: installed Expo 57.0.26 versus
+recommended patch 57.0.27. Mainnet, backend transaction logic and protected
+workspaces were unchanged. APK publication on the website was not performed
+in this visual change; installation and local artifact are the new version.
