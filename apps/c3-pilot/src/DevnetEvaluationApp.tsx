@@ -36,6 +36,7 @@ import type { IndicesAction } from "./evaluation-indices-state";
 import { indicesStatus } from "./evaluation-indices-copy";
 import { EvaluationHome } from "./EvaluationHome";
 import { EvaluationActivity } from "./EvaluationActivity";
+import { EvaluationBalances } from "./EvaluationBalances";
 
 const STORAGE = "c3-evaluation-language/v1";
 export default function DevnetEvaluationApp() {
@@ -401,6 +402,13 @@ export default function DevnetEvaluationApp() {
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
+        {tab !== "activity" ? (
+          <EvaluationBalances
+            wallet={wallet}
+            language={language}
+            revision={position}
+          />
+        ) : null}
         <View style={tab === "home" ? undefined : styles.hidden}>
           <EvaluationHome
             language={language}
