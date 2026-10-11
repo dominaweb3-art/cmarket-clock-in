@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Image,
-  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -29,41 +28,16 @@ import {
 } from "./evaluation-wallet";
 import type { EvaluationMoneyAction } from "./evaluation-owner-review";
 import { base64FromUint8Array } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
-import {
-  BottomNavigation,
-  EmptyActivity,
-  NavigationGlyph,
-} from "./EvaluationVisuals";
+import { BottomNavigation, NavigationGlyph } from "./EvaluationVisuals";
 import { visualText, type EvaluationTab } from "./evaluation-visual-copy";
 import { EvaluationIndices } from "./EvaluationIndices";
 import { EvaluationWalletSheet } from "./EvaluationWalletSheet";
 import type { IndicesAction } from "./evaluation-indices-state";
 import { indicesStatus } from "./evaluation-indices-copy";
 import { EvaluationHome } from "./EvaluationHome";
+import { EvaluationActivity } from "./EvaluationActivity";
 
 const STORAGE = "c3-evaluation-language/v1";
-function EvaluationButton({
-  label,
-  onPress,
-  disabled = false,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={[styles.button, disabled && styles.disabled]}
-    >
-      <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
-  );
-}
 export default function DevnetEvaluationApp() {
   const [language, setLanguage] = useState<Language>("en");
   const [tab, setTab] = useState<EvaluationTab>("home");
@@ -362,14 +336,6 @@ export default function DevnetEvaluationApp() {
     const n = BigInt(value);
     return `${n / 1_000_000n}.${String(n % 1_000_000n).padStart(6, "0")}`;
   };
-  const actions: EvaluationMoneyAction[] = [
-    "deposit",
-    "issue_shares",
-    "request_redemption",
-    "claim",
-    "renew_plan",
-    "recover_deposit_plan",
-  ];
   const pending =
     Array.isArray(position?.pendingRequests) &&
     position.pendingRequests.length > 0;
@@ -447,76 +413,24 @@ export default function DevnetEvaluationApp() {
             onUpcoming={openUpcoming}
           />
         </View>
-        <View style={[styles.card, tab !== "activity" && styles.hidden]}>
-          {tab === "activity" && (
-            <>
-              <Text style={styles.heading}>{t("activity")}</Text>
-              <Text style={styles.note}>{u("verifiedOnly")}</Text>
-              {Array.isArray(position?.activity) &&
-              position.activity.length > 0 ? (
-                position.activity.map((item: Record<string, unknown>) => (
-                  <View key={String(item.signature)} style={styles.receipt}>
-                    <View style={styles.receiptHeader}>
-                      <NavigationGlyph
-                        name="activity"
-                        color={
-                          item.effects_verified === true ? "#075c47" : "#76808d"
-                        }
-                      />
-                      <Text style={styles.receiptTitle}>
-                        {typeof item.action === "string" &&
-                        actions.includes(item.action as EvaluationMoneyAction)
-                          ? t(item.action as EvaluationMoneyAction)
-                          : t("process")}
-                      </Text>
-                    </View>
-                    <Text style={styles.receiptStatus}>
-                      {item.effects_verified === true
-                        ? t("verifiedEffects")
-                        : t("uncertain")}
-                    </Text>
-                    {typeof item.signature === "string" &&
-                      /^[1-9A-HJ-NP-Za-km-z]{64,96}$/.test(item.signature) && (
-                        <Pressable
-                          accessibilityRole="link"
-                          accessibilityLabel={`Solana Explorer Devnet: ${item.signature}`}
-                          style={styles.explorerLink}
-                          onPress={() => {
-                            void Linking.openURL(
-                              `https://explorer.solana.com/tx/${item.signature}?cluster=devnet`,
-                            );
-                          }}
-                        >
-                          <Text style={styles.activeText}>
-                            {item.signature.slice(0, 10)}…
-                            {item.signature.slice(-8)}
-                          </Text>
-                        </Pressable>
-                      )}
-                  </View>
-                ))
-              ) : (
-                <EmptyActivity language={language} />
-              )}
-              {!verified && (
-                <EvaluationButton
-                  label={u("account")}
-                  onPress={() => setWalletOpen(true)}
-                  disabled={busy}
-                />
-              )}
-              <EvaluationButton
-                label={t("refresh")}
-                disabled={busy || !verified}
-                onPress={() => {
-                  void refresh();
-                }}
-              />
-            </>
-          )}
-          <Text accessibilityLiveRegion="polite" style={styles.note}>
-            {busy ? t("busy") : status}
-          </Text>
+        <View style={tab !== "activity" && styles.hidden}>
+          <EvaluationActivity
+            language={language}
+            wallet={wallet}
+            verified={verified}
+            busy={busy}
+            position={position}
+            status={status}
+            displayUnits={displayUnits}
+            onWallet={() => setWalletOpen(true)}
+            onIndices={() => changeTab("indices")}
+            onRefresh={() => {
+              void refresh();
+            }}
+            onRecover={() => {
+              void recover();
+            }}
+          />
         </View>
         <View style={tab !== "indices" && styles.hidden}>
           <EvaluationIndices

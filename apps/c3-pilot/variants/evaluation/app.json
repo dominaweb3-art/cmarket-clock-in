@@ -2,14 +2,14 @@
   "expo": {
     "name": "C Market Devnet",
     "slug": "c-market-c3-devnet-evaluation",
-    "version": "0.1.15",
+    "version": "0.1.16",
     "icon": "../../../mobile/assets/images/icon.png",
     "orientation": "portrait",
     "scheme": "cmarketc3evaluation",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.dominaweb3.cmarket.c3evaluation",
-      "versionCode": 16,
+      "versionCode": 17,
       "adaptiveIcon": {
         "foregroundImage": "../../../mobile/assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"

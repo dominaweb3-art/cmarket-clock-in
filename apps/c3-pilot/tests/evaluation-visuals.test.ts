@@ -69,8 +69,12 @@ test("static navigation structure is outside scroll content and contains only th
   assert.match(app, /value === "home"|tab === "home"/);
   assert.match(app, /tab !== "indices" && styles.hidden/);
   assert.match(app, /tab !== "activity" && styles.hidden/);
-  assert.match(app, /<EmptyActivity language=\{language\}/);
-  assert.match(app, /item.effects_verified === true/);
-  assert.match(app, /cluster=devnet/);
+  assert.match(app, /<EvaluationActivity/);
+  const activityState = readFileSync(
+    new URL("../src/evaluation-activity-state.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(activityState, /item.effects_verified === true/);
+  assert.match(activityState, /cluster=devnet/);
   // Structure only; this does not attest physical layout or device QA.
 });
