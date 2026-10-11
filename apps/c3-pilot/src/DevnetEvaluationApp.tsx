@@ -31,16 +31,15 @@ import type { EvaluationMoneyAction } from "./evaluation-owner-review";
 import { base64FromUint8Array } from "@solana-mobile/mobile-wallet-adapter-protocol/encoding";
 import {
   BottomNavigation,
-  C3Summary,
   EmptyActivity,
   NavigationGlyph,
-  UpcomingIndices,
 } from "./EvaluationVisuals";
 import { visualText, type EvaluationTab } from "./evaluation-visual-copy";
 import { EvaluationIndices } from "./EvaluationIndices";
 import { EvaluationWalletSheet } from "./EvaluationWalletSheet";
 import type { IndicesAction } from "./evaluation-indices-state";
 import { indicesStatus } from "./evaluation-indices-copy";
+import { EvaluationHome } from "./EvaluationHome";
 
 const STORAGE = "c3-evaluation-language/v1";
 function EvaluationButton({
@@ -68,11 +67,10 @@ function EvaluationButton({
 export default function DevnetEvaluationApp() {
   const [language, setLanguage] = useState<Language>("en");
   const [tab, setTab] = useState<EvaluationTab>("home");
-  const [accountOpen, setAccountOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
   const scroll = useRef<ScrollView>(null);
-  const accountY = useRef(0);
-  const scrollToAccount = useRef(false);
+  const catalogY = useRef(0);
+  const catalogRequested = useRef(false);
   const [wallet, setWallet] = useState<string | null>(null);
   const [verified, setVerified] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,18 +84,21 @@ export default function DevnetEvaluationApp() {
   const u = (key: Parameters<typeof visualText>[1]) =>
     visualText(language, key);
   const changeTab = (value: EvaluationTab) => {
+    if (value !== "indices") catalogRequested.current = false;
     setTab(value);
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
-  const openAccount = () => {
-    if (!wallet || !verified) {
-      setWalletOpen(true);
-      return;
-    }
-    scrollToAccount.current = !accountOpen || tab !== "home";
-    setAccountOpen(true);
-    setTab("home");
-    scroll.current?.scrollTo({ y: accountY.current, animated: true });
+  const scrollToCatalog = (y: number) => {
+    catalogY.current = y;
+    if (!catalogRequested.current || y <= 0) return;
+    catalogRequested.current = false;
+    scroll.current?.scrollTo({ y, animated: true });
+  };
+  const openUpcoming = () => {
+    catalogRequested.current = true;
+    changeTab("indices");
+    // User-requested navigation only, never a reaction to arriving position data.
+    requestAnimationFrame(() => scrollToCatalog(catalogY.current));
   };
   useEffect(() => {
     AsyncStorage.getItem(STORAGE)
@@ -386,7 +387,6 @@ export default function DevnetEvaluationApp() {
     setPosition(null);
     setWallet(null);
     setStatus("");
-    setAccountOpen(false);
   };
   const indexAction = (action: IndicesAction) => {
     if (action === "activity") return changeTab("activity");
@@ -435,136 +435,19 @@ export default function DevnetEvaluationApp() {
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
-        {tab === "home" && (
-          <C3Summary
+        <View style={tab === "home" ? undefined : styles.hidden}>
+          <EvaluationHome
             language={language}
-            onExplore={openAccount}
-            disabled={busy}
-            onDetails={() => changeTab("indices")}
+            wallet={wallet}
+            verified={verified}
+            busy={busy}
+            position={position}
+            status={status}
+            onExplore={() => changeTab("indices")}
+            onUpcoming={openUpcoming}
           />
-        )}
-        <View
-          style={[
-            styles.card,
-            ((tab === "home" && !accountOpen) || tab === "indices") &&
-              styles.hidden,
-          ]}
-          onLayout={(event) => {
-            if (tab === "home" && accountOpen) {
-              accountY.current = event.nativeEvent.layout.y;
-              if (scrollToAccount.current) {
-                scrollToAccount.current = false;
-                scroll.current?.scrollTo({
-                  y: accountY.current,
-                  animated: true,
-                });
-              }
-            }
-          }}
-        >
-          {tab === "home" && accountOpen && (
-            <>
-              <View style={styles.panelHeader}>
-                <Text style={styles.heading}>{u("account")}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={u("back")}
-                  onPress={() => {
-                    setAccountOpen(false);
-                    scroll.current?.scrollTo({ y: 0, animated: true });
-                  }}
-                  style={styles.close}
-                >
-                  <Text style={styles.closeText}>×</Text>
-                </Pressable>
-              </View>
-              {verified && (
-                <EvaluationButton
-                  label={t("refresh")}
-                  disabled={busy}
-                  onPress={() => {
-                    void refresh();
-                  }}
-                />
-              )}
-              <Text style={styles.note}>
-                {verified ? t("authenticated") : t("noPosition")}
-              </Text>
-              <Text style={styles.note}>{t("restriction")}</Text>
-              {verified && (
-                <EvaluationButton
-                  label={t("provision")}
-                  disabled={busy}
-                  onPress={() => {
-                    void provision();
-                  }}
-                />
-              )}
-              {position && (
-                <>
-                  <View style={styles.position}>
-                    <Text style={styles.heading}>{u("position")}</Text>
-                    <Text style={styles.metricLabel}>{t("shares")}</Text>
-                    <Text style={styles.metric}>
-                      {displayUnits(position.shares)}
-                    </Text>
-                    <Text style={styles.metricLabel}>{t("claimable")}</Text>
-                    <Text style={styles.metric}>
-                      {displayUnits(position.claimable)}
-                    </Text>
-                    <Text style={styles.metricLabel}>{t("returned")}</Text>
-                    <Text style={styles.metric}>
-                      {displayUnits(position.returned)}
-                    </Text>
-                  </View>
-                  <Text style={styles.heading}>{u("controls")}</Text>
-                  <Text style={styles.note}>{u("stepHint")}</Text>
-                  {actions.map((action) => (
-                    <EvaluationButton
-                      key={action}
-                      label={t(action)}
-                      disabled={
-                        busy ||
-                        !verified ||
-                        pending ||
-                        position.settlementReleased !== true ||
-                        !Array.isArray(position.allowedActions) ||
-                        !position.allowedActions.includes(action)
-                      }
-                      onPress={() => prepareWalletAction(action)}
-                    />
-                  ))}
-                  <EvaluationButton
-                    label={t("process")}
-                    disabled={
-                      busy ||
-                      !verified ||
-                      pending ||
-                      position.settlementReleased !== true
-                    }
-                    onPress={() => {
-                      void advance();
-                    }}
-                  />
-                  <EvaluationButton
-                    label={t("recover")}
-                    disabled={
-                      busy ||
-                      !verified ||
-                      (!pending && !position.pendingInitialPlan)
-                    }
-                    onPress={() => {
-                      void recover();
-                    }}
-                  />
-                </>
-              )}
-              {position && position.settlementReleased !== true && (
-                <Text style={styles.warning}>{t("notReady")}</Text>
-              )}
-              <Text style={styles.note}>{t("restart")}</Text>
-            </>
-          )}
+        </View>
+        <View style={[styles.card, tab !== "activity" && styles.hidden]}>
           {tab === "activity" && (
             <>
               <Text style={styles.heading}>{t("activity")}</Text>
@@ -648,9 +531,9 @@ export default function DevnetEvaluationApp() {
             onRecover={() => {
               void recover();
             }}
+            onCatalogLayout={scrollToCatalog}
           />
         </View>
-        {tab === "home" && <UpcomingIndices language={language} />}
         <Text style={styles.footer}>{t("mainnet")}</Text>
       </ScrollView>
       <BottomNavigation language={language} tab={tab} onChange={changeTab} />

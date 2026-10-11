@@ -67,10 +67,10 @@ test("static navigation structure is outside scroll content and contains only th
   assert.match(visuals, /accessibilityRole="tab"/);
   assert.match(visuals, /accessibilityState=\{\{ selected: tab === value \}\}/);
   assert.match(app, /value === "home"|tab === "home"/);
-  assert.match(app, /tab === "indices"/);
-  assert.match(app, /tab === "activity"/);
+  assert.match(app, /tab !== "indices" && styles.hidden/);
+  assert.match(app, /tab !== "activity" && styles.hidden/);
   assert.match(app, /<EmptyActivity language=\{language\}/);
   assert.match(app, /item.effects_verified === true/);
   assert.match(app, /cluster=devnet/);
-  // This checks structure only. Physical layout and switching are tested on Seeker.
+  // Structure only; this does not attest physical layout or device QA.
 });

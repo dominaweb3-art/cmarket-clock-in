@@ -17,6 +17,7 @@ type Props = {
   onAction: (action: IndicesAction) => void;
   onRecover: () => void;
   displayUnits: (value: unknown) => string;
+  onCatalogLayout?: (y: number) => void;
 };
 export function EvaluationIndices({
   language,
@@ -28,6 +29,7 @@ export function EvaluationIndices({
   onAction,
   onRecover,
   displayUnits,
+  onCatalogLayout,
 }: Props) {
   const t = (key: Parameters<typeof indicesText>[1]) =>
     indicesText(language, key);
@@ -176,7 +178,10 @@ export function EvaluationIndices({
           <Text style={s.body}>{t(`${key}Body`)}</Text>
         </EvaluationAccordion>
       ))}
-      <View style={s.catalog}>
+      <View
+        style={s.catalog}
+        onLayout={(event) => onCatalogLayout?.(event.nativeEvent.layout.y)}
+      >
         <EvaluationAccordion title={t("more")}>
           {[5, 10, 20, 50].map((count) => (
             <View key={count} style={s.row}>
