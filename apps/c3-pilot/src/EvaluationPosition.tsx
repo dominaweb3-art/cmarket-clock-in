@@ -35,6 +35,19 @@ export function EvaluationPosition({
             : t(summary?.empty ? "empty" : "unavailable")}
       </Text>
     );
+  if (summary.received !== null)
+    return (
+      <View testID="evaluation-basket-position-closed" style={s.box}>
+        <Text accessibilityRole="header" style={s.title}>
+          {positionCopy[language].completed}
+        </Text>
+        <Text style={s.caption}>{t("participation")}: 0 C3</Text>
+        <Text style={s.result}>
+          {positionCopy[language].received}:{" "}
+          {localizedUnits(summary.received, language)}
+        </Text>
+      </View>
+    );
   const state = indicesView(wallet, verified, false, position);
   const stateKey =
     state.title in presentationCopy.en

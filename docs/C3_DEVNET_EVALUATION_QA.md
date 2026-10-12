@@ -818,3 +818,14 @@ Physical wallet renewal/claim after this update is still unverified; no wallet
 authorization or blockchain transaction was performed for this change.
 
 APK SHA-256: `c651c69c26249461e201bdeb791c4e7356a1e03b48dec287f465990dde587c9a`.
+# 2026-10-12 — 0.1.35 closed basket presentation (CLOCKIN_ONLY)
+
+The completed-position card no longer presents the historical deposit as a
+current holding. Only the existing validated closed summary (lifecycle 4, zero
+shares and positive realized proceeds) renders “Basket sold · no active position”,
+zero shares and realized test USDC. Deposit history remains in Activity. The same
+component and existing localized copy cover all four languages. No transaction,
+accounting, wallet or backend behavior changed. Nine focused position/presentation
+tests, TypeScript, focused lint and signed Android build passed. APK uses the
+existing certificate. Owner screenshot reported completed sale, zero shares and
+9.9 test USDC received; this UI change did not independently execute that sale.
