@@ -211,7 +211,9 @@ test("trade buttons are always present; expired-state copy is not presented as c
       language,
       "EVAL_LEG_PLAN_EXPIRED_RENEW_REQUIRED",
     );
-    assert.ok(label.includes("EVAL_LEG_PLAN_EXPIRED_RENEW_REQUIRED"));
+    assert.ok(!label.includes("EVAL_"));
+    const expired = indicesStatus(language, "EVAL_OWNER_BLOCKHASH_EXPIRED");
+    assert.ok(expired.length > 20 && !expired.includes("EVAL_"));
     assert.notEqual(
       label.split("\n")[0],
       indicesStatus(language, "EVAL_UNKNOWN").split("\n")[0],

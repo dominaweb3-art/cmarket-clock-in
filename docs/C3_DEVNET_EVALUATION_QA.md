@@ -800,3 +800,21 @@ Actual prior installed certificate matched; data-preserving adb install -r PASS.
 This metadata and inert test coverage do not prove physical renewal or a completed
 sale. Physical Phantom renewal/collection acceptance remains pending owner action.
 Mainnet, stable apps, protected branches and signing material remain untouched.
+# 2026-10-12 — 0.1.34 expiry UX (CLOCKIN_ONLY)
+
+Observed on Seeker: `EVAL_OWNER_BLOCKHASH_EXPIRED` after an owner request,
+with the original pending request still visible. The mobile app now refreshes
+authoritative position state on expiry, shows a short localized inline message,
+and avoids an additional modal acknowledgement. The pending recovery action uses
+the same bounded reconciliation-and-continue path as Buy/Sell. Duplicate primary
+and renewal actions are removed while recovery is pending. No automatic signing,
+submission, expiry bypass, or economic state change was added.
+
+Validation: 12 focused tests, TypeScript, focused ESLint and formatting passed.
+Signed Android build passed; certificate matches the previous release and
+`adb install -r` preserved app data. Seeker launched version 0.1.34 (35).
+Expo Doctor: 18/19, existing Expo 57.0.26/57.0.27 patch mismatch remains.
+Physical wallet renewal/claim after this update is still unverified; no wallet
+authorization or blockchain transaction was performed for this change.
+
+APK SHA-256: `c651c69c26249461e201bdeb791c4e7356a1e03b48dec287f465990dde587c9a`.

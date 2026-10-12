@@ -92,9 +92,9 @@ const en = {
   blocked: "Evaluation is unavailable",
   missing:
     "Load reconciled vault state before continuing. No share value is assumed.",
-  recover: "Check original operation",
+  recover: "Check and continue",
   recoveryNote:
-    "An original request is pending. Reconcile it before any new approval; it will not be automatically resent.",
+    "Your operation is pending. Check its status to continue safely.",
   continue: "Continue test settlement",
   issue: "Approve C3 shares",
   refresh: "Refresh state",
@@ -200,9 +200,9 @@ const es: Copy = {
   blocked: "Evaluación no disponible",
   missing:
     "Consulta el estado conciliado de la bóveda antes de continuar. No se presupone un valor de las participaciones.",
-  recover: "Consultar operación original",
+  recover: "Comprobar y continuar",
   recoveryNote:
-    "Hay una solicitud original pendiente. Concíliala antes de otra autorización; no se reenviará automáticamente.",
+    "Tu operación está pendiente. Comprueba su estado para continuar con seguridad.",
   continue: "Continuar liquidación de prueba",
   issue: "Autorizar participaciones C3",
   refresh: "Actualizar estado",
@@ -302,8 +302,8 @@ const zh: Copy = {
   language: "语言",
   blocked: "评估不可用",
   missing: "继续前请查询已核对的金库状态。不假定份额价值。",
-  recover: "查询原始操作",
-  recoveryNote: "存在待处理的原始请求。新批准前须先核对；不会自动重新发送。",
+  recover: "检查并继续",
+  recoveryNote: "操作待处理。请检查状态后安全继续。",
   continue: "继续测试结算",
   issue: "批准 C3 份额",
   refresh: "刷新状态",
@@ -405,9 +405,9 @@ const pt: Copy = {
   blocked: "Avaliação indisponível",
   missing:
     "Consulte o estado reconciliado do cofre antes de continuar. Não se presume um valor das cotas.",
-  recover: "Consultar operação original",
+  recover: "Verificar e continuar",
   recoveryNote:
-    "Há uma solicitação original pendente. Reconcilie antes de outra aprovação; ela não será reenviada automaticamente.",
+    "Sua operação está pendente. Verifique o estado para continuar com segurança.",
   continue: "Continuar liquidação de teste",
   issue: "Aprovar cotas C3",
   refresh: "Atualizar estado",
@@ -448,6 +448,14 @@ export const marketKeys = [
 /** Re-localize already displayed results without changing controller state or
  * re-requesting anything. Internal error identifiers are preserved verbatim. */
 export function indicesStatus(language: Language, status: string): string {
+  if (status === "EVAL_OWNER_BLOCKHASH_EXPIRED")
+    return {
+      en: "The request expired. Tap Buy or Sell again to check it and continue.",
+      es: "La solicitud venció. Pulsa Comprar o Vender de nuevo para comprobarla y continuar.",
+      "zh-CN": "请求已过期。再次点击买入或卖出，检查状态并继续。",
+      "pt-BR":
+        "A solicitação expirou. Toque em Comprar ou Vender novamente para verificar e continuar.",
+    }[language];
   if (
     [
       "EVAL_LEG_EXPIRED_OR_SLIPPAGE",
@@ -455,7 +463,7 @@ export function indicesStatus(language: Language, status: string): string {
       "EVAL_SERVICE_QUOTE_EXPIRED_RENEW_REQUIRED",
     ].includes(status)
   )
-    return `${saleCopy[language].expired}\n${status}`;
+    return saleCopy[language].expired;
   const keys: EvaluationKey[] = [
     "connected",
     "authenticated",

@@ -254,7 +254,8 @@ export function EvaluationIndices({
             <Text style={s.link}>{indicesText(language, "sell")}</Text>
           </Pressable>
         </View>
-        {!["deposit", "request_redemption", "new_purchase"].includes(
+        {!state.recover &&
+        !["deposit", "request_redemption", "new_purchase"].includes(
           primary.action,
         ) ? (
           <Pressable
@@ -299,14 +300,18 @@ export function EvaluationIndices({
               accessibilityRole="button"
               accessibilityState={{ disabled: busy }}
               disabled={busy}
-              onPress={onRecover}
+              onPress={() => {
+                if (position?.lifecycle === 3) onTrade("sell");
+                else if (position?.lifecycle === 1) onTrade("buy");
+                else onRecover();
+              }}
               style={s.secondary}
             >
               <Text style={s.link}>{indicesText(language, "recover")}</Text>
             </Pressable>
           </View>
         ) : null}
-        {state.renew ? (
+        {state.renew && !state.recover && primary.action !== "renew_plan" ? (
           <View>
             <Text style={s.body}>{indicesText(language, "renewal")}</Text>
             <Pressable

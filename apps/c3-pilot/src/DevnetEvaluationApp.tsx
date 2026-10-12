@@ -112,6 +112,22 @@ export default function DevnetEvaluationApp() {
         setWalletOpen(true);
       }
       setStatus(code);
+      if (
+        [
+          "EVAL_OWNER_BLOCKHASH_EXPIRED",
+          "EVAL_LEG_PLAN_EXPIRED_RENEW_REQUIRED",
+          "EVAL_SERVICE_QUOTE_EXPIRED_RENEW_REQUIRED",
+        ].includes(code)
+      ) {
+        // Refresh authoritative pending state without replaying a wallet action.
+        // The trade button reconciles the original request on the next explicit tap.
+        try {
+          await updatePosition();
+        } catch {
+          // Preserve the original expiry and position if the read is unavailable.
+        }
+        return;
+      }
       Alert.alert(t("status"), indicesStatus(language, code));
     } finally {
       lock.current = false;
