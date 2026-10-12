@@ -36,6 +36,7 @@ import { EvaluationWalletSheet } from "./EvaluationWalletSheet";
 import type { IndicesAction } from "./evaluation-indices-state";
 import { indicesStatus } from "./evaluation-indices-copy";
 import { EvaluationHome } from "./EvaluationHome";
+import { homeText } from "./evaluation-home-copy";
 import { EvaluationActivity } from "./EvaluationActivity";
 import { EvaluationBalances } from "./EvaluationBalances";
 import { purchaseUnits, purchaseCopy } from "./evaluation-purchase";
@@ -447,14 +448,16 @@ export default function DevnetEvaluationApp() {
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <View style={styles.header}>
+      <View style={[styles.header, tab === "home" && styles.homeHeader]}>
         <View style={styles.brand}>
           <Image
             accessible={false}
             source={require("../../mobile/assets/images/splash-icon.png")}
-            style={styles.wordmark}
+            style={[styles.wordmark, tab === "home" && styles.homeWordmark]}
           />
-          <Text style={styles.title}>C Market</Text>
+          <Text style={[styles.title, tab === "home" && styles.homeTitle]}>
+            C Market
+          </Text>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -467,16 +470,22 @@ export default function DevnetEvaluationApp() {
           {wallet ? <View style={styles.connectionDot} /> : null}
         </Pressable>
       </View>
-      <View style={styles.banner}>
-        <Text style={styles.demo}>{u("demo")}</Text>
-        <Text style={styles.bannerText}>{t("notice")}</Text>
+      <View style={tab === "home" ? styles.homeBanner : styles.banner}>
+        {tab === "home" ? (
+          <Text style={styles.homeDemo}>{homeText(language, "demoStrip")}</Text>
+        ) : (
+          <>
+            <Text style={styles.demo}>{u("demo")}</Text>
+            <Text style={styles.bannerText}>{t("notice")}</Text>
+          </>
+        )}
       </View>
       <ScrollView
         ref={scroll}
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
-        {tab !== "activity" ? (
+        {tab === "indices" ? (
           <EvaluationBalances
             wallet={wallet}
             language={language}
@@ -532,7 +541,9 @@ export default function DevnetEvaluationApp() {
             onCatalogLayout={scrollToCatalog}
           />
         </View>
-        <Text style={styles.footer}>{t("mainnet")}</Text>
+        {tab !== "home" ? (
+          <Text style={styles.footer}>{t("mainnet")}</Text>
+        ) : null}
       </ScrollView>
       <BottomNavigation language={language} tab={tab} onChange={changeTab} />
       <EvaluationWalletSheet
@@ -543,6 +554,7 @@ export default function DevnetEvaluationApp() {
         busy={busy}
         pending={unresolved}
         status={busy ? t("busy") : indicesStatus(language, status)}
+        balanceRevision={position}
         onClose={() => setWalletOpen(false)}
         onLanguage={selectLanguage}
         onConnect={() => {
@@ -562,6 +574,23 @@ export default function DevnetEvaluationApp() {
   );
 }
 const styles = StyleSheet.create({
+  homeHeader: { paddingVertical: 6 },
+  homeWordmark: { width: 32, height: 32 },
+  homeTitle: { fontSize: 26 },
+  homeBanner: {
+    backgroundColor: "#eaf7f1",
+    marginHorizontal: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  homeDemo: {
+    color: "#124b3d",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
   page: {
     flex: 1,
     backgroundColor: "#fff",

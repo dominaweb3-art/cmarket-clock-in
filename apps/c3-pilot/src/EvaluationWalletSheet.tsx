@@ -12,6 +12,7 @@ import {
 import { languageLabels, languages, type Language } from "./locales";
 import { indicesText } from "./evaluation-indices-copy";
 import { EvaluationAccordion } from "./EvaluationAccordion";
+import { EvaluationBalances } from "./EvaluationBalances";
 
 type Props = {
   visible: boolean;
@@ -21,6 +22,7 @@ type Props = {
   busy: boolean;
   pending: boolean;
   status: string;
+  balanceRevision: unknown;
   onClose: () => void;
   onLanguage: (language: Language) => void;
   onConnect: () => void;
@@ -28,7 +30,7 @@ type Props = {
   onDisconnect: () => void;
   onCheck: () => void;
 };
-/** No mount effects, provider assumptions, balances, or monetary actions. */
+/** Shared read-only balances; no wallet side effects or monetary actions on mount. */
 export function EvaluationWalletSheet({
   visible,
   language,
@@ -37,6 +39,7 @@ export function EvaluationWalletSheet({
   busy,
   pending,
   status,
+  balanceRevision,
   onClose,
   onLanguage,
   onConnect,
@@ -93,6 +96,14 @@ export function EvaluationWalletSheet({
           </View>
           <ScrollView contentContainerStyle={s.content}>
             <Text style={s.network}>Solana Devnet · TEST</Text>
+            {visible ? (
+              <EvaluationBalances
+                wallet={wallet}
+                language={language}
+                revision={balanceRevision}
+                compact
+              />
+            ) : null}
             {wallet ? (
               <>
                 <Text style={s.address}>

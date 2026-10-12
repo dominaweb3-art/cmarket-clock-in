@@ -97,11 +97,11 @@ test("Buy entry guides authentication and a fresh vault without authorizing a pa
     null,
   );
 });
-test("Home and Indices share the position; token details stay collapsed and sale remains state-bound", () => {
+test("Indices keeps the position; compact Home only navigates, and sale remains state-bound", () => {
   const source = (p: string) =>
     readFileSync(new URL("../src/" + p, import.meta.url), "utf8");
-  for (const p of ["EvaluationHome.tsx", "EvaluationIndices.tsx"])
-    assert.match(source(p), /<EvaluationPosition/);
+  assert.match(source("EvaluationIndices.tsx"), /<EvaluationPosition/);
+  assert.doesNotMatch(source("EvaluationHome.tsx"), /<EvaluationPosition/);
   assert.match(
     source("EvaluationIndices.tsx"),
     /EvaluationAccordion title=\{positionCopy\[language\]\.details\}/,

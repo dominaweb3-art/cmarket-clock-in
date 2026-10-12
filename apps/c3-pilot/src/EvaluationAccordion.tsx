@@ -5,30 +5,41 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 export function EvaluationAccordion({
   title,
   children,
+  expanded: controlledExpanded,
+  onToggle,
+  inline = false,
 }: {
   title: string;
   children: ReactNode;
+  expanded?: boolean;
+  onToggle?: () => void;
+  inline?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const open = controlledExpanded ?? expanded;
   return (
-    <View style={s.section}>
+    <View style={inline ? s.inline : s.section}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={title}
-        accessibilityState={{ expanded }}
-        onPress={() => setExpanded((v) => !v)}
+        accessibilityState={{ expanded: open }}
+        onPress={() => {
+          if (onToggle) onToggle();
+          else setExpanded((v) => !v);
+        }}
         style={s.trigger}
       >
         <Text style={s.title}>{title}</Text>
         <Text accessible={false} style={s.indicator}>
-          {expanded ? "−" : "+"}
+          {open ? "−" : "+"}
         </Text>
       </Pressable>
-      {expanded ? <View style={s.content}>{children}</View> : null}
+      {open ? <View style={s.content}>{children}</View> : null}
     </View>
   );
 }
 const s = StyleSheet.create({
+  inline: { borderTopWidth: StyleSheet.hairlineWidth, borderColor: "#e3ebe7" },
   section: {
     backgroundColor: "#fff",
     borderWidth: 1,

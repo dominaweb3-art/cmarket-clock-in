@@ -563,3 +563,62 @@ and SHA match the signed local artifact. Public download:
 <https://cmarket-nine.vercel.app/downloads/c-market-c3-devnet-evaluation-0.1.29.apk>.
 Prior APKs and all historical economic receipts are preserved. No monetary
 cycle was repeated for this visual change.
+
+## 12 October 2026 — compact Home and wallet balances, APK 0.1.30
+
+Classification: CLOCKIN_ONLY. Starting commit
+`4f970123508702a782e43d6fd94d959b70cf76a4`. The supplied design describes Home,
+although the accompanying message names Indices; clarification was requested.
+This implementation applies the explicitly specified Home layout and preserves
+Indices and Activity. It does not implement a variable market-linked redemption.
+
+Home alone has a compact brand header, permanent localized
+"Demo Devnet · No real money" strip, two-line introduction and a smaller
+40/30/30 C3 card with one primary navigation button. Explanations share one
+container with five initially closed, flat accordion rows; only one may remain
+open, including the separate coming-soon row. Pending operation hints still use
+the original wallet-scoped state and navigation. Positions and market-reference
+performance remain in Indices rather than overcrowding the explanatory Home.
+SOL/evaluation-USDC balances and their original refresh action are available in
+the shared wallet menu. The former Home balance cards are removed; Indices
+retains its original cards. No mint, RPC, amount, accounting or processing changed.
+The FAQ preserves the actual ten separate per-wallet vault rounds after finalized
+redemption; it does not copy the obsolete instruction requiring a different wallet.
+All copy has English/Spanish/Simplified-Chinese/Brazilian-Portuguese translations.
+Approved images are reused, not redesigned. No dependency was added.
+
+Validation: 37 focused mobile tests, TypeScript, lint, formatting, Android export,
+signed release build and diff checks PASS. Eleven authentication/wallet/operation
+controller initializers independently compared against starting HEAD have
+identical canonical TypeScript AST output. Services, contracts, wallet/protocol
+modules and Indices/Activity source are unchanged. React review confirms local
+accordion state, accessible expanded states, text scaling, default-compatible
+shared components and no monetary callbacks on expansion or navigation.
+Expo Doctor remains 18/19: existing Expo 57.0.26 versus expected 57.0.27 mismatch.
+
+APK `c-market-c3-devnet-evaluation-0.1.30.apk`, version code 31, package
+`com.dominaweb3.cmarket.c3evaluation`, display name `C Market`.
+SHA-256: `70bdfd3d87afd08bc4399c7f4844b3ff3edb743adfcb4bc166e3354feaa88bbc`.
+Certificate SHA-256:
+`58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+The actual installed previous certificate matched before data-preserving
+`adb install -r`. Prior APKs were not overwritten. Seeker cold launch without
+Metro, Spanish Home, expanded getting-started text, mutual exclusion when opening
+another information row, wallet-menu opening, and Devnet balance rendering PASS.
+The wallet was connected with ownership pending; no authentication or transaction
+signature was requested or approved by the agent. Physical four-language review
+was interrupted when a different app became foreground; UI interaction stopped.
+Do not infer full physical multilingual acceptance from the locale unit tests.
+No new blockchain cycle, deployment, funds transfer, service publication or push
+was performed for this visual change; Mainnet remains disabled.
+
+The requested market-linked test-USDC reserve remains **NOT IMPLEMENTED**.
+Existing sale output and minimum in `evaluation-route.ts` and
+`evaluation-settlement-client.ts` use the deterministic test ratio. The market
+reference is deliberately excluded from quote and monetary authorization. Merely
+holding or issuing more test USDC does not change redemption entitlement. A
+separate, explicitly agreed Devnet-only policy must bind fresh market evidence,
+sale plan, signed outputs/minima and actual reconciled reserve transfers, preserve
+historical floors and uncertain signatures, and define both losses and gains.
+Always paying more would not reproduce market performance. No client display
+value or unauthenticated request was promoted into a payable amount.

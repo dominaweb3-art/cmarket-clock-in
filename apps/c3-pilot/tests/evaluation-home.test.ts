@@ -89,10 +89,7 @@ test("Home copy is complete in four languages and preserves truthful test restri
     for (const key of Object.keys(homeCopy.en) as (keyof typeof homeCopy.en)[])
       assert.ok(homeText(language, key).trim().length, `${language}/${key}`);
     assert.match(homeText(language, "note"), /Devnet/);
-    assert.match(
-      homeText(language, "buyBody"),
-      /1.*1[.,]000[.,]000 USDC Devnet/,
-    );
+    assert.match(homeText(language, "buyBody"), /1.*USDC/);
     assert.match(
       homeText(language, "methodologyBody"),
       /BTC 40%.*ETH 30%.*SOL 30%/,
@@ -117,10 +114,10 @@ test("Home copy is complete in four languages and preserves truthful test restri
     ] as const)
       assert.ok(indicesText(language, state));
   }
-  assert.equal(homeText("es", "title"), "Criptoactivos, en una cesta.");
+  assert.equal(homeText("es", "title"), "Tres criptoactivos.\nUna sola cesta.");
   assert.equal(
     homeText("es", "introduction"),
-    "C Market reúne activos en índices y te permite seguir tu participación desde una experiencia móvil sencilla.",
+    "Conoce C3, explora su composición y sigue tus participaciones desde tu wallet.",
   );
 });
 test("pending hint uses existing wallet-scoped state, not balances or a stored success signature", () => {
@@ -300,6 +297,7 @@ test("information accordions toggle locally, remain flat and introduce no signat
   visit(file);
   let expanded = false;
   const toggle = expressionFunction(expression, {
+    onToggle: undefined,
     setExpanded: (fn: (v: boolean) => boolean) => {
       expanded = fn(expanded);
     },
@@ -309,7 +307,7 @@ test("information accordions toggle locally, remain flat and introduce no signat
   toggle();
   assert.equal(expanded, false);
   assert.match(accordionText, /useState\(false\)/);
-  assert.match(accordionText, /accessibilityState=\{\{ expanded \}\}/);
+  assert.match(accordionText, /accessibilityState=\{\{ expanded: open \}\}/);
   const home = ts.createSourceFile(
     "home.tsx",
     source("EvaluationHome.tsx"),
@@ -332,10 +330,57 @@ test("information accordions toggle locally, remain flat and introduce no signat
     );
   }
   inspect(home);
-  assert.equal(count, 5);
+  assert.equal(count, 6);
   assert.equal(nested, false);
   assert.ok(!appText.includes("accountOpen")); // Home no longer hosts duplicate wallet/trading controls.
   assert.ok(
     !appText.includes("<C3Summary") && !appText.includes("<UpcomingIndices"),
   );
+});
+test("Home information uses a single controlled group; only one row can stay open", () => {
+  const text = source("EvaluationHome.tsx");
+  const file = ts.createSourceFile(
+    "home.tsx",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let opened: string | null = null;
+  const props = (key: string) =>
+    expressionFunction(initializer("accordionProps", file), {
+      openSection: opened,
+      setOpenSection: (fn: (old: string | null) => string | null) => {
+        opened = fn(opened);
+      },
+    })(key) as { expanded: boolean; onToggle: () => void; inline: boolean };
+  assert.equal(props("how").expanded, false);
+  props("how").onToggle();
+  assert.equal(props("how").expanded, true);
+  props("faq").onToggle();
+  assert.equal(props("how").expanded, false);
+  assert.equal(props("faq").expanded, true);
+  props("faq").onToggle();
+  assert.equal(opened, null);
+  assert.equal(props("about").inline, true);
+  assert.match(text, /useState<string \| null>\(null\)/);
+  assert.equal(
+    (text.match(/testID="home-information-group"/g) ?? []).length,
+    1,
+  );
+  assert.doesNotMatch(text, /t\("available"\)|t\("note"\)/);
+  assert.match(text, /CryptoIcon index=\{asset.icon\} size=\{36\}/);
+});
+test("Home balances live in the existing wallet sheet; other tabs keep their presentation", () => {
+  const sheet = source("EvaluationWalletSheet.tsx");
+  assert.match(appText, /tab === "indices" \? \(\s*<EvaluationBalances/);
+  assert.match(sheet, /visible \? \(\s*<EvaluationBalances/);
+  assert.match(sheet, /revision=\{balanceRevision\}/);
+  assert.match(appText, /balanceRevision=\{position\}/);
+  assert.match(appText, /tab === "home" \? styles.homeBanner : styles.banner/);
+  assert.match(appText, /homeText\(language, "demoStrip"\)/);
+  for (const language of languages) {
+    assert.match(homeText(language, "demoStrip"), /Devnet/);
+    assert.match(homeText(language, "aboutBody"), /Devnet/);
+  }
 });

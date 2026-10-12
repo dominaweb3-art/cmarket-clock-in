@@ -104,13 +104,27 @@ export function BottomNavigation({
   );
 }
 
-export function CryptoIcon({ index }: { index: number }) {
+export function CryptoIcon({
+  index,
+  size = 56,
+}: {
+  index: number;
+  size?: number;
+}) {
   // Crop in the view, not the source: all approved pixels/proportions preserved.
   return (
-    <View accessible={false} style={s.crop}>
+    <View accessible={false} style={[s.crop, { width: size, height: size }]}>
       <Image
         source={require("../assets/evaluation-ui/crypto-sprite-v1.png")}
-        style={[s.sprite, { left: -index * 56 }]}
+        style={[
+          s.sprite,
+          {
+            width: size * 4,
+            height: (size * 4) / 3,
+            top: -((size * 4) / 3 - size) / 2,
+            left: -index * size,
+          },
+        ]}
       />
     </View>
   );

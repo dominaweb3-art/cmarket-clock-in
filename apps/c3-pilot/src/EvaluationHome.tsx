@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
 import type { Language } from "./locales";
 import { evalText } from "./evaluation-locales";
 import { evaluationTargets } from "./evaluation-visual-copy";
@@ -7,7 +8,6 @@ import { homeText } from "./evaluation-home-copy";
 import { homeOperation } from "./evaluation-home-state";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { CryptoIcon, NavigationGlyph } from "./EvaluationVisuals";
-import { EvaluationPosition } from "./EvaluationPosition";
 
 const steps = [
   { title: "connect", body: "connectBody", icon: "wallet" },
@@ -39,6 +39,13 @@ export function EvaluationHome({
 }: Props) {
   const t = (key: Parameters<typeof homeText>[1]) => homeText(language, key);
   const operation = homeOperation(wallet, verified, busy, position);
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const accordionProps = (key: string) => ({
+    inline: true,
+    expanded: openSection === key,
+    onToggle: () =>
+      setOpenSection((previous) => (previous === key ? null : key)),
+  });
   return (
     <View testID="evaluation-home">
       <Text accessibilityRole="header" style={s.title}>
@@ -50,13 +57,6 @@ export function EvaluationHome({
           <Text style={s.c3}>C3</Text>
           <Text style={s.index}>{indicesText(language, "index")}</Text>
         </View>
-        <Text style={s.available}>{t("available")}</Text>
-        <EvaluationPosition
-          language={language}
-          wallet={wallet}
-          verified={verified}
-          position={position}
-        />
         <Text style={s.caption}>{t("target")}</Text>
         <View style={s.assets}>
           {evaluationTargets.map((asset) => (
@@ -64,7 +64,7 @@ export function EvaluationHome({
               key={asset.symbol}
               style={[s.asset, { backgroundColor: asset.background }]}
             >
-              <CryptoIcon index={asset.icon} />
+              <CryptoIcon index={asset.icon} size={36} />
               <Text style={s.weight}>
                 {asset.symbol} {asset.percent}%
               </Text>
@@ -96,9 +96,7 @@ export function EvaluationHome({
               <Text style={s.link}>{t("continue")}</Text>
             </Pressable>
           </View>
-        ) : (
-          <Text style={s.note}>{t("note")}</Text>
-        )}
+        ) : null}
         {status.startsWith("EVAL_") ? (
           <Text accessibilityLiveRegion="polite" style={s.warning}>
             {evalText(language, "error")}
@@ -107,40 +105,48 @@ export function EvaluationHome({
           </Text>
         ) : null}
       </View>
-      <EvaluationAccordion title={t("how")}>
-        {steps.map((step, index) => (
-          <View key={step.title} style={s.step}>
-            <View accessible={false} style={s.stepIcon}>
-              <NavigationGlyph name={step.icon} color="#075c47" />
-            </View>
-            <View style={s.stepText}>
-              <Text style={s.question}>
-                {index + 1}. {t(step.title)}
-              </Text>
-              <Text style={s.body}>{t(step.body)}</Text>
-            </View>
-          </View>
-        ))}
-      </EvaluationAccordion>
       <Text accessibilityRole="header" style={s.sectionTitle}>
         {t("learn")}
       </Text>
-      <EvaluationAccordion title={t("what")}>
-        <Text style={s.body}>{t("whatBody")}</Text>
-      </EvaluationAccordion>
-      <EvaluationAccordion title={t("methodology")}>
-        <Text style={s.body}>{t("methodologyBody")}</Text>
-      </EvaluationAccordion>
-      <EvaluationAccordion title={t("faq")}>
-        {questions.map((key) => (
-          <View key={key} style={s.answer}>
-            <Text style={s.question}>{t(key)}</Text>
-            <Text style={s.body}>{t(`${key}Body`)}</Text>
-          </View>
-        ))}
-      </EvaluationAccordion>
+      <View style={s.information} testID="home-information-group">
+        <EvaluationAccordion title={t("how")} {...accordionProps("how")}>
+          {steps.map((step, index) => (
+            <View key={step.title} style={s.step}>
+              <View accessible={false} style={s.stepIcon}>
+                <NavigationGlyph name={step.icon} color="#075c47" />
+              </View>
+              <View style={s.stepText}>
+                <Text style={s.question}>
+                  {index + 1}. {t(step.title)}
+                </Text>
+                <Text style={s.body}>{t(step.body)}</Text>
+              </View>
+            </View>
+          ))}
+        </EvaluationAccordion>
+        <EvaluationAccordion title={t("what")} {...accordionProps("what")}>
+          <Text style={s.body}>{t("whatBody")}</Text>
+        </EvaluationAccordion>
+        <EvaluationAccordion
+          title={t("methodology")}
+          {...accordionProps("methodology")}
+        >
+          <Text style={s.body}>{t("methodologyBody")}</Text>
+        </EvaluationAccordion>
+        <EvaluationAccordion title={t("faq")} {...accordionProps("faq")}>
+          {questions.map((key) => (
+            <View key={key} style={s.answer}>
+              <Text style={s.question}>{t(key)}</Text>
+              <Text style={s.body}>{t(`${key}Body`)}</Text>
+            </View>
+          ))}
+        </EvaluationAccordion>
+        <EvaluationAccordion title={t("about")} {...accordionProps("about")}>
+          <Text style={s.body}>{t("aboutBody")}</Text>
+        </EvaluationAccordion>
+      </View>
       <View style={s.future}>
-        <EvaluationAccordion title={t("future")}>
+        <EvaluationAccordion title={t("future")} {...accordionProps("future")}>
           <Text style={s.body}>{t("futureBody")}</Text>
           <Pressable
             testID="home-upcoming-indices"
@@ -168,7 +174,7 @@ const s = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginTop: 8,
-    marginBottom: 18,
+    marginBottom: 22,
   },
   card: {
     borderWidth: 1,
@@ -176,7 +182,7 @@ const s = StyleSheet.create({
     backgroundColor: "#fbfefd",
     borderRadius: 24,
     padding: 16,
-    marginBottom: 6,
+    marginBottom: 0,
   },
   heading: {
     flexDirection: "row",
@@ -186,21 +192,14 @@ const s = StyleSheet.create({
   },
   c3: { fontSize: 32, fontWeight: "800", color: "#0b1221" },
   index: { color: "#183d30", fontSize: 20, fontWeight: "600", flexShrink: 1 },
-  available: {
-    color: "#075c47",
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
-    marginBottom: 12,
-  },
   caption: { color: "#60766a", fontSize: 13, lineHeight: 20 },
-  assets: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+  assets: { flexDirection: "row", gap: 8, marginTop: 8 },
   asset: {
     flex: 1,
-    minWidth: 78,
+    minWidth: 0,
     borderRadius: 14,
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     gap: 4,
   },
   weight: {
@@ -224,7 +223,6 @@ const s = StyleSheet.create({
     color: "#fff",
     textAlign: "center",
   },
-  note: { color: "#60766a", fontSize: 12, lineHeight: 18, marginTop: 10 },
   pending: { paddingTop: 10 },
   secondary: { minHeight: 48, justifyContent: "center", paddingVertical: 10 },
   link: { color: "#075c47", fontSize: 15, lineHeight: 22, fontWeight: "600" },
@@ -234,6 +232,14 @@ const s = StyleSheet.create({
     color: "#153c2e",
     fontWeight: "700",
     marginTop: 22,
+    marginBottom: 8,
+  },
+  information: {
+    borderWidth: 1,
+    borderColor: "#e3ebe7",
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#fff",
   },
   step: {
     flexDirection: "row",
@@ -251,7 +257,7 @@ const s = StyleSheet.create({
   },
   body: { color: "#52675b", fontSize: 15, lineHeight: 23, marginTop: 4 },
   answer: { paddingVertical: 8 },
-  future: { marginTop: 12 },
+  future: { marginTop: 20 },
   warning: {
     color: "#765311",
     backgroundColor: "#fff4d4",

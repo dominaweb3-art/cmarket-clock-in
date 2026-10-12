@@ -70,10 +70,12 @@ export function EvaluationBalances({
   wallet,
   language,
   revision,
+  compact = false,
 }: {
   wallet: string | null;
   language: Language;
   revision: unknown;
+  compact?: boolean;
 }) {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [refresh, setRefresh] = useState(0);
@@ -119,12 +121,15 @@ export function EvaluationBalances({
   }, [wallet, refresh, revision]);
   const values = entry?.wallet === wallet ? entry.values : null;
   return (
-    <View style={s.container} testID="evaluation-wallet-balances">
+    <View
+      style={[s.container, compact && s.compact]}
+      testID="evaluation-wallet-balances"
+    >
       {!wallet ? (
         <Text style={s.note}>{c[0]}</Text>
       ) : (
         <>
-          <View style={s.row}>
+          <View style={[s.row, compact && s.compactRow]}>
             <View style={s.cell}>
               <View style={s.solIcon}>
                 <View style={s.solInner}>
@@ -132,8 +137,10 @@ export function EvaluationBalances({
                 </View>
               </View>
               <View style={s.content}>
-                <Text style={s.label}>SOL Devnet</Text>
-                <Text style={s.amount}>
+                <Text style={[s.label, compact && s.compactLabel]}>
+                  SOL Devnet
+                </Text>
+                <Text style={[s.amount, compact && s.compactAmount]}>
                   {loading ? c[1] : (values?.[0] ?? c[2])}
                 </Text>
               </View>
@@ -146,11 +153,13 @@ export function EvaluationBalances({
               />
               <View style={s.content}>
                 <View style={s.tokenHeading}>
-                  <Text style={s.label}>{c[4]}</Text>
+                  <Text style={[s.label, compact && s.compactLabel]}>
+                    {c[4]}
+                  </Text>
                   <Text style={s.network}>{c[6]}</Text>
                 </View>
                 <View>
-                  <Text style={s.amount}>
+                  <Text style={[s.amount, compact && s.compactAmount]}>
                     {loading ? c[1] : (values?.[1] ?? c[2])}
                   </Text>
                 </View>
@@ -162,9 +171,9 @@ export function EvaluationBalances({
             accessibilityLabel={c[3]}
             disabled={loading}
             onPress={() => setRefresh((v) => v + 1)}
-            style={s.refresh}
+            style={[s.refresh, compact && s.compactRefresh]}
           >
-            <Text style={s.note}>{c[5]} · ↻</Text>
+            <Text style={[s.note, compact && s.compactNote]}>{c[5]} · ↻</Text>
           </Pressable>
         </>
       )}
@@ -172,6 +181,12 @@ export function EvaluationBalances({
   );
 }
 const s = StyleSheet.create({
+  compact: { marginHorizontal: 0, marginBottom: 12 },
+  compactRow: { flexWrap: "wrap" },
+  compactLabel: { fontSize: 13 },
+  compactAmount: { fontSize: 17 },
+  compactNote: { fontSize: 12 },
+  compactRefresh: { minHeight: 48 },
   container: { marginHorizontal: 20, marginTop: 10, marginBottom: 2 },
   row: { flexDirection: "row", gap: 10 },
   cell: {

@@ -213,7 +213,7 @@ test("accordions and wallet opening are passive; bottom navigation is fixed; no 
     app = source("DevnetEvaluationApp.tsx"),
     indices = source("EvaluationIndices.tsx");
   assert.match(accordion, /useState\(false\)/);
-  assert.match(accordion, /accessibilityState=\{\{ expanded \}\}/);
+  assert.match(accordion, /accessibilityState=\{\{ expanded: open \}\}/);
   assert.ok(!accordion.includes("useEffect"));
   assert.ok(!sheet.includes("useEffect"));
   assert.ok(!sheet.includes("signEvaluation"));
