@@ -69,7 +69,38 @@ export function referenceView(
     frozen: r.frozen as boolean,
     observedAt: r.observedAt as string,
     basisTime: r.basisTime as string,
+    performance: referencePerformance(
+      r.changeUnits as string,
+      position.deposited,
+    ),
   };
+}
+/** Exact display arithmetic; never authorizes a swap, valuation or redemption.
+ * Percentages truncate to two decimals. Tiny nonzero changes retain their sign
+ * and use a less-than label rather than falsely presenting zero performance. */
+export function referencePerformance(change: string, deposited: string) {
+  if (
+    !/^-?(0|[1-9][0-9]{0,29})$/.test(change) ||
+    !/^[1-9][0-9]{0,29}$/.test(deposited) ||
+    BigInt(deposited) < 1_000_000n ||
+    BigInt(deposited) > 1_000_000_000_000n ||
+    BigInt(change) < -BigInt(deposited)
+  )
+    throw Error("EVAL_REFERENCE_PERFORMANCE_INVALID");
+  const delta = BigInt(change),
+    absolute = delta < 0n ? -delta : delta,
+    hundredths = (absolute * 10_000n) / BigInt(deposited);
+  return {
+    direction: delta > 0n ? "up" : delta < 0n ? "down" : "flat",
+    percent:
+      (delta > 0n ? "+" : delta < 0n ? "−" : "") +
+      (delta !== 0n && hundredths === 0n
+        ? "<0.01"
+        : (hundredths / 100n).toString() +
+          "." +
+          (hundredths % 100n).toString().padStart(2, "0")) +
+      "%",
+  } as const;
 }
 export function referenceDollars(units: string) {
   const value = BigInt(units),

@@ -513,3 +513,53 @@ request correctly rejected the new binary with `EVAL_PROVISION_PROGRAM_BINARY`.
 These are honest stop/recovery records, not failed deposits hidden as success.
 The maximum-unit journey was NOT signed through physical Phantom; the owner's
 10-unit active basket was not sold or changed by this technical test.
+
+## 12 October 2026 — basket performance display, APK 0.1.29
+
+Classification: CLOCKIN_ONLY. Display-only improvement from commit
+`d023a16f5ba641e49d636bc315051a3aae6f14df`. Home and Indices reuse the same
+position component: deposited test USDC, verified deposit date, illustrative
+current USD value, signed amount and percentage change. Positive, negative and
+zero changes have green/red/neutral styling AND localized directional text.
+All four existing locales are covered. Percentage uses checked bigint arithmetic,
+relative to the deposited amount; nonzero changes below 0.01% retain their sign
+and a less-than label. The existing read-only query refreshes every 60 seconds
+while foregrounded and not processing an operation. No polling, wallet,
+ownership verification, transaction controller, backend, program or signing
+behavior changed. Missing, contradictory or stale reference evidence is not
+displayed as current performance; the reference remains frozen at a sale request.
+
+This is **informational simulated performance**, not a live monetary NAV,
+investment gain/loss or redemption entitlement. Deposit basis remains the last
+closed 60-second BTC/ETH/SOL candle before the reconciled deposit. Actual sales
+pay only finalized, reconciled test USDC, independently of the displayed USD
+estimate. Mainnet remains disabled.
+
+Validation: ten focused reference/position/variable-purchase tests PASS;
+TypeScript, lint, changed-file formatting, Android production export and signed
+release build PASS. React review: no wallet/HTTP callbacks were added to the
+display component; labels do not rely solely on color; the existing timer cleans
+up on unmount. Expo Doctor 18/19: existing Expo 57.0.26 versus expected
+57.0.27 patch mismatch, not suppressed or upgraded in a display-only task.
+
+APK: `c-market-c3-devnet-evaluation-0.1.29.apk`, version code 30, package
+`com.dominaweb3.cmarket.c3evaluation`, launcher label `C Market`.
+SHA-256: `99f2ec56df4581d7eaff67fa404af61d73435941bfab6f97c0051f58071d3168`.
+Certificate SHA-256:
+`58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+The installed prior APK certificate was independently compared; `adb install -r`
+succeeded without uninstalling or clearing data. Seeker cold launch without a
+Metro listener and Home-to-Indices navigation PASS. Following cold launch the
+wallet is disconnected; **authenticated physical performance display remains
+pending** the owner's normal connection and ownership-verification flow. No
+physical signature, buy, sale, claim or blockchain transaction was performed.
+Unit tests cover both directions, zero, small changes, million-unit bounds,
+stale reference rejection and frozen sale state; these do not substitute for
+the pending authenticated visual check.
+
+Published in the existing free Vercel project only. Staged health reports
+`VERIFIED_DEVNET`, `SCHEMA_PRESENT`, `mainnetEnabled:false`; staged APK download
+and SHA match the signed local artifact. Public download:
+<https://cmarket-nine.vercel.app/downloads/c-market-c3-devnet-evaluation-0.1.29.apk>.
+Prior APKs and all historical economic receipts are preserved. No monetary
+cycle was repeated for this visual change.
