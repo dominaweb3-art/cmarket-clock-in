@@ -1,5 +1,6 @@
 import { languages, type Language } from "./locales.ts";
 import { evalText, type EvaluationKey } from "./evaluation-locales.ts";
+import { saleCopy } from "./evaluation-sale-copy.ts";
 
 const en = {
   currentPosition: "Current on-chain position",
@@ -447,6 +448,14 @@ export const marketKeys = [
 /** Re-localize already displayed results without changing controller state or
  * re-requesting anything. Internal error identifiers are preserved verbatim. */
 export function indicesStatus(language: Language, status: string): string {
+  if (
+    [
+      "EVAL_LEG_EXPIRED_OR_SLIPPAGE",
+      "EVAL_LEG_PLAN_EXPIRED_RENEW_REQUIRED",
+      "EVAL_SERVICE_QUOTE_EXPIRED_RENEW_REQUIRED",
+    ].includes(status)
+  )
+    return `${saleCopy[language].expired}\n${status}`;
   const keys: EvaluationKey[] = [
     "connected",
     "authenticated",

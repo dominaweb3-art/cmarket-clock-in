@@ -1,6 +1,13 @@
 import type { Language } from "./locales";
 const en = {
   quantity: "Quantity to sell",
+  renew: "Renew and continue this sale",
+  expired:
+    "The settlement plan expired, not your shares. Tap Sell C3 to review its renewal and resume the existing sale.",
+  finishFirst:
+    "Finish or recover the current basket before opening another purchase. No deposit will be duplicated.",
+  noShares:
+    "There are no verified shares available to sell yet. Complete the current purchase or refresh your position.",
   all: "All my shares · {amount} C3",
   totalOnly:
     "This vault supports full sales only; partial sales are not available.",
@@ -21,6 +28,13 @@ export const saleCopy: Record<Language, Copy> = {
   en,
   es: {
     quantity: "Cantidad a vender",
+    renew: "Renovar y continuar esta venta",
+    expired:
+      "Venció el plan de liquidación, no tus participaciones. Pulsa Vender C3 para revisar su renovación y retomar la venta existente.",
+    finishFirst:
+      "Termina o recupera la cesta actual antes de abrir otra compra. No se duplicará ningún depósito.",
+    noShares:
+      "Todavía no hay participaciones verificadas disponibles para vender. Completa la compra actual o actualiza tu posición.",
     all: "Todas mis participaciones · {amount} C3",
     totalOnly:
       "Esta bóveda solo permite venta total; la venta parcial no está disponible.",
@@ -38,6 +52,11 @@ export const saleCopy: Record<Language, Copy> = {
   },
   "zh-CN": {
     quantity: "卖出数量",
+    renew: "续期并继续本次卖出",
+    expired:
+      "结算计划已过期，份额并未失效。点击卖出 C3 查看续期并继续现有卖出。",
+    finishFirst: "开启新购买前请完成或恢复当前篮子。不会重复存入。",
+    noShares: "尚无可卖出的已验证份额。请完成当前购买或刷新仓位。",
     all: "全部份额 · {amount} C3",
     totalOnly: "此金库仅支持全部卖出；暂不支持部分卖出。",
     sell: "卖出全部 C3",
@@ -52,6 +71,13 @@ export const saleCopy: Record<Language, Copy> = {
   },
   "pt-BR": {
     quantity: "Quantidade a vender",
+    renew: "Renovar e continuar esta venda",
+    expired:
+      "O plano de liquidação expirou, não suas cotas. Toque em Vender C3 para revisar a renovação e retomar a venda existente.",
+    finishFirst:
+      "Conclua ou recupere a cesta atual antes de iniciar outra compra. Nenhum depósito será duplicado.",
+    noShares:
+      "Ainda não há cotas verificadas disponíveis para vender. Conclua a compra atual ou atualize sua posição.",
     all: "Todas as minhas cotas · {amount} C3",
     totalOnly:
       "Este cofre permite apenas venda total; vendas parciais não estão disponíveis.",

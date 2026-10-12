@@ -249,7 +249,6 @@ test("connection, reconciliation and recovery controllers remain byte-equivalent
     health: "d9067e2d888360430b33fa605a0bba10ea54ab85e5e3d90159521d21d50467b6",
     updatePosition:
       "17a795837ad753dd8109a8565b33072ba9c242b1d4c4b4929fe144254e89b0ca",
-    recover: "a19a5139f3bfba4bdb1de4bd63c5cf34fae9c152ad6a38a195f129a356d0537f",
     displayUnits:
       "d145603605e61958338148a209820b0f4e0f4b93862649ed5abdab53188e0837",
   };

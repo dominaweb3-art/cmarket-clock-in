@@ -220,10 +220,10 @@ export function verifiedEvaluationLegContext(
     ),
     "PROGRESS_EFFECTS",
   );
+  check(number(p.max_slippage_bps) === 100n, "SLIPPAGE_POLICY");
   check(
-    number(p.max_slippage_bps) === 100n &&
-      snapshot.chainTime < number(p.expires_at),
-    "EXPIRED_OR_SLIPPAGE",
+    snapshot.chainTime < number(p.expires_at),
+    "PLAN_EXPIRED_RENEW_REQUIRED",
   );
   const registryAddress = client.pda("c3-route-reg-v1", client.vault),
     policyAddress = client.pda("c3-quote-policy-v1", client.vault);

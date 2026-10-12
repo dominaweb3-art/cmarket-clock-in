@@ -28,6 +28,7 @@ import { OpenOwnerJournal } from "./open-owner-journal-core.ts";
 import { verifyEvaluationOwnerEffects } from "./evaluation-owner-effects.ts";
 import { evaluationCanonical } from "./evaluation-canonical.ts";
 import { marketReference } from "./evaluation-market-reference.ts";
+import { evaluationPlanRecovery } from "./evaluation-plan-recovery.ts";
 import {
   captureEvaluationRenewal,
   assertRenewalOperationsUnchanged,
@@ -143,6 +144,37 @@ export class EvaluationOwnerService {
         [ctx.proof.wallet],
       )
     ).rows[0];
+    let settlementPlan = null;
+    if (intent && [1, 3].includes(ctx.position.lifecycle)) {
+      const direction = ctx.position.lifecycle === 1 ? 1 : 2;
+      const address = ctx.client.pda(
+        "c3-plan-v1",
+        ctx.client.intent(direction === 1 ? "deposit" : "redemption"),
+      );
+      const raw = await this.rpc.getAccountInfoAndContext(address, {
+        commitment: "finalized",
+        minContextSlot: ctx.slot,
+      });
+      const clock = await this.rpc.getBlockTime(raw.context.slot);
+      check(
+        clock && Math.abs(Date.now() / 1000 - clock) < 60,
+        "RECOVERY_CHAIN_CLOCK",
+      );
+      settlementPlan = evaluationPlanRecovery(
+        ctx.client,
+        direction,
+        String(intent.chain_revision),
+        clock!,
+        raw.value
+          ? {
+              owner: raw.value.owner.toBase58(),
+              executable: raw.value.executable,
+              lamports: raw.value.lamports,
+              data: [raw.value.data.toString("base64"), "base64"],
+            }
+          : null,
+      );
+    }
     const activity = intent
       ? (
           await this.pool.query(
@@ -191,6 +223,7 @@ export class EvaluationOwnerService {
           return false;
         }
       }),
+      settlementPlan,
       pendingRequests: intent
         ? (
             await this.pool.query(

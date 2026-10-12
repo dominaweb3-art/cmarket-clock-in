@@ -34,6 +34,7 @@ import {
   type PresentationKey,
 } from "./evaluation-indices-presentation-copy";
 import { saleCopy } from "./evaluation-sale-copy";
+import type { TradeMode } from "./evaluation-trade-actions";
 
 type Props = {
   language: Language;
@@ -43,6 +44,7 @@ type Props = {
   position: Record<string, unknown> | null;
   status: string;
   onAction: (action: IndicesAction) => void;
+  onTrade: (mode: TradeMode) => void;
   onRecover: () => void;
   displayUnits: (value: unknown) => string;
   purchaseAmount: string;
@@ -58,6 +60,7 @@ export function EvaluationIndices({
   position,
   status,
   onAction,
+  onTrade,
   onRecover,
   purchaseAmount,
   onPurchaseAmount,
@@ -105,23 +108,25 @@ export function EvaluationIndices({
   }
   const primary = presentationAction(state, busy, validAmount, limits);
   const label =
-    primary.action === "request_redemption"
-      ? sale.sell
-      : primary.action === "new_purchase"
-        ? t("newTrial")
-        : primary.action === "claim"
-          ? t("claim")
-          : primary.action === "issue_shares"
-            ? t("issue")
-            : primary.action === "advance"
-              ? t("continue")
-              : primary.action === "provision"
-                ? t("funds")
-                : primary.action === "refresh"
-                  ? t("refresh")
-                  : primary.action === "activity"
-                    ? t(state.title === "completed" ? "activity" : "view")
-                    : indicesText(language, state.label);
+    primary.action === "renew_plan"
+      ? evalText(language, "renew_plan")
+      : primary.action === "request_redemption"
+        ? sale.sell
+        : primary.action === "new_purchase"
+          ? t("newTrial")
+          : primary.action === "claim"
+            ? t("claim")
+            : primary.action === "issue_shares"
+              ? t("issue")
+              : primary.action === "advance"
+                ? t("continue")
+                : primary.action === "provision"
+                  ? t("funds")
+                  : primary.action === "refresh"
+                    ? t("refresh")
+                    : primary.action === "activity"
+                      ? t(state.title === "completed" ? "activity" : "view")
+                      : indicesText(language, state.label);
   const infoKeys = [
     "composition",
     "how",
@@ -225,19 +230,47 @@ export function EvaluationIndices({
             <Text style={s.caption}>{sale.totalOnly}</Text>
           </View>
         ) : null}
-        <Pressable
-          testID="indices-primary-action"
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          accessibilityState={{ disabled: primary.disabled }}
-          disabled={primary.disabled}
-          onPress={() => {
-            if (!primary.disabled) onAction(primary.action);
-          }}
-          style={[s.primary, primary.disabled && s.disabled]}
-        >
-          <Text style={s.primaryText}>{label}</Text>
-        </Pressable>
+        <View style={s.tradeRow}>
+          <Pressable
+            testID="indices-buy-action"
+            accessibilityRole="button"
+            accessibilityLabel={t("buy")}
+            disabled={busy}
+            accessibilityState={{ disabled: busy }}
+            onPress={() => onTrade("buy")}
+            style={[s.tradeButton, busy && s.disabled]}
+          >
+            <Text style={s.link}>{t("buy")}</Text>
+          </Pressable>
+          <Pressable
+            testID="indices-sell-action"
+            accessibilityRole="button"
+            accessibilityLabel={indicesText(language, "sell")}
+            disabled={busy}
+            accessibilityState={{ disabled: busy }}
+            onPress={() => onTrade("sell")}
+            style={[s.tradeButton, busy && s.disabled]}
+          >
+            <Text style={s.link}>{indicesText(language, "sell")}</Text>
+          </Pressable>
+        </View>
+        {!["deposit", "request_redemption", "new_purchase"].includes(
+          primary.action,
+        ) ? (
+          <Pressable
+            testID="indices-primary-action"
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ disabled: primary.disabled }}
+            disabled={primary.disabled}
+            onPress={() => {
+              if (!primary.disabled) onAction(primary.action);
+            }}
+            style={[s.primary, primary.disabled && s.disabled]}
+          >
+            <Text style={s.primaryText}>{label}</Text>
+          </Pressable>
+        ) : null}
         {ownsPosition && [3, 4].includes(Number(position?.lifecycle)) ? (
           <Text accessibilityLiveRegion="polite" style={s.body}>
             {state.action === "claim"
@@ -453,6 +486,19 @@ export function EvaluationIndices({
   );
 }
 const s = StyleSheet.create({
+  tradeRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
+  tradeButton: {
+    flex: 1,
+    minWidth: 120,
+    minHeight: 48,
+    padding: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#075c47",
+    backgroundColor: "#eef8f4",
+  },
   title: { color: "#0b1221", fontSize: 27, fontWeight: "800" },
   subtitle: {
     color: "#52665c",

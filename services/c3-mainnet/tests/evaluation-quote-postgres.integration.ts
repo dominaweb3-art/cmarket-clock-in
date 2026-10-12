@@ -37,6 +37,11 @@ test("Devnet quote preparation and existing signer journal use real PG CAS/trigg
     { encoding: "utf8" },
   );
   await pool.query(sql);
+  // This disposable test mocks provisioning/context. Match the current-wallet
+  // selector consumed by the quote service, without touching any hosted schema.
+  await pool.query(
+    "CREATE VIEW c3_eval.current_wallet_vaults AS SELECT wallet,vault FROM c3_eval.intents",
+  );
   const f = await evaluationContextFixture(
     1,
     0,
@@ -190,7 +195,7 @@ test("Devnet quote preparation and existing signer journal use real PG CAS/trigg
   });
   await assert.rejects(
     () => service.prepare("test-only-session"),
-    /EXPIRED_OR_SLIPPAGE/,
+    /PLAN_EXPIRED_RENEW_REQUIRED/,
   );
   f.accounts.set(f.planAddress.toBase58(), originalPlan);
   await pool.query(

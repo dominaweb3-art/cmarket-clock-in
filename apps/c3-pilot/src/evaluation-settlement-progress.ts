@@ -12,6 +12,8 @@ export function canContinueSettlement(wallet: string, position: Position) {
     Array.isArray(position.pendingRequests) &&
     position.pendingRequests.length === 0 &&
     !position.pendingInitialPlan &&
+    (position.settlementPlan as Record<string, unknown> | null)?.state !==
+      "expired" &&
     [1, 3].includes(position.lifecycle as number) &&
     Array.isArray(position.allowedActions) &&
     !position.allowedActions.includes("claim") &&

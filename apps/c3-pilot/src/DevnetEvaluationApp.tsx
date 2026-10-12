@@ -45,6 +45,11 @@ import {
   continueSettlement,
 } from "./evaluation-settlement-progress";
 import { saleCopy } from "./evaluation-sale-copy";
+import {
+  tradeAction,
+  recoverOwnerRequest,
+  type TradeMode,
+} from "./evaluation-trade-actions";
 
 const STORAGE = "c3-evaluation-language/v1";
 export default function DevnetEvaluationApp() {
@@ -107,7 +112,7 @@ export default function DevnetEvaluationApp() {
         setWalletOpen(true);
       }
       setStatus(code);
-      Alert.alert(t("status"), `${t("error")}\n${code}`);
+      Alert.alert(t("status"), indicesStatus(language, code));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -273,15 +278,18 @@ export default function DevnetEvaluationApp() {
       foreground.remove();
     };
   }, [wallet, verified, position]);
-  const prepareWalletAction = (action: EvaluationMoneyAction) => {
+  const prepareWalletAction = (
+    action: EvaluationMoneyAction,
+    reviewedPosition = position,
+  ) => {
     if (!wallet || !verified || busy) return;
     let amount: bigint, round: bigint;
     try {
       amount =
         action === "deposit"
           ? purchaseUnits(purchaseAmount)
-          : BigInt(String(position?.deposited ?? "1000000"));
-      round = BigInt(String(position?.round ?? "1"));
+          : BigInt(String(reviewedPosition?.deposited ?? "1000000"));
+      round = BigInt(String(reviewedPosition?.round ?? "1"));
     } catch {
       Alert.alert(t("status"), purchaseCopy[language].invalid);
       return;
@@ -417,12 +425,8 @@ export default function DevnetEvaluationApp() {
         return;
       }
       if (!pending) return;
-      const result = await evaluationRequest(
-        {
-          operation: pending.signature ? "reconcile" : "close_expired",
-          requestId: pending.request_id,
-        },
-        session.current,
+      const result = await recoverOwnerRequest(pending, (body) =>
+        evaluationRequest(body, session.current),
       );
       setStatus(String(result.status ?? ""));
       await updatePosition();
@@ -466,6 +470,65 @@ export default function DevnetEvaluationApp() {
     )
       return;
     prepareWalletAction(action);
+  };
+  const retryTrade = async (mode: TradeMode) => {
+    if (busy || lock.current) return;
+    if (!wallet || !verified) return setWalletOpen(true);
+    if (!position) return mode === "buy" ? provision() : refresh();
+    const loaded = { position: null as Record<string, unknown> | null };
+    await run(async () => {
+      let current = await updatePosition();
+      // Explicit button press: bounded reconciliation, never automatic resend.
+      for (let step = 0; step < 4; step++) {
+        const pending = Array.isArray(current.pendingRequests)
+          ? current.pendingRequests[0]
+          : null;
+        if (!pending) break;
+        const result = await recoverOwnerRequest(pending, (body) =>
+          evaluationRequest(body, session.current),
+        );
+        setStatus(String(result.status ?? ""));
+        current = await updatePosition();
+        if (
+          ![
+            "effects_verified",
+            "already_reconciled",
+            "closed_unexecuted",
+          ].includes(String(result.status))
+        )
+          return;
+      }
+      if (current.pendingInitialPlan) {
+        await evaluationRequest(
+          { operation: "recover_initial_plan" },
+          session.current,
+        );
+        current = await updatePosition();
+      }
+      loaded.position = current;
+    });
+    if (!loaded.position || lock.current) return;
+    const action = tradeAction(mode, wallet, verified, loaded.position);
+    if (action === null) {
+      Alert.alert(
+        t("status"),
+        saleCopy[language][mode === "buy" ? "finishFirst" : "noShares"],
+      );
+      return;
+    }
+    if (action === "recover") return; // Original signature remains pending, not a new approval.
+    if (action === "advance") return advance();
+    if (action === "new_purchase" || action === "provision")
+      return provision(action === "new_purchase");
+    if (action === "wallet") return setWalletOpen(true);
+    if (action === "refresh" || action === "activity")
+      return changeTab("activity");
+    if (
+      !Array.isArray(loaded.position.allowedActions) ||
+      !loaded.position.allowedActions.includes(action)
+    )
+      return;
+    prepareWalletAction(action, loaded.position);
   };
   return (
     <SafeAreaView style={styles.page}>
@@ -556,6 +619,9 @@ export default function DevnetEvaluationApp() {
             purchaseAmount={purchaseAmount}
             onPurchaseAmount={setPurchaseAmount}
             onAction={indexAction}
+            onTrade={(mode) => {
+              void retryTrade(mode);
+            }}
             onRecover={() => {
               void recover();
             }}

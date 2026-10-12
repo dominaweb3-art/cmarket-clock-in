@@ -89,7 +89,14 @@ export function indicesView(
     return view("active", "sell", "request_redemption");
   if (p.lifecycle === 1 || p.lifecycle === 3)
     return {
-      ...view(p.lifecycle === 1 ? "buying" : "selling", "continue", "advance"),
+      ...view(
+        p.lifecycle === 1 ? "buying" : "selling",
+        "continue",
+        (p.settlementPlan as Record<string, unknown> | null)?.state ===
+          "expired" && allows("renew_plan")
+          ? "renew_plan"
+          : "advance",
+      ),
       renew: allows("renew_plan"),
       initialPlan: allows("recover_deposit_plan"),
     };

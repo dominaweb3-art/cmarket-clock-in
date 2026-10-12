@@ -756,3 +756,47 @@ foreground-only polling, listener/timer cleanup, localized exact integer values
 and explicit accessible recovery actions; no new UI framework or network provider.
 No publication or push; Mainnet remains disabled. This is not a partial-redemption
 release or a claim that the user's pending sale has been completed.
+
+## 2026-10-12 — Persistent trade actions and expiry-aware recovery (CLOCKIN_ONLY)
+
+Started from clean delivery/c3-devnet-evaluation at 3988cea. Read-only hosted
+PostgreSQL inspection showed the current intent in selling, database revision 12,
+chain revision 2, two verified sale executions, and no owner renewal request.
+Official finalized Devnet account decoding independently showed bitmap 3 and an
+expired plan at revision 2. The previous primary Continue action was therefore
+re-entering expiry rejection rather than preparing renewal.
+
+The hosted position response now supplies strictly owner/vault/intent/amount/
+revision-bound plan recovery metadata from finalized Devnet accounts and chain
+time. Expiry is distinguished from an invalid slippage policy. The client keeps
+Buy C3 and Sell C3 visible in every lifecycle state; pressing Sell on the existing
+expired sale opens explicit owner renewal, not a second redemption. Other states
+route to continuation or actual claim. Buy on an active or selling position
+explains the current one-active-basket restriction instead of disappearing or
+calling a sale. No multiple active vaults, partial redemptions, changed minimums
+or automatic expiry extensions are implemented.
+
+Explicit recovery reconciles the original signature first, then asks the existing
+server expiry/effect barrier to retire an unexecuted request if eligible. A live
+blockhash, unfinalized signature or changed account image remains blocked.
+Confirmed effects are never cancelled or repeated. Original records, signatures,
+inventories, shares and all prior APKs remain preserved. No hosted SQL mutation,
+on-chain submission or wallet signature was performed to implement these fixes.
+
+Validation: 53 focal mobile tests PASS, six Borsh/renewal/metadata tests PASS,
+disposable PostgreSQL service and quote/journal suites PASS (four each).
+The quote integration fixture initially lacked the existing current-wallet view;
+a disposable-only selector fixture was added, with no hosted schema change.
+Mobile and service TypeScript, focal lint, formatting, Android export, signed
+build and diff checks PASS. Expo Doctor remains 18/19 with its existing patch
+mismatch (57.0.26 vs expected 57.0.27); no dependency upgrade or suppression.
+Service bundle isolation passed: no Mainnet policy/assets, local harness or keys.
+Staged hosted health returned SCHEMA_PRESENT and VERIFIED_DEVNET, Mainnet false.
+
+APK 0.1.33 / code 34, package com.dominaweb3.cmarket.c3evaluation:
+SHA-256 68123b5bcd410d26ab08ad37350430cacdd5dabcfd5e87204b93b139254223a3.
+Certificate SHA-256 58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016.
+Actual prior installed certificate matched; data-preserving adb install -r PASS.
+This metadata and inert test coverage do not prove physical renewal or a completed
+sale. Physical Phantom renewal/collection acceptance remains pending owner action.
+Mainnet, stable apps, protected branches and signing material remain untouched.
