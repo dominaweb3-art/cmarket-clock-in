@@ -829,3 +829,25 @@ accounting, wallet or backend behavior changed. Nine focused position/presentati
 tests, TypeScript, focused lint and signed Android build passed. APK uses the
 existing certificate. Owner screenshot reported completed sale, zero shares and
 9.9 test USDC received; this UI change did not independently execute that sale.
+# 2026-10-12 — 0.1.36 first-run English welcome (CLOCKIN_ONLY)
+
+Three horizontal welcome pages use owner-reference illustrations, native English
+copy, approved existing C Market header logo, pagination and an explicit Connect
+wallet action on page three. C3 target remains 40/30/30. Devnet/test-token notice
+is visible on every page; global markets are identified as future vision.
+The completion marker is local AsyncStorage `c3-evaluation-onboarding/v1` and
+is written after successful connection or explicit Explore first. It is unrelated
+to authentication, wallet authority or economic state. Cancelled connection stays
+on page three with short English retry/explore guidance and no extra alert.
+
+Seeker verification on final APK: pages 1–3, swiping, MWA Android wallet chooser,
+connection cancellation, Explore first, original Home/navigation, and cold restart
+without repeating completed welcome passed. Screenshots are ignored QA artifacts.
+No wallet authorization, signature, transfer or blockchain deployment occurred.
+Successful Phantom authorization from this new button was not physically repeated;
+the existing connection controller remains unchanged and its regression check passed.
+TypeScript, focused ESLint, formatting, 12 controller/presentation tests and signed
+Android production build passed. Existing certificate and data were preserved.
+
+APK 0.1.36 (37), SHA-256:
+`5e7d72cec33400b31a00f4c8ef7b1dfed5899fba44842b181e44ea646fc4281c`.

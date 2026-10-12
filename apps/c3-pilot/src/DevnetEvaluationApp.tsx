@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { EvaluationOnboarding } from "./EvaluationOnboarding";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -52,7 +53,9 @@ import {
 } from "./evaluation-trade-actions";
 
 const STORAGE = "c3-evaluation-language/v1";
+const ONBOARDING_STORAGE = "c3-evaluation-onboarding/v1";
 export default function DevnetEvaluationApp() {
+  const [welcome, setWelcome] = useState<boolean | null>(null);
   const [language, setLanguage] = useState<Language>("en");
   const [tab, setTab] = useState<EvaluationTab>("home");
   const [walletOpen, setWalletOpen] = useState(false);
@@ -90,12 +93,31 @@ export default function DevnetEvaluationApp() {
     requestAnimationFrame(() => scrollToCatalog(catalogY.current));
   };
   useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_STORAGE)
+      .then((value) => setWelcome(value !== "completed"))
+      .catch(() => setWelcome(true));
     AsyncStorage.getItem(STORAGE)
       .then((v) => {
         if (languages.includes(v as Language)) setLanguage(v as Language);
       })
       .catch(() => undefined);
   }, []);
+  const finishWelcome = async () => {
+    try {
+      await AsyncStorage.setItem(ONBOARDING_STORAGE, "completed");
+      setWelcome(false);
+    } catch {
+      // Allow access even if storage is unavailable; welcome can reappear next launch.
+      setWelcome(false);
+    }
+  };
+  useEffect(() => {
+    if (welcome && wallet) {
+      AsyncStorage.setItem(ONBOARDING_STORAGE, "completed")
+        .then(() => setWelcome(false))
+        .catch(() => setWelcome(false));
+    }
+  }, [wallet, welcome]);
   const run = async (action: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true;
@@ -112,6 +134,7 @@ export default function DevnetEvaluationApp() {
         setWalletOpen(true);
       }
       setStatus(code);
+      if (welcome) return;
       if (
         [
           "EVAL_OWNER_BLOCKHASH_EXPIRED",
@@ -546,6 +569,27 @@ export default function DevnetEvaluationApp() {
       return;
     prepareWalletAction(action, loaded.position);
   };
+  if (welcome === null)
+    return <SafeAreaView style={{ flex: 1, backgroundColor: "#030c10" }} />;
+  if (welcome)
+    return (
+      <EvaluationOnboarding
+        busy={busy}
+        status={
+          status.startsWith("EVAL_")
+            ? "Connection wasn't completed. Try again or explore first."
+            : indicesStatus("en", status)
+        }
+        onConnect={() => {
+          setStatus("");
+          void connect();
+        }}
+        onExplore={() => {
+          setStatus("");
+          void finishWelcome();
+        }}
+      />
+    );
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
