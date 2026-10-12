@@ -24,6 +24,7 @@ type Props = {
   status: string;
   balanceRevision: unknown;
   onClose: () => void;
+  onWelcome?: () => void;
   onLanguage: (language: Language) => void;
   onConnect: () => void;
   onVerify: () => void;
@@ -41,6 +42,7 @@ export function EvaluationWalletSheet({
   status,
   balanceRevision,
   onClose,
+  onWelcome,
   onLanguage,
   onConnect,
   onVerify,
@@ -181,6 +183,26 @@ export function EvaluationWalletSheet({
                 </Pressable>
               ))}
             </EvaluationAccordion>
+            {onWelcome ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                accessibilityState={{ disabled: busy }}
+                onPress={onWelcome}
+                style={s.secondary}
+              >
+                <Text style={s.link}>
+                  {
+                    {
+                      en: "View welcome tour",
+                      es: "Ver bienvenida",
+                      "zh-CN": "查看欢迎介绍",
+                      "pt-BR": "Ver boas-vindas",
+                    }[language]
+                  }
+                </Text>
+              </Pressable>
+            ) : null}
             {__DEV__ ? (
               <EvaluationAccordion title={t("diagnostics")}>
                 <Pressable

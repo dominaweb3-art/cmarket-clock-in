@@ -851,3 +851,19 @@ Android production build passed. Existing certificate and data were preserved.
 
 APK 0.1.36 (37), SHA-256:
 `5e7d72cec33400b31a00f4c8ef7b1dfed5899fba44842b181e44ea646fc4281c`.
+# 2026-10-12 — 0.1.37 white welcome and official brand (CLOCKIN_ONLY)
+
+Welcome pages now use white backgrounds, dark readable English text and the
+approved existing C Market splash symbol in the header. Owner-approved brand
+reference replaces the plain C emblem in the C3 illustration medallions. Original
+dark images remain preserved; three new white assets are active. Wallet menu adds
+localized “View welcome tour” without clearing completion, wallet or position data.
+Replay with an already connected wallet is guarded against immediate dismissal.
+
+Seeker: compatible install preserved data; wallet-menu replay, page 1, horizontal
+swipes and page 3 with Connect wallet/Explore first verified on APK 0.1.37 (38).
+TypeScript, focused lint, formatting, 12 existing controller/presentation tests and
+signed Android build passed. No wallet signing or blockchain transaction occurred.
+The current physical connection callback was not repeated for this visual change.
+Mainnet remains disabled. APK SHA-256:
+`86bab7e4fb59c044497b49c784e1015de1b8d93b0066caf3e84d5e0bc0148bac`.

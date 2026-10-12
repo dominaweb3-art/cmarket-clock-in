@@ -16,19 +16,19 @@ const slides = [
   {
     title: "The crypto market.\nAll in one place.",
     body: "Discover digital asset baskets through a simple, clear, on-chain experience.",
-    image: require("../assets/onboarding/crypto.png"),
+    image: require("../assets/onboarding/crypto-white.png"),
     footer: "On-chain indices for a better future.",
   },
   {
     title: "A world of markets.\nOne platform.",
     body: "We start with crypto indices. Our vision is to connect global markets through tokenized indices.",
-    image: require("../assets/onboarding/global-final.png"),
+    image: require("../assets/onboarding/global-white.png"),
     footer: "Global markets are our vision · Coming soon.",
   },
   {
     title: "Your journey\nstarts with C3.",
     body: "Connect your wallet and discover our first digital asset basket.",
-    image: require("../assets/onboarding/connect.png"),
+    image: require("../assets/onboarding/connect-white.png"),
     footer: "Simple. Transparent. On-chain.",
   },
 ];
@@ -50,7 +50,7 @@ export function EvaluationOnboarding({
   const [page, setPage] = useState(0);
   return (
     <SafeAreaView style={s.root} testID="evaluation-onboarding">
-      <StatusBar barStyle="light-content" backgroundColor="#030c10" />
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       <FlatList
         ref={list}
         data={slides}
@@ -165,7 +165,7 @@ export function EvaluationOnboarding({
   );
 }
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#030c10" },
+  root: { flex: 1, backgroundColor: "#ffffff" },
   slide: {
     flexGrow: 1,
     alignItems: "center",
@@ -180,21 +180,21 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   logo: { width: 52, height: 52, borderRadius: 12 },
-  brandName: { color: "#ffffff", fontSize: 30, fontWeight: "800" },
+  brandName: { color: "#0b1221", fontSize: 30, fontWeight: "800" },
   notice: {
-    color: "#69ddd2",
+    color: "#075c47",
     fontSize: 11,
     textAlign: "center",
     marginBottom: 20,
   },
   title: {
-    color: "#ffffff",
+    color: "#0b1221",
     fontWeight: "800",
     textAlign: "center",
     marginBottom: 14,
   },
   body: {
-    color: "#bbc7ce",
+    color: "#52685e",
     fontSize: 16,
     lineHeight: 23,
     textAlign: "center",
@@ -214,9 +214,9 @@ const s = StyleSheet.create({
   buttonText: { color: "#031215", fontWeight: "800", fontSize: 19 },
   disabled: { opacity: 0.55 },
   explore: { minHeight: 48, justifyContent: "center", paddingHorizontal: 16 },
-  exploreText: { color: "#c1d1d7", fontSize: 14 },
+  exploreText: { color: "#075c47", fontSize: 14 },
   footer: {
-    color: "#a8bdc7",
+    color: "#52685e",
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
@@ -229,7 +229,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#41545e" },
+  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: "#cbdad2" },
   activeDot: {
     backgroundColor: "#00e1d2",
     width: 11,

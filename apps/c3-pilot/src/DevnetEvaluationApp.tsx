@@ -56,6 +56,7 @@ const STORAGE = "c3-evaluation-language/v1";
 const ONBOARDING_STORAGE = "c3-evaluation-onboarding/v1";
 export default function DevnetEvaluationApp() {
   const [welcome, setWelcome] = useState<boolean | null>(null);
+  const welcomePreviousWallet = useRef<string | null>(null);
   const [language, setLanguage] = useState<Language>("en");
   const [tab, setTab] = useState<EvaluationTab>("home");
   const [walletOpen, setWalletOpen] = useState(false);
@@ -112,7 +113,7 @@ export default function DevnetEvaluationApp() {
     }
   };
   useEffect(() => {
-    if (welcome && wallet) {
+    if (welcome && wallet && wallet !== welcomePreviousWallet.current) {
       AsyncStorage.setItem(ONBOARDING_STORAGE, "completed")
         .then(() => setWelcome(false))
         .catch(() => setWelcome(false));
@@ -570,7 +571,7 @@ export default function DevnetEvaluationApp() {
     prepareWalletAction(action, loaded.position);
   };
   if (welcome === null)
-    return <SafeAreaView style={{ flex: 1, backgroundColor: "#030c10" }} />;
+    return <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }} />;
   if (welcome)
     return (
       <EvaluationOnboarding
@@ -582,7 +583,8 @@ export default function DevnetEvaluationApp() {
         }
         onConnect={() => {
           setStatus("");
-          void connect();
+          if (wallet) void finishWelcome();
+          else void connect();
         }}
         onExplore={() => {
           setStatus("");
@@ -703,6 +705,12 @@ export default function DevnetEvaluationApp() {
         status={busy ? t("busy") : indicesStatus(language, status)}
         balanceRevision={position}
         onClose={() => setWalletOpen(false)}
+        onWelcome={() => {
+          setWalletOpen(false);
+          setStatus("");
+          welcomePreviousWallet.current = wallet;
+          setWelcome(true);
+        }}
         onLanguage={selectLanguage}
         onConnect={() => {
           setWalletOpen(false);
