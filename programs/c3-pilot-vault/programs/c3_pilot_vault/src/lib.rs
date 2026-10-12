@@ -83,7 +83,7 @@ pub mod c3_pilot_vault {
             TOTAL_BPS as u32,
             VaultError::InvalidConfig
         );
-        purchase_amount(max_tvl, 200 * ONE_USDC)?;
+        purchase_amount(max_tvl, 1_000_000 * ONE_USDC)?;
         let a = ctx.accounts.vault_authority.key();
         let mints = [
             ctx.accounts.usdc_mint.key(),

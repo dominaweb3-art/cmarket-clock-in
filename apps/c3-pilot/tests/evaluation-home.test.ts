@@ -89,7 +89,10 @@ test("Home copy is complete in four languages and preserves truthful test restri
     for (const key of Object.keys(homeCopy.en) as (keyof typeof homeCopy.en)[])
       assert.ok(homeText(language, key).trim().length, `${language}/${key}`);
     assert.match(homeText(language, "note"), /Devnet/);
-    assert.match(homeText(language, "buyBody"), /1.*200 USDC Devnet/);
+    assert.match(
+      homeText(language, "buyBody"),
+      /1.*1[.,]000[.,]000 USDC Devnet/,
+    );
     assert.match(
       homeText(language, "methodologyBody"),
       /BTC 40%.*ETH 30%.*SOL 30%/,

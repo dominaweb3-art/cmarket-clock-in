@@ -164,7 +164,7 @@ export class EvaluationOwnerService {
       vault: ctx.client.vault.toBase58(),
       round: ctx.client.config.version.toString(),
       minimumPurchase: EVALUATION.amount.toString(),
-      maximumPurchase: EVALUATION.maximumAmount.toString(),
+      maximumPurchase: ctx.position.bytes.readBigUInt64LE(448).toString(),
       shareMint: ctx.client.config.shareMint,
       shares: ctx.position.shares.toString(),
       availableUsdc: ctx.availableUsdc.toString(),
@@ -282,7 +282,7 @@ export class EvaluationOwnerService {
             ([key]) => key !== "depositAmount",
           ),
         ),
-        ...(client.config.version > 1n
+        ...(client.config.version > 1n || amount !== EVALUATION.amount
           ? { depositAmount: amount.toString() }
           : {}),
         version: client.config.version.toString(),

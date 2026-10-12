@@ -7,6 +7,7 @@ import { homeText } from "./evaluation-home-copy";
 import { homeOperation } from "./evaluation-home-state";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { CryptoIcon, NavigationGlyph } from "./EvaluationVisuals";
+import { EvaluationPosition } from "./EvaluationPosition";
 
 const steps = [
   { title: "connect", body: "connectBody", icon: "wallet" },
@@ -50,6 +51,12 @@ export function EvaluationHome({
           <Text style={s.index}>{indicesText(language, "index")}</Text>
         </View>
         <Text style={s.available}>{t("available")}</Text>
+        <EvaluationPosition
+          language={language}
+          wallet={wallet}
+          verified={verified}
+          position={position}
+        />
         <Text style={s.caption}>{t("target")}</Text>
         <View style={s.assets}>
           {evaluationTargets.map((asset) => (

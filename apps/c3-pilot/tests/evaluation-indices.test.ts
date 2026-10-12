@@ -43,7 +43,10 @@ test("all four locales cover every new key; catalog stays informational", () => 
     ) as (keyof typeof indicesCopy.en)[])
       assert.ok(indicesText(language, key).trim().length, `${language}/${key}`);
     assert.match(indicesText(language, "testNote"), /test|prueba|测试|teste/);
-    assert.match(indicesText(language, "conditionsBody"), /1–200 USDC Devnet/);
+    assert.match(
+      indicesText(language, "conditionsBody"),
+      /1–1,000,000 USDC Devnet/,
+    );
     assert.match(indicesText(language, "conditionsBody"), /Mainnet/);
     assert.match(indicesText(language, "compositionBody"), /40%.*30%.*30%/);
     assert.match(indicesText(language, "europe"), /region|región|地区|região/);
@@ -226,11 +229,11 @@ test("accordions and wallet opening are passive; bottom navigation is fixed; no 
   assert.ok(app.includes('style={tab !== "indices" && styles.hidden}')); // Keep accordion state mounted across tabs.
   assert.ok(
     indices.indexOf("{state.recover ?") <
-      indices.indexOf("<EvaluationAccordion"),
+      indices.indexOf("<EvaluationAccordion key={key}"),
   );
   assert.ok(
     indices.indexOf("accessibilityLiveRegion") <
-      indices.indexOf("<EvaluationAccordion"),
+      indices.indexOf("<EvaluationAccordion key={key}"),
   );
   assert.ok(
     indices.indexOf("marketKeys.map") > indices.indexOf('title={t("markets")}'),

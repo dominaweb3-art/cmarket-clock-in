@@ -3,8 +3,8 @@ const en = {
   title: "C Market · C3",
   notice:
     "Devnet evaluation · test tokens and liquidity with no monetary value",
-  provision: "Receive 200 TEST USDC / prepare my vault",
-  deposit: "Choose 1–200 USDC Devnet within your available test balance.",
+  provision: "Receive 1,000,000 TEST USDC / prepare my vault",
+  deposit: "Choose 1–1,000,000 USDC Devnet within your available test balance.",
   issue_shares: "Issue on-chain evaluation shares",
   request_redemption: "Sell my evaluation shares",
   claim: "Burn shares and claim realized test USDC",
@@ -60,8 +60,8 @@ type Dictionary = Record<keyof typeof en, string>;
 const es: Dictionary = {
   title: "C Market · C3",
   notice: "Evaluación Devnet · tokens y liquidez de prueba sin valor monetario",
-  provision: "Recibir 200 TEST USDC / preparar mi bóveda",
-  deposit: "Elige de 1 a 200 USDC Devnet dentro de tu saldo de prueba.",
+  provision: "Recibir 1,000,000 TEST USDC / preparar mi bóveda",
+  deposit: "Elige de 1 a 1.000.000 USDC Devnet dentro de tu saldo de prueba.",
   issue_shares: "Emitir participaciones de evaluación on-chain",
   request_redemption: "Vender mis participaciones de evaluación",
   claim: "Quemar participaciones y reclamar USDC de prueba liquidado",
@@ -116,8 +116,8 @@ const es: Dictionary = {
 const zh: Dictionary = {
   title: "C Market · C3",
   notice: "Devnet 评估 · 测试代币和流动性无货币价值",
-  provision: "领取 200 TEST USDC / 准备我的金库",
-  deposit: "选择测试余额范围内的 1–200 USDC Devnet。",
+  provision: "领取 1,000,000 TEST USDC / 准备我的金库",
+  deposit: "选择测试余额范围内的 1–1,000,000 USDC Devnet。",
   issue_shares: "发行链上评估份额",
   request_redemption: "出售我的评估份额",
   claim: "销毁份额并领取实际结算的测试 USDC",
@@ -171,8 +171,8 @@ const zh: Dictionary = {
 const pt: Dictionary = {
   title: "C Market · C3",
   notice: "Avaliação Devnet · tokens e liquidez de teste sem valor monetário",
-  provision: "Receber 200 TEST USDC / preparar meu cofre",
-  deposit: "Escolha de 1 a 200 USDC Devnet dentro do saldo de teste.",
+  provision: "Receber 1,000,000 TEST USDC / preparar meu cofre",
+  deposit: "Escolha de 1 a 1.000.000 USDC Devnet dentro do saldo de teste.",
   issue_shares: "Emitir cotas de avaliação on-chain",
   request_redemption: "Vender minhas cotas de avaliação",
   claim: "Queimar cotas e resgatar USDC de teste liquidado",

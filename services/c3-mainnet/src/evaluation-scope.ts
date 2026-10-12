@@ -20,13 +20,13 @@ export const EVALUATION = Object.freeze({
   // or Mainnet capability. Never selected through an environment value.
   lifecycleReady: true,
   amount: 1_000_000n,
-  maximumAmount: 200_000_000n,
+  maximumAmount: 1_000_000_000_000n,
   maximumRounds: 10n,
   weights: Object.freeze([4000, 3000, 3000]),
 });
 
 export function evaluationAmount(value: unknown): bigint {
-  if (typeof value !== "string" || !/^[1-9][0-9]{0,8}$/.test(value))
+  if (typeof value !== "string" || !/^[1-9][0-9]{0,12}$/.test(value))
     throw Error("EVAL_PURCHASE_AMOUNT");
   const amount = BigInt(value);
   if (amount < EVALUATION.amount || amount > EVALUATION.maximumAmount)

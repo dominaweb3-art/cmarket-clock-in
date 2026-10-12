@@ -46,6 +46,9 @@ test("decimal purchases have no float rounding and allocation always sums to the
     ["10,234567", "10234567"],
     ["100", "100000000"],
     ["200", "200000000"],
+    ["200.000001", "200000001"],
+    ["10000", "10000000000"],
+    ["1000000", "1000000000000"],
   ]) {
     const amount = purchaseUnits(decimal!);
     assert.equal(String(amount), units);
@@ -58,7 +61,7 @@ test("decimal purchases have no float rounding and allocation always sums to the
   for (const value of [
     "0",
     "0.999999",
-    "200.000001",
+    "1000000.000001",
     "1e2",
     "-1",
     "100.0000001",
@@ -67,10 +70,10 @@ test("decimal purchases have no float rounding and allocation always sums to the
     "",
   ])
     assert.throws(() => purchaseUnits(value));
-  for (const value of [null, 100000000, "01000000", "200000001", "-1"])
+  for (const value of [null, 100000000, "01000000", "1000000000001", "-1"])
     assert.throws(() => evaluationAmount(value));
   for (const locale of Object.values(purchaseCopy))
-    assert.ok(locale.range.includes("1–200"));
+    assert.ok(locale.range.includes("1–1,000,000"));
 });
 test("separate rounds and all six owner actions are independently bound to wallet, amount and vault", async () => {
   const wallet = String(Keypair.generate().publicKey),
@@ -88,7 +91,12 @@ test("separate rounds and all six owner actions are independently bound to walle
     time = BigInt(Math.floor(now / 1000));
   const seen = new Set<string>();
   for (const round of [1n, 2n, 3n, 10n]) {
-    const amount = round === 1n ? 1_000_000n : 100_000_000n;
+    const amount =
+      round === 1n
+        ? 10_000_000_000n
+        : round === 10n
+          ? 1_000_000_000_000n
+          : 100_000_000n;
     const client = new EvaluationClient(idl, {
       wallet,
       version: round,

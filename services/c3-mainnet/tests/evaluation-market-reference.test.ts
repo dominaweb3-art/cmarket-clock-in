@@ -67,7 +67,11 @@ test("100 hypothetical dollars follow fixed 40/30/30 quantities, up and down", (
     representativeValue(200_000_000n, prices, [110n, 110n, 110n]).valueUnits,
     "220000000",
   );
-  for (const amount of [0n, 999999n, 200000001n])
+  assert.equal(
+    representativeValue(1_000_000_000_000n, prices, prices).valueUnits,
+    "1000000000000",
+  );
+  for (const amount of [0n, 999999n, 1000000000001n])
     assert.throws(() => representativeValue(amount, prices, prices));
   for (const value of [
     null,

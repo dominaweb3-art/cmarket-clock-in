@@ -116,10 +116,10 @@ test("ATA metas, bounded test minting and initialization cannot add wallet signe
     owner,
     EVALUATION_FAUCET_USDC_AMOUNT,
   );
-  assert.equal(EVALUATION_FAUCET_USDC_AMOUNT, 200_000_000n);
-  assert.equal(faucet.data.readBigUInt64LE(1), 200_000_000n);
+  assert.equal(EVALUATION_FAUCET_USDC_AMOUNT, 1_000_000_000_000n);
+  assert.equal(faucet.data.readBigUInt64LE(1), 1_000_000_000_000n);
   assert.throws(
-    () => evaluationMintTestTokens(mints[0]!, owner, 200_000_001n),
+    () => evaluationMintTestTokens(mints[0]!, owner, 1_000_000_000_001n),
     /LIMIT/,
   );
   const idl = JSON.parse(

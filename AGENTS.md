@@ -3,12 +3,17 @@
 ## Active delivery override — Devnet evaluation (5 October 2026)
 
 Evaluation purchase update (11 October 2026): the owner explicitly authorizes
-variable deposits from 1 to 200 test USDC (six decimals), and successive trials
+variable deposits from 1 to 1,000,000 test USDC (six decimals), and successive trials
 in separate per-wallet vault rounds after finalized redemption. Preserve every
 old vault, intent, share mint and signature. Round 1 PDA bytes stay unchanged;
 rounds 2–10 are separate one-position evaluation vaults. This does not authorize
 pooled Mainnet deposits, a monetary NAV or redeeming market-reference dollars.
 Displayed real-market BTC/ETH/SOL reference values are informational only.
+12 October update: preserve original 1/200-unit vault caps and history; new
+evaluation vaults use the million-unit cap. New fixed test faucet/liquidity
+generations cannot reuse old grant signatures. The user-facing position shows
+deposit, illustrative market value and actual redemption, not a tradable C3
+token price. Large Devnet units are not real dollars or Mainnet approval.
 
 On `delivery/c3-devnet-evaluation` only, the owner authorizes a functional
 Devnet evaluation with explicitly simulated test assets and settlement. This

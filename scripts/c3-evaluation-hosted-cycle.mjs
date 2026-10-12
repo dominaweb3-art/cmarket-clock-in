@@ -132,7 +132,7 @@ async function ownerAction(action) {
       signature: submitted.signature,
     }),
   );
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 32; i++) {
     const result = await call({
       operation: "reconcile",
       requestId: packet.requestId,
@@ -332,7 +332,7 @@ try {
   token = undefined;
   report.finishedAt = new Date().toISOString();
   writeFileSync(
-    new URL("artifacts/c3-devnet-evaluation/hosted-cycle.json", root),
+    new URL("artifacts/c3-devnet-million-purchases/hosted-cycle.json", root),
     JSON.stringify(report, null, 2),
   );
 }

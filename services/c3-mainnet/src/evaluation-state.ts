@@ -57,8 +57,13 @@ export function verifyEvaluationConfig(
     [4000, 3000, 3000].every(
       (weight, i) => b.readUInt16LE(434 + i * 2) === weight,
     ) &&
-      b.readBigUInt64LE(440) ===
-        (c.version === 1n ? EVALUATION.amount : EVALUATION.maximumAmount) &&
+      (c.version === 1n
+        ? [EVALUATION.amount, EVALUATION.maximumAmount].some(
+            (limit) => limit === b.readBigUInt64LE(440),
+          )
+        : [200_000_000n, EVALUATION.maximumAmount].includes(
+            b.readBigUInt64LE(440),
+          )) &&
       b.readBigUInt64LE(448) === b.readBigUInt64LE(440) &&
       b.readBigUInt64LE(456) <= 1n &&
       b.readBigUInt64LE(464) <= 1n &&

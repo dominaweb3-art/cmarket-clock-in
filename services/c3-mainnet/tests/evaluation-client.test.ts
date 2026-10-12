@@ -211,6 +211,12 @@ test("exact reviewed config bytes reject changed roles, mints, allocation and li
     data: [b.toString("base64"), "base64"],
   });
   assert.equal(verifyEvaluationConfig(client, raw(data)).deposits, 0n);
+  const large = Buffer.from(data);
+  large.writeBigUInt64LE(EVALUATION.maximumAmount, 440);
+  large.writeBigUInt64LE(EVALUATION.maximumAmount, 448);
+  assert.equal(verifyEvaluationConfig(client, raw(large)).deposits, 0n);
+  large.writeBigUInt64LE(EVALUATION.maximumAmount + 1n, 448);
+  assert.throws(() => verifyEvaluationConfig(client, raw(large)), /LIMITS/);
   for (const offset of [
     17, 49, 81, 113, 146, 274, 306, 434, 440, 448, 481, 482,
   ]) {
@@ -281,7 +287,7 @@ test("shares stay non-transferable under the evaluation PDA, with no delegate ex
       verifyShareMintForAuthority(
         client.authority.toBase58(),
         raw(variable),
-        200_000_001n,
+        1_000_000_000_001n,
       ),
     /SUPPLY_LIMIT/,
   );

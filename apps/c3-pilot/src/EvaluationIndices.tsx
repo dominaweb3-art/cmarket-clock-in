@@ -15,7 +15,9 @@ import { indicesView, type IndicesAction } from "./evaluation-indices-state";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 import { CryptoIcon, NavigationGlyph } from "./EvaluationVisuals";
 import { activityGroups, activityScope } from "./evaluation-activity-state";
-import { EvaluationMarketReference } from "./EvaluationMarketReference";
+import { EvaluationPosition } from "./EvaluationPosition";
+import { positionCopy } from "./evaluation-position-view";
+import { buyEntryAction } from "./evaluation-indices-state";
 
 type Props = {
   language: Language;
@@ -63,11 +65,15 @@ export function EvaluationIndices({
     validAmount =
       typeof position?.availableUsdc === "string" &&
       /^\d+$/.test(position.availableUsdc) &&
+      typeof position?.maximumPurchase === "string" &&
+      /^\d+$/.test(position.maximumPurchase) &&
+      amount <= BigInt(position.maximumPurchase) &&
       amount <= BigInt(position.availableUsdc);
   } catch {
     /* No signing for invalid amounts. */
   }
-  const canBuy = state.action === "deposit" && !busy && validAmount;
+  const buyAction = buyEntryAction(state, busy, validAmount);
+  const canBuy = buyAction !== null;
   const canSell = state.action === "request_redemption" && !busy;
   return (
     <View testID="evaluation-indices">
@@ -85,6 +91,12 @@ export function EvaluationIndices({
           {t("purchaseHeading")}
         </Text>
         <View style={s.operation}>
+          <EvaluationPosition
+            language={language}
+            wallet={wallet}
+            verified={verified}
+            position={position}
+          />
           <Text accessibilityRole="header" style={s.state}>
             {t(state.title)}
           </Text>
@@ -96,7 +108,7 @@ export function EvaluationIndices({
                 value={purchaseAmount}
                 onChangeText={onPurchaseAmount}
                 keyboardType="decimal-pad"
-                maxLength={10}
+                maxLength={14}
                 editable={!busy}
                 style={[
                   s.body,
@@ -115,7 +127,7 @@ export function EvaluationIndices({
             </View>
           ) : null}
           {hasScopedHistory ? (
-            <View style={s.history}>
+            <EvaluationAccordion title={positionCopy[language].details}>
               <Text style={s.state}>{t("purchaseResult")}</Text>
               <Text style={s.caption}>{t("currentPosition")}</Text>
               <Text style={s.metric}>{displayUnits(position?.shares)} C3</Text>
@@ -152,18 +164,16 @@ export function EvaluationIndices({
               {state.title === "completed" ? (
                 <Text style={s.body}>{t("burnedHistory")}</Text>
               ) : null}
-              <EvaluationMarketReference
-                language={language}
-                position={position}
-              />
-            </View>
+            </EvaluationAccordion>
           ) : null}
           <View style={s.tradeActions}>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ disabled: !canBuy }}
               disabled={!canBuy}
-              onPress={() => onAction("deposit")}
+              onPress={() => {
+                if (buyAction) onAction(buyAction);
+              }}
               style={[s.primary, s.tradeButton, !canBuy && s.disabled]}
             >
               <Text style={s.primaryText}>{t("buy")}</Text>
@@ -178,20 +188,19 @@ export function EvaluationIndices({
               <Text style={s.primaryText}>{t("sell")}</Text>
             </Pressable>
           </View>
-          {state.title === "completed" && !busy ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => onAction("new_purchase")}
-              style={s.primary}
-            >
-              <Text style={s.primaryText}>{purchaseCopy[language].next}</Text>
-            </Pressable>
+          {!canSell ? (
+            <Text style={s.caption}>{positionCopy[language].sellReason}</Text>
           ) : null}
-          {!canBuy || !canSell ? (
-            <Text style={s.caption}>{t("tradeAvailability")}</Text>
+          {buyAction && buyAction !== "deposit" ? (
+            <Text style={s.caption}>{positionCopy[language].prepare}</Text>
+          ) : null}
+          {state.title === "active" ? (
+            <Text style={s.caption}>{positionCopy[language].limited}</Text>
           ) : null}
           {state.action !== "deposit" &&
-          state.action !== "request_redemption" ? (
+          state.action !== "request_redemption" &&
+          state.action !== buyAction &&
+          state.title !== "completed" ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t(state.label)}

@@ -28,7 +28,7 @@ export function referenceView(
     !/^-?(0|[1-9][0-9]{0,29})$/.test(r.changeUnits) ||
     !unsigned(position.deposited) ||
     BigInt(position.deposited) < 1_000_000n ||
-    BigInt(position.deposited) > 200_000_000n ||
+    BigInt(position.deposited) > 1_000_000_000_000n ||
     BigInt(r.valueUnits) - BigInt(position.deposited) !==
       BigInt(r.changeUnits) ||
     r.frozen !== Number(position.lifecycle) >= 3 ||

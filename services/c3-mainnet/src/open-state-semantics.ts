@@ -177,7 +177,7 @@ export function verifyShareMintForAuthority(
   maximumSupply = 1000000n,
 ) {
   demand(
-    maximumSupply >= 1000000n && maximumSupply <= 200000000n,
+    maximumSupply >= 1000000n && maximumSupply <= 1000000000000n,
     "SUPPLY_LIMIT",
   );
   publicKeyBytes(authority);

@@ -2,9 +2,12 @@ import { StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import type { Language } from "./locales";
 import { referenceDollars, referenceView } from "./evaluation-reference-view";
+import { EvaluationAccordion } from "./EvaluationAccordion";
 const copy = {
   en: {
-    title: "Illustrative market value",
+    title: "Estimated current value · USD reference",
+    detail: "How this estimate is calculated",
+    warning: "Informational simulation. Not the amount paid by a test sale.",
     change: "Change since deposit",
     frozen: "Reference at sale request",
     unavailable: "Market reference unavailable",
@@ -14,7 +17,10 @@ const copy = {
     entry: "Deposit basis",
   },
   es: {
-    title: "Valor representativo de mercado",
+    title: "Valor actual estimado · referencia USD",
+    detail: "Cómo se calcula esta estimación",
+    warning:
+      "Simulación informativa. No es el importe que paga la venta de prueba.",
     change: "Variación desde el depósito",
     frozen: "Referencia al solicitar la venta",
     unavailable: "Referencia de mercado no disponible",
@@ -25,7 +31,9 @@ const copy = {
     entry: "Base del depósito",
   },
   "zh-CN": {
-    title: "模拟市场价值",
+    title: "当前估值 · 美元参考",
+    detail: "估值计算方式",
+    warning: "仅供参考的模拟。并非测试卖出所支付的金额。",
     change: "相对存款的变化",
     frozen: "卖出申请时的参考值",
     unavailable: "市场参考暂不可用",
@@ -35,7 +43,9 @@ const copy = {
     entry: "存款基准",
   },
   "pt-BR": {
-    title: "Valor representativo de mercado",
+    title: "Valor atual estimado · referência USD",
+    detail: "Como esta estimativa é calculada",
+    warning: "Simulação informativa. Não é o valor pago pela venda de teste.",
     change: "Variação desde o depósito",
     frozen: "Referência ao solicitar a venda",
     unavailable: "Referência de mercado indisponível",
@@ -73,17 +83,22 @@ export function EvaluationMarketReference({
             {referenceDollars(r.change)} USD
           </Text>
           <Text style={s.caption}>
-            {t.entry}: {new Date(r.basisTime).toLocaleString(language)}
-          </Text>
-          <Text style={s.caption}>
             {t.updated}: {new Date(r.observedAt).toLocaleString(language)}
           </Text>
-          <Text style={s.caption}>{t.source}</Text>
         </>
       ) : (
         <Text style={s.caption}>{t.unavailable}</Text>
       )}
-      <Text style={s.caption}>{t.note}</Text>
+      <Text style={s.caption}>{t.warning}</Text>
+      <EvaluationAccordion title={t.detail}>
+        {r ? (
+          <Text style={s.caption}>
+            {t.entry}: {new Date(r.basisTime).toLocaleString(language)}
+          </Text>
+        ) : null}
+        <Text style={s.caption}>{t.source}</Text>
+        <Text style={s.caption}>{t.note}</Text>
+      </EvaluationAccordion>
     </View>
   );
 }

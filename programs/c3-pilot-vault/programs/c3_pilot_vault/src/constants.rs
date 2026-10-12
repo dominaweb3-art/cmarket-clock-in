@@ -101,7 +101,7 @@ pub fn purchase_amount(amount: u64, maximum: u64) -> anchor_lang::prelude::Resul
     use anchor_lang::prelude::*;
     #[cfg(feature = "devnet-evaluation")]
     require!(
-        amount >= ONE_USDC && amount <= maximum && maximum <= 200 * ONE_USDC,
+        amount >= ONE_USDC && amount <= maximum && maximum <= 1_000_000 * ONE_USDC,
         crate::errors::VaultError::InvalidAmount
     );
     #[cfg(not(feature = "devnet-evaluation"))]
@@ -160,11 +160,19 @@ mod scope_tests {
         let owner = Pubkey::new_unique();
         assert_eq!(vault_round_seed(owner, 1), vault_seed(owner));
         assert_eq!(authority_round_seed(owner, 1), authority_seed(owner));
-        for amount in [1_000_000, 1_000_001, 10_234_567, 100_000_000, 200_000_000] {
+        for amount in [
+            1_000_000,
+            1_000_001,
+            10_234_567,
+            100_000_000,
+            200_000_000,
+            10_000 * ONE_USDC,
+            1_000_000 * ONE_USDC,
+        ] {
             let legs = deposit_budgets(amount).unwrap();
             assert_eq!(legs.iter().sum::<u64>(), amount);
             #[cfg(feature = "devnet-evaluation")]
-            assert!(purchase_amount(amount, 200_000_000).is_ok());
+            assert!(purchase_amount(amount, 1_000_000 * ONE_USDC).is_ok());
         }
         #[cfg(feature = "devnet-evaluation")]
         {
@@ -175,6 +183,7 @@ mod scope_tests {
             );
             assert!(purchase_amount(999_999, 200_000_000).is_err());
             assert!(purchase_amount(200_000_001, 200_000_000).is_err());
+            assert!(purchase_amount(1_000_000 * ONE_USDC + 1, 1_000_000 * ONE_USDC).is_err());
         }
         #[cfg(not(feature = "devnet-evaluation"))]
         {

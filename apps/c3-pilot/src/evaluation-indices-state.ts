@@ -17,6 +17,19 @@ export type IndicesView = {
   renew: boolean;
   initialPlan: boolean;
 };
+/** Entry navigation is not deposit authorization. Existing controllers still
+ * inspect, authenticate and explicitly review any monetary request. */
+export function buyEntryAction(
+  view: IndicesView,
+  busy: boolean,
+  validAmount: boolean,
+): IndicesAction | null {
+  if (busy) return null;
+  if (view.action === "wallet" || view.action === "provision")
+    return view.action;
+  if (view.title === "completed") return "new_purchase";
+  return view.action === "deposit" && validAmount ? "deposit" : null;
+}
 /** Presentation only. Existing reviewed controllers remain the authorizers. */
 export function indicesView(
   wallet: string | null,

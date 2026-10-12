@@ -25,7 +25,7 @@ export function representativeValue(
   basis: Prices,
   current: Prices,
 ) {
-  check(deposited >= 1_000_000n && deposited <= 200_000_000n, "AMOUNT");
+  check(deposited >= 1_000_000n && deposited <= 1_000_000_000_000n, "AMOUNT");
   check(
     basis.length === 3 &&
       current.length === 3 &&

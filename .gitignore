@@ -48,3 +48,4 @@ credentials.json
 /apps/c3-pilot/variants/evaluation/ios/
 # Generated Devnet variable-purchase binaries; preserve older release artifacts.
 artifacts/c3-devnet-variable-purchases/
+artifacts/c3-devnet-million-purchases/

@@ -353,8 +353,8 @@ export class EvaluationProvisionService {
     check((await this.rpc.getGenesisHash()) === EVALUATION.genesis, "NETWORK");
     await this.program(
       EVALUATION.program,
-      "a582571274157d7486e69a8bc89fd36abdc40fb52bf7430f28115343d885a703",
-      928400,
+      "a9940b85a2ab60ea923ac2cfc421cc24eea497a8a8b74b9773043a9574460b44",
+      928424,
     );
     await this.program(
       EVALUATION.router,
@@ -508,6 +508,30 @@ export class EvaluationProvisionService {
               poolAuthority,
               mint,
             )) >= 100_000_000n,
+            "POOL_BALANCE",
+          );
+        },
+      });
+      // Separate immutable provisioning generation. Never rename the old
+      // liquidity journal or reuse a missing/uncertain previous signature.
+      steps.push({
+        scope: "assets",
+        name: "pool-million-v1-" + name,
+        signer: EVALUATION_MINT_AUTHORITY,
+        instructions: [
+          evaluationMintTestTokens(
+            mint,
+            poolAuthority,
+            EVALUATION.maximumAmount,
+          ),
+        ],
+        verify: async () => {
+          check(
+            (await this.token(
+              evaluationAta(mint, poolAuthority),
+              poolAuthority,
+              mint,
+            )) >= EVALUATION.maximumAmount,
             "POOL_BALANCE",
           );
         },
@@ -741,9 +765,9 @@ export class EvaluationProvisionService {
     });
     steps.push({
       scope: proof.wallet,
-      // Stable per-wallet journal identity makes this a one-time 200 TEST USDC
-      // grant. Retries reconcile the same transaction and cannot mint twice.
-      name: "faucet-usdc-200",
+      // New fixed grant generation: old 200-unit grants stay immutable. This
+      // one-time million TEST USDC grant reconciles its original signature.
+      name: "faucet-usdc-million-v1",
       signer: EVALUATION_MINT_AUTHORITY,
       instructions: [
         evaluationMintTestTokens(

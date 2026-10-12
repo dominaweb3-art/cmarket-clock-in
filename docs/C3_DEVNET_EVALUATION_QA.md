@@ -432,3 +432,84 @@ Doctor retains the existing 18/19 patch-version warning (57.0.26 versus
 57.0.27); dependencies were not upgraded. Shared Mainnet share-layout checks
 retain their default one-unit cap; only validated evaluation calls supply the
 bounded variable cap. Mainnet remains disabled; no real funds were used.
+
+## Amount-first position and larger evaluation units — 12 October 2026 UTC
+
+APK 0.1.28 / version code 29 is signed with the existing compatible certificate,
+installed with data-preserving `adb install -r`, and cold-launched without Metro.
+SHA-256: `55f60e06b21bf9ba852af15613e3c907866d827dfe7198729ea0c993e8bb2148`.
+Home and Indices now prioritize My C3 basket, deposited test USDC, illustrative
+current USD reference and actual realized test proceeds. Technical share-token
+details are in a closed accordion, not the primary position metric. Sold/burned
+positions never display a nonzero current holding. Buy guides prerequisites or
+a new vault; Sell remains gated by confirmed shares and unresolved requests.
+
+Observed on the Seeker: wallet DEHxW5…YLVsej has an active 10-unit test deposit,
+displayed USD reference 10.0242 at 2026-10-12T00:48:23Z, and an enabled green
+Sell C3 button. Official finalized Devnet account inspection independently
+confirmed the wallet-bound vault `BkQTwkkrffmLh8vzS1ayhzTWSjdBhCLyjTpCPyARu6tN`,
+lifecycle 2, 10,000,000 issued base units and matching on-chain share supply.
+No sale of this user's basket was initiated by this execution. This is observed
+position/display evidence, not a claim that this execution performed its
+physical purchase. Phone DNS access is restored; the previous DNS blocker is
+historical, not the current result.
+
+New evaluation vaults admit 1–1,000,000 test units with checked six-decimal
+integers. Existing 1/200-unit vault limits, intents, signatures and histories
+remain unchanged. The server returns the actual on-chain vault cap; both its
+cap and the wallet balance still bound approval. The new fixed million-unit
+faucet and pool grants have distinct immutable journal identities, not renamed
+or reused 200-unit receipts. There remains one active basket per wallet and
+ten distinct lifetime vault rounds. Additional pooled deposits are not enabled.
+
+Evaluation program upgrade finalized at slot 510091010, signature
+`3CyR41EgtBGEtQbTEg9Dc4jjecb3pgs1EnS68JE4Ux84g5aWTSka5bNpixnPYtvrZYXZ1iT449RGsam9dkdDCBud`.
+Binary size 928424 bytes, SHA-256
+`a9940b85a2ab60ea923ac2cfc421cc24eea497a8a8b74b9773043a9574460b44`.
+Complete deployed bytes and zero padding were verified. The previous short
+temporary buffer was closed to refund evaluation SOL, and bounded journaled
+writes repaired the replacement buffer before upgrading. An initial RPC 429
+stopped that attempt; no user assets or Mainnet material were involved.
+
+Focused mobile tests (20), evaluation effect/renewal/history tests (19), other
+focused service tests (12), Devnet Rust (13) and default Rust (12) pass, as do
+TypeScript, changed-file lint, formatting and Android release build/signature.
+Structural tests do not substitute for physical wallet signing. Expo Doctor
+reports 17/19: existing Expo patch mismatch and an external Directory lookup
+failure. No dependency upgrades or advisory suppression were performed.
+The market reference remains informational, not monetary NAV or a redeemable
+dollar entitlement; real-market prices do not make these Devnet assets real.
+
+### Maximum-unit technical lifecycle: PASS (not physical MWA)
+
+Using the same hosted compiler, PostgreSQL journals, signers and reconciliation
+as the APK, the separate evaluation identity completed vault round 3
+`8NLEJeq9pSsnFjHdBoRtS4fsLGczHDqVUMZX5Yo5JaZA`: 1,000,000 test USDC deposited,
+three test buys, 1,000,000 on-chain share units issued, three test sales, full
+burn and 990,000 actual test USDC claimed. Current shares are zero. All ten
+economic signatures were independently checked finalized through official
+Devnet RPC; duplicate claim was rejected. The active illustrative reference
+was 998,717.129310 USD in one observation, NOT the 990,000 test-USDC claim.
+
+Receipts (each Explorer URL must use `?cluster=devnet`):
+
+- Deposit: `p7zvydjjqF6iQTPciS5eCEAs6GCiSMtvBz99uBHL1ciDriub2zHvqgRnX3Czx5kXi4GXdroaDEhihGGUzZgoF8M`.
+- BTC test buy: `65Gwk8EwYpZZ48o9VsKEdfTSb8cr24BmJxKsR7PKzsTYLcBCrTBSPYRfhctnAgrQjGp27aRJkbVijxKL5JJa7rnH`.
+- ETH test buy: `5YCZgb6aq2SCjmax8KqFPCNhmbheDamxDy2dXBzUja8hkTsgey9J8UdAMq2qDe1HQVAXSQ8x97GfYPRx5XJEjLuE`.
+- SOL test buy: `GYJDtVLTLzhiyGPE3gyQPn26rKheCqUbaTDK4dPaaMVeykwjuKpGraPJBnWonVgVFT1dYX3aiz174VKBqh5x5CY`.
+- Issuance: `27swWX6uyL3cJbzBx91DgrK7E7YWAaHXR3AbWg3FoLP9R43F4RZ4qKPRf5yUwbfWbfwnuDAiD9s3oJFH5mCXT11x`.
+- Sale request: `5pzsPZVdCbv4fuPHBFkffQoNWHx5stMvt2nxDgaNv6WvBHBZuJYCM3C4DyTEjH8ybqzfmoBgVB84U9QpNrcuPjuG`.
+- BTC test sale: `2RNtD6gtd2LQSJj3N2StVjiptZWvJiTLRtqDfAzsZzY5qvxS7RNGuMkGtSHJQ6BonRfN2AJSCt58tkvS4PGvjno9`.
+- ETH test sale: `66sYyA2qG1UiF6cK7Wn5PSmnZWc29LaKy1PqmjZa6yv2B8X1QM5iBjaY4dJjyGXfiqCoE3YN7E3D82Hwyh1zpf8v`.
+- SOL test sale: `2a9nQ8QgzLRsyJNiQP4tAQHcV9NHNjAjCTskpB9CvTakQ4xsj8BYapZ5T32aVWK7kAM7oBMbn16KU52tTiddTC7C`.
+- Burn/claim: `5FHsyLbBiPSCvycoorT2zBfLNg5efwo8gV58FnRvpynRxppbpwMJSCrkb3QvKhtFSAxmdxBSxarFfA9qeEkECgdu`.
+
+Transient uncertain execution responses reconciled the SAME stored signatures,
+not replacements. The first technical provisioning driver stopped at its old
+15-request boundary; its report is preserved and continuation used the existing
+durable setup receipts. The driver now has a bounded 32-request bootstrap;
+the APK's existing 80-request boundary was not changed. An earlier pre-promotion
+request correctly rejected the new binary with `EVAL_PROVISION_PROGRAM_BINARY`.
+These are honest stop/recovery records, not failed deposits hidden as success.
+The maximum-unit journey was NOT signed through physical Phantom; the owner's
+10-unit active basket was not sold or changed by this technical test.
