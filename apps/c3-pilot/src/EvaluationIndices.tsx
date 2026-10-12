@@ -27,11 +27,13 @@ import {
   localizedUnits,
   presentationAction,
   presentationLimits,
+  positionSummary,
 } from "./evaluation-indices-presentation";
 import {
   presentationText,
   type PresentationKey,
 } from "./evaluation-indices-presentation-copy";
+import { saleCopy } from "./evaluation-sale-copy";
 
 type Props = {
   language: Language;
@@ -66,6 +68,8 @@ export function EvaluationIndices({
   const ownsPosition = verified && activityScope(wallet, position);
   const history = activityGroups(wallet, verified, position);
   const limits = presentationLimits(wallet, verified, position);
+  const summary = positionSummary(wallet, verified, position);
+  const sale = saleCopy[language];
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [proofError, setProofError] = useState(false);
   const { width, fontScale } = useWindowDimensions();
@@ -101,21 +105,23 @@ export function EvaluationIndices({
   }
   const primary = presentationAction(state, busy, validAmount, limits);
   const label =
-    primary.action === "new_purchase"
-      ? t("newTrial")
-      : primary.action === "claim"
-        ? t("claim")
-        : primary.action === "issue_shares"
-          ? t("issue")
-          : primary.action === "advance"
-            ? t("continue")
-            : primary.action === "provision"
-              ? t("funds")
-              : primary.action === "refresh"
-                ? t("refresh")
-                : primary.action === "activity"
-                  ? t(state.title === "completed" ? "activity" : "view")
-                  : indicesText(language, state.label);
+    primary.action === "request_redemption"
+      ? sale.sell
+      : primary.action === "new_purchase"
+        ? t("newTrial")
+        : primary.action === "claim"
+          ? t("claim")
+          : primary.action === "issue_shares"
+            ? t("issue")
+            : primary.action === "advance"
+              ? t("continue")
+              : primary.action === "provision"
+                ? t("funds")
+                : primary.action === "refresh"
+                  ? t("refresh")
+                  : primary.action === "activity"
+                    ? t(state.title === "completed" ? "activity" : "view")
+                    : indicesText(language, state.label);
   const infoKeys = [
     "composition",
     "how",
@@ -191,6 +197,32 @@ export function EvaluationIndices({
             {!validAmount ? (
               <Text style={s.warning}>{t("invalid")}</Text>
             ) : null}
+            {validAmount ? (
+              <Text style={s.caption}>
+                {sale.expected.replace(
+                  "{amount}",
+                  localizedUnits(
+                    purchaseUnits(purchaseAmount).toString(),
+                    language,
+                  ),
+                )}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        {primary.action === "request_redemption" &&
+        summary &&
+        !summary.empty &&
+        summary.shares !== null ? (
+          <View style={s.amountEntry}>
+            <Text style={s.body}>{sale.quantity}</Text>
+            <Text style={s.input}>
+              {sale.all.replace(
+                "{amount}",
+                localizedUnits(summary.shares, language),
+              )}
+            </Text>
+            <Text style={s.caption}>{sale.totalOnly}</Text>
           </View>
         ) : null}
         <Pressable
@@ -206,6 +238,15 @@ export function EvaluationIndices({
         >
           <Text style={s.primaryText}>{label}</Text>
         </Pressable>
+        {ownsPosition && [3, 4].includes(Number(position?.lifecycle)) ? (
+          <Text accessibilityLiveRegion="polite" style={s.body}>
+            {state.action === "claim"
+              ? sale.claiming
+              : summary && !summary.empty && summary.received !== null
+                ? sale.closed
+                : sale.selling}
+          </Text>
+        ) : null}
         {primary.action !== "activity" && verified ? (
           <Pressable
             accessibilityRole="button"
@@ -261,7 +302,15 @@ export function EvaluationIndices({
         ) : null}
         {busy || status ? (
           <Text accessibilityLiveRegion="polite" style={s.caption}>
-            {busy ? evalText(language, "busy") : status}
+            {busy
+              ? evalText(language, "busy")
+              : summary &&
+                  !summary.empty &&
+                  summary.received !== null &&
+                  !state.recover &&
+                  !status.startsWith("EVAL_")
+                ? t("completed")
+                : status}
           </Text>
         ) : null}
         {ownsPosition && [2, 3].includes(Number(position?.lifecycle)) ? (

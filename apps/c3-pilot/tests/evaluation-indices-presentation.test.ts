@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
 import { indicesText } from "../src/evaluation-indices-copy.ts";
+import { saleCopy } from "../src/evaluation-sale-copy.ts";
 import {
   localizedUnits,
   presentationLimits,
@@ -350,12 +351,15 @@ test("actual primary-label and press expressions preserve all locales and cannot
         language,
         t,
         indicesText,
+        sale: saleCopy[language],
       });
       assert.equal(
         label,
-        c.key === "connect" || c.key === "verify"
-          ? indicesText(language, c.key)
-          : t(c.key as keyof typeof presentationCopy.en),
+        c.key === "sell"
+          ? saleCopy[language].sell
+          : c.key === "connect" || c.key === "verify"
+            ? indicesText(language, c.key)
+            : t(c.key as keyof typeof presentationCopy.en),
       );
       const recorded: unknown[] = [];
       const onAction = (action: unknown) => recorded.push(action);

@@ -240,7 +240,7 @@ test("accordions and wallet opening are passive; bottom navigation is fixed; no 
   );
   // Structural checks are not a rendered-device accessibility or layout test.
 });
-test("unchanged connection, reconciliation and recovery controllers remain byte-equivalent after AST printing", () => {
+test("connection, reconciliation and recovery controllers remain byte-equivalent; settlement continuation is separately regression-tested", () => {
   // Canonical AST-printer SHA-256 digests captured from original commit 804c3d8.
   // No whitespace/formatting changes can masquerade as a behavioral change.
   const hashes: Record<string, string> = {
@@ -249,7 +249,6 @@ test("unchanged connection, reconciliation and recovery controllers remain byte-
     health: "d9067e2d888360430b33fa605a0bba10ea54ab85e5e3d90159521d21d50467b6",
     updatePosition:
       "17a795837ad753dd8109a8565b33072ba9c242b1d4c4b4929fe144254e89b0ca",
-    advance: "fe2a2dcdf8aee6ac742337e63f9ae38e8f14c323b0df946ef04f8041cceb2585",
     recover: "a19a5139f3bfba4bdb1de4bd63c5cf34fae9c152ad6a38a195f129a356d0537f",
     displayUnits:
       "d145603605e61958338148a209820b0f4e0f4b93862649ed5abdab53188e0837",

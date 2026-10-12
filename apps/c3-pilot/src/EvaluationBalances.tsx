@@ -82,11 +82,18 @@ export function EvaluationBalances({
   const [loading, setLoading] = useState(false);
   const c = copy[language];
   useEffect(() => {
+    if (!wallet) return;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") setRefresh((v) => v + 1);
     });
-    return () => subscription.remove();
-  }, []);
+    const timer = setInterval(() => {
+      if (AppState.currentState === "active") setRefresh((v) => v + 1);
+    }, 30_000);
+    return () => {
+      subscription.remove();
+      clearInterval(timer);
+    };
+  }, [wallet]);
   useEffect(() => {
     let cancelled = false;
     if (!wallet) return;

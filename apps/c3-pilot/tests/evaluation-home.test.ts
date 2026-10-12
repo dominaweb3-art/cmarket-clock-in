@@ -371,9 +371,12 @@ test("Home information uses a single controlled group; only one row can stay ope
   assert.doesNotMatch(text, /t\("available"\)|t\("note"\)/);
   assert.match(text, /CryptoIcon index=\{asset.icon\} size=\{36\}/);
 });
-test("Home balances live in the existing wallet sheet; other tabs keep their presentation", () => {
+test("balances are restored once above all three tabs and remain in the wallet sheet", () => {
   const sheet = source("EvaluationWalletSheet.tsx");
-  assert.doesNotMatch(appText, /<EvaluationBalances/);
+  assert.equal((appText.match(/<EvaluationBalances/g) ?? []).length, 1);
+  assert.ok(
+    appText.indexOf("<EvaluationBalances") < appText.indexOf("<EvaluationHome"),
+  );
   assert.match(sheet, /visible \? \(\s*<EvaluationBalances/);
   assert.match(sheet, /revision=\{balanceRevision\}/);
   assert.match(appText, /balanceRevision=\{position\}/);

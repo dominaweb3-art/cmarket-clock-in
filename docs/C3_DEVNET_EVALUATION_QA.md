@@ -684,3 +684,75 @@ Mainnet and real funds stay disabled. Custody, transaction construction, signatu
 claim accounting, replay/recovery, current configurations and historical receipts
 are unchanged. This version does not implement market-linked test-USDC payouts.
 No service publication, deployment, paid action, signing-material change or push.
+
+## 2026-10-11 — Restore available balances and confirmed settlement continuity
+
+Classification: CLOCKIN_ONLY. Started from clean delivery/c3-devnet-evaluation
+at 2eff65c540622807aca5a4558c53402bc57aeacf; prior local visual commits and
+all previous APKs preserved. No changes to programs, backend, dependency versions,
+Mainnet candidates, custody, transaction encoding or signing implementation.
+
+Read-only diagnosis, not an executed sale: the authenticated Seeker screen showed
+10 deposited test USDC, 10 C3 shares, "Venta en curso", renewal and an uncertain
+status. Official finalized Devnet RPC independently decoded round-two redemption
+FUCkeCSnFWvcbjMJ6Ld9ru8Q1by3kjAFG2bZZejMaGyw at slot 510139387: status 2,
+share_amount 10000000, usdc_claimable 0, usdc_returned 0. Its settlement plan
+7ZcpMfY8rq4tYhYkVhnZZtgtUZBFWCVn35hLLJ3dbguX, revision 2, was expired
+at observation. Neither a completed sale nor received funds were demonstrated.
+Recovery requires explicit owner-approved renewal; hiding this position or
+inventing a wallet credit would be incorrect.
+
+SOL and the single configured evaluation-USDC balance are restored once above
+all three tabs, with existing token icons and Devnet labels. Finalized RPC reads
+refresh on foreground, every 30 seconds while active, after economic position
+changes, and manually. Missing or contradictory data stays unavailable, not zero.
+Position polling now refreshes every 15 seconds and on foreground. Effect cleanup
+and stale-wallet guards remain. SOL is not assumed to increase on sale.
+
+After deposit, sale-request or renewal effects are reconciled by the hosted
+service, the same bounded settlement controller continues the authorized trial
+until an explicit owner action (issuance/claim), uncertainty, failure or limit.
+It does not sign another owner packet, start another purchase, renew automatically,
+retry a failed request or resubmit an uncertain owner signature. Claim still
+atomically burns all shares and transfers only actual claimable test USDC.
+Completed-position copy is distinguished from an active sale; Activity receipts
+and original recovery signatures remain intact.
+
+Purchase amount remains selectable within current on-chain cap and actual balance,
+with an issuance estimate reflecting the existing test-only one-share-per-deposited-
+USDC rule. Full-sale quantity is shown explicitly. Partial redemption is NOT
+implemented: deployed create_redemption_intent requires shares == total_shares_issued
+and claim_usdc requires the full owner balance and mint supply. Owner was asked
+whether to authorize a separately reviewed Devnet contract/backend extension;
+no amount slider, changed custody model or unsupported partial success was added.
+
+Validation: 49 focused mobile tests PASS; TypeScript, lint, formatting, Android
+production export, signed build and diff checks PASS. Six new tests exercise
+bounded continuation, original uncertain/failed operations, expiry, restart,
+wrong scope, explicit claim boundary and the actual source-derived owner-action
+continuation guard with inert adapters. These tests are NOT physical signing or
+a new on-chain sale. Original connection, refresh, account verification, recovery
+and unit-display controllers retain their canonical AST hashes. The deliberately
+changed settlement controller has dedicated behavioral tests rather than a new
+unexplained snapshot hash. Expo Doctor: existing 18/19 patch-version mismatch
+(Expo 57.0.26 installed; 57.0.27 expected), not suppressed or upgraded here.
+
+APK 0.1.32 / version code 33:
+apps/c3-pilot/dist/devnet-evaluation-balances-sale-v33/c-market-c3-devnet-evaluation-0.1.32.apk.
+SHA-256: 6312be9865e998b8616e484eb5407fa2ff3660a34aa667d3304e6d1325d29577.
+Certificate SHA-256: 58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016.
+Actual previous installed certificate matched. adb install -r PASS, no uninstall
+or data deletion. Device package version 0.1.32/code33 verified. Cold launch
+without a Metro listener PASS; Spanish Home shows the restored balance area and
+unchanged discovery/navigation. Physical Home → Indices → Activity → Home
+navigation PASS, with the balance area visible in every tab in disconnected
+state. This is not evidence of authenticated RPC amounts. Authentication is in memory, so the owner was
+asked to reconnect for actual-wallet balance review. Authenticated physical
+balance, renewal/claim and full-sale acceptance remain pending; no wallet
+authorization or chain transaction was performed during this execution.
+
+React review: one shared visible balance component, scoped refresh dependencies,
+foreground-only polling, listener/timer cleanup, localized exact integer values
+and explicit accessible recovery actions; no new UI framework or network provider.
+No publication or push; Mainnet remains disabled. This is not a partial-redemption
+release or a claim that the user's pending sale has been completed.

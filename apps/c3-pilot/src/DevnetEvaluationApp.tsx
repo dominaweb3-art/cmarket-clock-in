@@ -39,6 +39,12 @@ import { EvaluationHome } from "./EvaluationHome";
 import { homeText } from "./evaluation-home-copy";
 import { EvaluationActivity } from "./EvaluationActivity";
 import { purchaseUnits, purchaseCopy } from "./evaluation-purchase";
+import { EvaluationBalances } from "./EvaluationBalances";
+import {
+  canContinueSettlement,
+  continueSettlement,
+} from "./evaluation-settlement-progress";
+import { saleCopy } from "./evaluation-sale-copy";
 
 const STORAGE = "c3-evaluation-language/v1";
 export default function DevnetEvaluationApp() {
@@ -233,7 +239,7 @@ export default function DevnetEvaluationApp() {
   useEffect(() => {
     if (!wallet || !verified || !position) return;
     let active = true;
-    const timer = setInterval(() => {
+    const query = () => {
       if (
         !session.current ||
         lock.current ||
@@ -256,10 +262,15 @@ export default function DevnetEvaluationApp() {
             );
         })
         .catch(() => undefined);
-    }, 60_000);
+    };
+    const timer = setInterval(query, 15_000);
+    const foreground = AppState.addEventListener("change", (state) => {
+      if (state === "active") query();
+    });
     return () => {
       active = false;
       clearInterval(timer);
+      foreground.remove();
     };
   }, [wallet, verified, position]);
   const prepareWalletAction = (action: EvaluationMoneyAction) => {
@@ -277,7 +288,7 @@ export default function DevnetEvaluationApp() {
     }
     Alert.alert(
       t("transactionTitle"),
-      `${t(action)}${action === "deposit" ? " · " + displayUnits(amount.toString()) + " USDC · Devnet" : ""}\n\n${t(action === "renew_plan" ? "renewalNotice" : "transactionNotice")}`,
+      `${t(action)}${action === "deposit" ? " · " + displayUnits(amount.toString()) + " USDC · Devnet" : ""}\n\n${t(action === "renew_plan" ? "renewalNotice" : "transactionNotice")}${["deposit", "request_redemption", "renew_plan"].includes(action) ? "\n\n" + saleCopy[language].processing : ""}`,
       [
         { text: t("cancel"), style: "cancel" },
         {
@@ -322,7 +333,19 @@ export default function DevnetEvaluationApp() {
                   ? t("verifiedEffects")
                   : t("uncertain"),
               );
-              await updatePosition();
+              const current = await updatePosition();
+              if (
+                (result.status === "effects_verified" ||
+                  result.status === "already_reconciled") &&
+                ["deposit", "request_redemption", "renew_plan"].includes(
+                  action,
+                ) &&
+                canContinueSettlement(wallet, current)
+              ) {
+                // Continue the user's confirmed operation in the hosted keeper.
+                // Further owner signatures (issuance/claim) remain explicit.
+                await advanceSettlement(current);
+              }
             });
           },
         },
@@ -357,27 +380,27 @@ export default function DevnetEvaluationApp() {
       }
       setStatus(t("uncertain"));
     });
-  const advance = () =>
-    run(async () => {
-      if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
-      for (let step = 0; step < 48; step++) {
+  const advanceSettlement = async (initial?: Record<string, unknown>) => {
+    if (!session.current) throw Error("EVAL_SESSION_REQUIRED");
+    if (!wallet) throw Error("EVAL_SESSION_REQUIRED");
+    const outcome = await continueSettlement({
+      wallet,
+      initial: initial ?? (await updatePosition()),
+      advance: async () => {
         const value = await evaluationRequest(
           { operation: "advance" },
           session.current,
         );
         setStatus(String(value.stage ?? ""));
-        await updatePosition();
-        if (value.needsOwnerAction) return;
-        if (value.stage === "uncertain") {
-          setStatus(t("uncertain"));
-          return;
-        }
-        if (value.stage === "failed")
-          throw Error("EVAL_FINALIZED_OPERATION_FAILED");
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
-      setStatus(t("uncertain"));
+        return value;
+      },
+      position: updatePosition,
+      sleep: (milliseconds) =>
+        new Promise((resolve) => setTimeout(resolve, milliseconds)),
     });
+    setStatus(t(outcome === "uncertain" ? "uncertain" : "verifiedEffects"));
+  };
+  const advance = () => run(() => advanceSettlement());
   const recover = () =>
     run(async () => {
       const value = await updatePosition();
@@ -484,6 +507,12 @@ export default function DevnetEvaluationApp() {
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
+        <EvaluationBalances
+          wallet={wallet}
+          language={language}
+          revision={`${position?.vault ?? ""}:${position?.lifecycle ?? ""}:${position?.shares ?? ""}:${position?.returned ?? ""}:${position?.availableUsdc ?? ""}`}
+          compact
+        />
         <View style={tab === "home" ? undefined : styles.hidden}>
           <EvaluationHome
             language={language}
