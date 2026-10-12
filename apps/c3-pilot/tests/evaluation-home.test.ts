@@ -373,11 +373,14 @@ test("Home information uses a single controlled group; only one row can stay ope
 });
 test("Home balances live in the existing wallet sheet; other tabs keep their presentation", () => {
   const sheet = source("EvaluationWalletSheet.tsx");
-  assert.match(appText, /tab === "indices" \? \(\s*<EvaluationBalances/);
+  assert.doesNotMatch(appText, /<EvaluationBalances/);
   assert.match(sheet, /visible \? \(\s*<EvaluationBalances/);
   assert.match(sheet, /revision=\{balanceRevision\}/);
   assert.match(appText, /balanceRevision=\{position\}/);
-  assert.match(appText, /tab === "home" \? styles.homeBanner : styles.banner/);
+  assert.match(
+    appText,
+    /tab !== "activity" \? styles.homeBanner : styles.banner/,
+  );
   assert.match(appText, /homeText\(language, "demoStrip"\)/);
   for (const language of languages) {
     assert.match(homeText(language, "demoStrip"), /Devnet/);

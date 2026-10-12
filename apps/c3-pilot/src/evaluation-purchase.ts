@@ -1,4 +1,5 @@
 /** Devnet-only decimal policy. No floats, prices, RPC or wallet callbacks. */
+export const EVALUATION_ROUND_LIMIT = 10n;
 export function purchaseUnits(value: string): bigint {
   if (!/^(0|[1-9][0-9]{0,6})([.,][0-9]{1,6})?$/.test(value))
     throw Error("EVAL_PURCHASE_AMOUNT");
@@ -17,7 +18,7 @@ export function validatePurchaseReview(context: EvaluationPurchaseReview) {
     context.amount < 1_000_000n ||
     context.amount > 1_000_000_000_000n ||
     context.round < 1n ||
-    context.round > 10n
+    context.round > EVALUATION_ROUND_LIMIT
   )
     throw Error("EVAL_OWNER_PURCHASE_CONTEXT");
   return context;

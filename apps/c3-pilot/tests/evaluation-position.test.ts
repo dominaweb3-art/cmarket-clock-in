@@ -104,11 +104,12 @@ test("Indices keeps the position; compact Home only navigates, and sale remains 
   assert.doesNotMatch(source("EvaluationHome.tsx"), /<EvaluationPosition/);
   assert.match(
     source("EvaluationIndices.tsx"),
-    /EvaluationAccordion title=\{positionCopy\[language\]\.details\}/,
+    /presentationAction\(state, busy, validAmount, limits\)/,
   );
+  assert.match(source("EvaluationIndices.tsx"), /testID="indices-about-c3"/);
   assert.match(
     source("EvaluationIndices.tsx"),
-    /state\.action === "request_redemption" && !busy/,
+    /if \(!primary\.disabled\) onAction\(primary\.action\)/,
   );
   for (const forbidden of [
     "signEvaluation",

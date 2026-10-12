@@ -229,11 +229,11 @@ test("accordions and wallet opening are passive; bottom navigation is fixed; no 
   assert.ok(app.includes('style={tab !== "indices" && styles.hidden}')); // Keep accordion state mounted across tabs.
   assert.ok(
     indices.indexOf("{state.recover ?") <
-      indices.indexOf("<EvaluationAccordion key={key}"),
+      indices.indexOf('testID="indices-about-c3"'),
   );
   assert.ok(
     indices.indexOf("accessibilityLiveRegion") <
-      indices.indexOf("<EvaluationAccordion key={key}"),
+      indices.indexOf('testID="indices-about-c3"'),
   );
   assert.ok(
     indices.indexOf("marketKeys.map") > indices.indexOf('title={t("markets")}'),
@@ -287,7 +287,7 @@ test("unchanged connection, reconciliation and recovery controllers remain byte-
   visit(file);
   assert.equal(found.size, Object.keys(hashes).length);
 });
-test("basket asset uses alpha transparency and is consumed only by explanatory indices content", () => {
+test("approved basket asset is preserved but no longer enlarges compact explanatory content", () => {
   const png = readFileSync(
     new URL(
       "../assets/evaluation-ui/c3-basket-explainer-v1.png",
@@ -300,6 +300,6 @@ test("basket asset uses alpha transparency and is consumed only by explanatory i
     new URL("../src/EvaluationIndices.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(ui, /key === "shares"/);
-  assert.match(ui, /c3-basket-explainer-v1.png/);
+  assert.doesNotMatch(ui, /c3-basket-explainer-v1.png/);
+  assert.match(ui, /CryptoIcon index=\{asset.icon\} size=\{32\}/);
 });

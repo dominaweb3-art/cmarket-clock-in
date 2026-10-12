@@ -1,19 +1,21 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import type { Language } from "./locales";
-import { referenceDollars, referenceView } from "./evaluation-reference-view";
+import { referenceView } from "./evaluation-reference-view";
+import { localizedUnits } from "./evaluation-indices-presentation";
 import { EvaluationAccordion } from "./EvaluationAccordion";
 const copy = {
   en: {
-    title: "Estimated current value · USD reference",
-    detail: "How this estimate is calculated",
-    warning: "Informational simulation. Not the amount paid by a test sale.",
+    title: "Indicative value",
+    detail: "About this value",
+    warning:
+      "Reference only. Sale proceeds are confirmed when processing finishes.",
     change: "Estimated change since deposit",
     up: "Up",
     down: "Down",
     flat: "No change",
-    frozen: "Reference at sale request",
-    unavailable: "Market reference unavailable",
+    frozen: "Indicative value at sale request",
+    unavailable: "Indicative value unavailable",
     note: "Simulation using real BTC/ETH/SOL USD prices (40/30/30). Not real assets, redeemable dollars or guaranteed test USDC. Sales pay only reconciled test USDC and burn shares.",
     source: "Coinbase Exchange · 60-second historical entry reference",
     updated: "Updated",
@@ -22,16 +24,15 @@ const copy = {
       "Refreshes every minute while the app is open. Percentage is relative to the deposit; it is not a realized profit or loss.",
   },
   es: {
-    title: "Valor actual estimado · referencia USD",
-    detail: "Cómo se calcula esta estimación",
-    warning:
-      "Simulación informativa. No es el importe que paga la venta de prueba.",
+    title: "Valor orientativo",
+    detail: "Sobre este valor",
+    warning: "Es una referencia. El importe de venta se confirma al finalizar.",
     change: "Variación estimada desde el depósito",
     up: "Subió",
     down: "Bajó",
     flat: "Sin variación",
-    frozen: "Referencia al solicitar la venta",
-    unavailable: "Referencia de mercado no disponible",
+    frozen: "Valor orientativo al solicitar la venta",
+    unavailable: "Valor orientativo no disponible",
     note: "Simulación con precios reales BTC/ETH/SOL en USD (40/30/30). No son activos reales, dólares rescatables ni USDC de prueba garantizado. La venta paga solo USDC de prueba conciliado y quema participaciones.",
     source:
       "Coinbase Exchange · referencia histórica de entrada de 60 segundos",
@@ -41,15 +42,15 @@ const copy = {
       "Se actualiza cada minuto mientras la app está abierta. El porcentaje se compara con el depósito; no es ganancia o pérdida realizada.",
   },
   "zh-CN": {
-    title: "当前估值 · 美元参考",
-    detail: "估值计算方式",
-    warning: "仅供参考的模拟。并非测试卖出所支付的金额。",
+    title: "参考估值",
+    detail: "关于此估值",
+    warning: "仅供参考。卖出金额在处理完成后确认。",
     change: "相对存款的估计变化",
     up: "上涨",
     down: "下跌",
     flat: "无变化",
     frozen: "卖出申请时的参考值",
-    unavailable: "市场参考暂不可用",
+    unavailable: "参考估值暂不可用",
     note: "使用 BTC/ETH/SOL 真实美元价格的模拟（40/30/30）。并非真实资产、可赎回美元或保证的测试 USDC。卖出仅支付已核实的测试 USDC，并销毁份额。",
     source: "Coinbase Exchange · 60 秒历史入场参考",
     updated: "更新时间",
@@ -58,15 +59,15 @@ const copy = {
       "应用打开时每分钟刷新。百分比相对于存款计算，并非已实现的收益或损失。",
   },
   "pt-BR": {
-    title: "Valor atual estimado · referência USD",
-    detail: "Como esta estimativa é calculada",
-    warning: "Simulação informativa. Não é o valor pago pela venda de teste.",
+    title: "Valor indicativo",
+    detail: "Sobre este valor",
+    warning: "É uma referência. O valor da venda é confirmado ao finalizar.",
     change: "Variação estimada desde o depósito",
     up: "Subiu",
     down: "Caiu",
     flat: "Sem variação",
-    frozen: "Referência ao solicitar a venda",
-    unavailable: "Referência de mercado indisponível",
+    frozen: "Valor indicativo ao solicitar a venda",
+    unavailable: "Valor indicativo indisponível",
     note: "Simulação com preços reais BTC/ETH/SOL em USD (40/30/30). Não são ativos reais, dólares resgatáveis ou USDC de teste garantido. A venda paga apenas USDC de teste conciliado e queima participações.",
     source:
       "Coinbase Exchange · referência histórica de entrada de 60 segundos",
@@ -79,9 +80,13 @@ const copy = {
 export function EvaluationMarketReference({
   language,
   position,
+  expanded,
+  onToggle,
 }: {
   language: Language;
   position: Record<string, unknown> | null;
+  expanded?: boolean;
+  onToggle?: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -90,6 +95,7 @@ export function EvaluationMarketReference({
   }, []);
   const t = copy[language],
     r = referenceView(position, now);
+  if (!r) return <Text style={s.caption}>{t.unavailable}</Text>;
   return (
     <View style={s.box}>
       {r ? (
@@ -102,7 +108,7 @@ export function EvaluationMarketReference({
       </Text>
       {r ? (
         <>
-          <Text style={s.value}>USD {referenceDollars(r.value)}</Text>
+          <Text style={s.value}>USD {localizedUnits(r.value, language)}</Text>
           <View
             testID="evaluation-basket-performance"
             style={[
@@ -120,7 +126,7 @@ export function EvaluationMarketReference({
               ]}
             >
               {t[r.performance.direction]} · {BigInt(r.change) > 0n ? "+" : ""}
-              {referenceDollars(r.change)} USD ·{" "}
+              {localizedUnits(r.change, language)} USD ·{" "}
               {r.performance.percent.replace(
                 ".",
                 language === "es" || language === "pt-BR" ? "," : ".",
@@ -135,7 +141,12 @@ export function EvaluationMarketReference({
         <Text style={s.caption}>{t.unavailable}</Text>
       )}
       <Text style={s.caption}>{t.warning}</Text>
-      <EvaluationAccordion title={t.detail}>
+      <EvaluationAccordion
+        title={t.detail}
+        {...(expanded === undefined ? {} : { expanded })}
+        {...(onToggle ? { onToggle } : {})}
+        inline
+      >
         <Text style={s.caption}>{t.source}</Text>
         <Text style={s.caption}>{t.refresh}</Text>
         <Text style={s.caption}>{t.note}</Text>
@@ -144,9 +155,15 @@ export function EvaluationMarketReference({
   );
 }
 const s = StyleSheet.create({
-  box: { paddingVertical: 16, gap: 8 },
+  box: {
+    paddingTop: 14,
+    marginTop: 8,
+    gap: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: "#dce9e2",
+  },
   title: { fontSize: 18, fontWeight: "700", color: "#17443b" },
-  value: { fontSize: 28, fontWeight: "700", color: "#0c1424" },
+  value: { fontSize: 24, fontWeight: "700", color: "#0c1424" },
   performance: {
     backgroundColor: "#edf8f2",
     borderRadius: 12,

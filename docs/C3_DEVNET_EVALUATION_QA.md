@@ -622,3 +622,65 @@ sale plan, signed outputs/minima and actual reconciled reserve transfers, preser
 historical floors and uncertain signatures, and define both losses and gains.
 Always paying more would not reproduce market performance. No client display
 value or unauthenticated request was promoted into a payable amount.
+
+## 12 October 2026 — compact Indices, APK 0.1.31
+
+Classification: CLOCKIN_ONLY. Starting HEAD
+`a4120c2c046246a4c10f6b69d6e43122b88fda4c`. Interface/copy only; no blockchain
+cycle, program upgrade, backend change, wallet signature or monetary operation.
+Home and Activity components remain unchanged. Indices now uses the same compact
+header/Devnet strip as Home; general balances remain only in the shared wallet
+menu, with their existing queries and refresh action.
+
+C3 composition appears first with smaller approved icons and an exact 40/30/30
+bar. One owned position summary separates deposited test USDC, verified C3
+shares, pending issuance, actual sale proceeds and available claim. Missing or
+wrong-wallet evidence never becomes zero. Decimal/group formatting uses bigint
+and retains six-decimal precision without converting money to Number. A single
+primary action dispatches to the existing reviewed controller: connect, verify,
+prepare, buy, issue, continue, sell, claim, activity or next trial. Uncertain
+operations, recovery, renewal, errors and Activity remain visible before details.
+Verified current vault minimum/maximum/balance/round determine displayed limits;
+legacy caps are preserved. The unchanged ten-round review limit is factored into
+a shared constant, not duplicated or increased. Round ten or missing repetition
+evidence shows Activity instead of advertising a new trial.
+
+Market value remains informational and is separate from deposit/shares/proceeds.
+Unavailable reference evidence yields one secondary line, not a large empty
+valuation panel. Existing freshness, frozen sale reference, percentage arithmetic
+and red/green/neutral performance remain unchanged. Details open in the same
+single-expanded-section state as the flat About C3 rows. Oversized educational
+artwork is no longer rendered but its original asset is preserved. Four-language
+copy is concise; upcoming C5/C10/C20/C50 and ten global markets remain informational.
+Europe is a region, and market names switch to one column with larger text/small
+screens. No dependencies were added or upgraded.
+
+Validation: 43 focused tests PASS, including scoped positions, missing shares,
+legacy/million caps, round-ten behavior, exact large numbers and source-derived
+primary labels/click guards in all four locales. Those inert presentation fixtures
+are not native-device rendering or physical wallet acceptance. Eleven original
+authentication/wallet/operation controller initializers are identical after
+canonical TypeScript AST comparison. TypeScript, lint (no errors or warnings),
+formatting, Android production export, signed build and diff checks PASS.
+Expo Doctor remains 18/19: existing Expo 57.0.26 versus expected 57.0.27 mismatch.
+
+APK `c-market-c3-devnet-evaluation-0.1.31.apk`, version code 32, package
+`com.dominaweb3.cmarket.c3evaluation`, launcher name `C Market`.
+SHA-256: `a204c5427485589a3a206f2f99de8794adde450e458d801dd4cb00a936080e95`.
+Certificate SHA-256:
+`58f880e44f7e9e28d3f4b4a5d5def9291b0244a1672eef9bcd4f5d745ec54016`.
+The actual installed previous certificate matched; data-preserving installation
+PASS without uninstall. All prior APKs preserved. Seeker cold launch without
+Metro, Home-to-Indices navigation, Spanish/English rendering, one connect action,
+no fictitious position values, composition expansion and wallet-menu/language
+opening PASS. After the update no authenticated wallet position was present;
+active/claim/completed layouts are covered by automated fixtures, not claimed as
+physical acceptance. Phone focus subsequently changed to another application;
+interaction stopped without reading unrelated UI. Physical Chinese/Portuguese,
+authenticated-position review and restoration of the original Spanish selection
+remain pending. The owner was asked only to keep C Market foreground, not to sign.
+
+Mainnet and real funds stay disabled. Custody, transaction construction, signatures,
+claim accounting, replay/recovery, current configurations and historical receipts
+are unchanged. This version does not implement market-linked test-USDC payouts.
+No service publication, deployment, paid action, signing-material change or push.

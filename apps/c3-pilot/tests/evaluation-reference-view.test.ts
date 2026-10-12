@@ -156,6 +156,6 @@ test("performance display is localized and does not introduce wallet actions", (
   assert.match(source, /t\[r\.performance\.direction\]/);
   assert.ok(
     source.indexOf("t.entry") <
-      source.indexOf("USD {referenceDollars(r.value)}"),
+      source.indexOf("USD {localizedUnits(r.value, language)}"),
   );
 });

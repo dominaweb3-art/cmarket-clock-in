@@ -38,7 +38,6 @@ import { indicesStatus } from "./evaluation-indices-copy";
 import { EvaluationHome } from "./EvaluationHome";
 import { homeText } from "./evaluation-home-copy";
 import { EvaluationActivity } from "./EvaluationActivity";
-import { EvaluationBalances } from "./EvaluationBalances";
 import { purchaseUnits, purchaseCopy } from "./evaluation-purchase";
 
 const STORAGE = "c3-evaluation-language/v1";
@@ -448,14 +447,14 @@ export default function DevnetEvaluationApp() {
   return (
     <SafeAreaView style={styles.page}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      <View style={[styles.header, tab === "home" && styles.homeHeader]}>
+      <View style={[styles.header, tab !== "activity" && styles.homeHeader]}>
         <View style={styles.brand}>
           <Image
             accessible={false}
             source={require("../../mobile/assets/images/splash-icon.png")}
-            style={[styles.wordmark, tab === "home" && styles.homeWordmark]}
+            style={[styles.wordmark, tab !== "activity" && styles.homeWordmark]}
           />
-          <Text style={[styles.title, tab === "home" && styles.homeTitle]}>
+          <Text style={[styles.title, tab !== "activity" && styles.homeTitle]}>
             C Market
           </Text>
         </View>
@@ -470,8 +469,8 @@ export default function DevnetEvaluationApp() {
           {wallet ? <View style={styles.connectionDot} /> : null}
         </Pressable>
       </View>
-      <View style={tab === "home" ? styles.homeBanner : styles.banner}>
-        {tab === "home" ? (
+      <View style={tab !== "activity" ? styles.homeBanner : styles.banner}>
+        {tab !== "activity" ? (
           <Text style={styles.homeDemo}>{homeText(language, "demoStrip")}</Text>
         ) : (
           <>
@@ -485,13 +484,6 @@ export default function DevnetEvaluationApp() {
         style={styles.scrollView}
         contentContainerStyle={styles.scroll}
       >
-        {tab === "indices" ? (
-          <EvaluationBalances
-            wallet={wallet}
-            language={language}
-            revision={position}
-          />
-        ) : null}
         <View style={tab === "home" ? undefined : styles.hidden}>
           <EvaluationHome
             language={language}
@@ -541,7 +533,7 @@ export default function DevnetEvaluationApp() {
             onCatalogLayout={scrollToCatalog}
           />
         </View>
-        {tab !== "home" ? (
+        {tab === "activity" ? (
           <Text style={styles.footer}>{t("mainnet")}</Text>
         ) : null}
       </ScrollView>
