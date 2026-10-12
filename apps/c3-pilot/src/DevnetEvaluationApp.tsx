@@ -672,6 +672,7 @@ export default function DevnetEvaluationApp() {
         <View style={tab !== "indices" && styles.hidden}>
           <EvaluationIndices
             language={language}
+            screenActive={tab === "indices"}
             wallet={wallet}
             verified={verified}
             busy={busy}

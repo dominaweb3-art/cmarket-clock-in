@@ -867,3 +867,40 @@ signed Android build passed. No wallet signing or blockchain transaction occurre
 The current physical connection callback was not repeated for this visual change.
 Mainnet remains disabled. APK SHA-256:
 `86bab7e4fb59c044497b49c784e1015de1b8d93b0066caf3e84d5e0bc0148bac`.
+# 2026-10-12 — 0.1.38 real market references, 5-second display queries
+
+The public display-only `/api/prices` endpoint queries official Coinbase Exchange
+BTC-USD, ETH-USD and SOL-USD ticker and 24h stats. It validates positive fixed-point
+prices and trade timestamps, caches market data for five seconds, coalesces concurrent
+requests, and rejects missing/stale/error responses. It has no database, wallet,
+signer or transaction access. Six provider GETs per cache miss; no keys or paid service.
+The mobile client queries only while Indices is visible and foregrounded, prevents
+overlapping requests, aborts on unmount, and backs off 15 seconds on failures.
+
+The market card is visible independently of wallet/purchase state and shows real
+spot USD prices, 24h percentage and source/observation time. Active basket reference
+changes derive from these real prices and the existing verified-deposit historical
+entry basis with integer 40/30/30 arithmetic. Pending purchases cannot become owned
+positions, and sale-request/closed values and actual USDC payouts remain unchanged.
+Devnet inventory and liquidity remain test assets; these are informational references,
+not Mainnet asset acquisition, monetary NAV or a market-linked payout promise.
+
+Observed current wallet deposit: 100 test USDC; signature
+`cGqqVqVfFc8GnwtRkZc6xPP7qGrqnTatgKpKRLS2KdC7saq4VmALRPZDrjXm73J9qoukZFm7bJoh4Ay4DiiJt7p`
+finalized successfully on official Devnet RPC. Durable deposit effect receipt is
+funded; plan processing/share issuance remain pending. Explicit recovery encountered
+expired owner session, so authentication is required before continuation. No new
+owner transaction or deposit was submitted in this execution.
+
+Validation: 16 focused mobile tests, collector adversarial test, TypeScript, focused
+lint and signed build passed; official live market read and staged API GET passed.
+Existing Expo Doctor patch warning remains 18/19. Existing signing certificate preserved.
+Seeker final APK physically displayed real BTC/ETH/SOL USD quotes, red/green
+24h percentages and observation timestamp through the public hosted API.
+APK 0.1.38 (39) SHA-256:
+`926f6ce2e0c2cffe85a71274fe54107abf3b48649ed7d6bb369b70f591c15cb1`.
+
+Primary references:
+https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-ticker
+https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-stats
+https://docs.cdp.coinbase.com/exchange/rest-api/rate-limits

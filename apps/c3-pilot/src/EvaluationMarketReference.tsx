@@ -1,9 +1,15 @@
-import { StyleSheet, Text, View } from "react-native";
+import { AppState, StyleSheet, Text, View } from "react-native";
 import { useEffect, useState } from "react";
 import type { Language } from "./locales";
 import { referenceView } from "./evaluation-reference-view";
 import { localizedUnits } from "./evaluation-indices-presentation";
 import { EvaluationAccordion } from "./EvaluationAccordion";
+import {
+  checkedLivePrices,
+  liveReferencePosition,
+  priceChange24h,
+  type LivePrices,
+} from "./evaluation-live-prices";
 const copy = {
   en: {
     title: "Indicative value",
@@ -21,7 +27,7 @@ const copy = {
     updated: "Updated",
     entry: "Deposit date",
     refresh:
-      "Refreshes every minute while the app is open. Percentage is relative to the deposit; it is not a realized profit or loss.",
+      "Market prices are checked every 5 seconds while Indices is open. Basket change is relative to the deposit; it is not a realized profit or loss.",
   },
   es: {
     title: "Valor orientativo",
@@ -39,7 +45,7 @@ const copy = {
     updated: "Actualizado",
     entry: "Fecha del depósito",
     refresh:
-      "Se actualiza cada minuto mientras la app está abierta. El porcentaje se compara con el depósito; no es ganancia o pérdida realizada.",
+      "Los precios se consultan cada 5 segundos con Índices abierto. La variación de la cesta se compara con el depósito; no es ganancia o pérdida realizada.",
   },
   "zh-CN": {
     title: "参考估值",
@@ -56,7 +62,7 @@ const copy = {
     updated: "更新时间",
     entry: "存款日期",
     refresh:
-      "应用打开时每分钟刷新。百分比相对于存款计算，并非已实现的收益或损失。",
+      "指数页面打开时每5秒查询市场价格。篮子百分比相对于存款计算，并非已实现的收益或损失。",
   },
   "pt-BR": {
     title: "Valor indicativo",
@@ -74,7 +80,7 @@ const copy = {
     updated: "Atualizado",
     entry: "Data do depósito",
     refresh:
-      "Atualiza a cada minuto enquanto o app está aberto. A porcentagem é relativa ao depósito; não é lucro ou prejuízo realizado.",
+      "Consulta preços a cada 5 segundos com Índices aberto. A variação da cesta é relativa ao depósito; não é lucro ou prejuízo realizado.",
   },
 } satisfies Record<Language, Record<string, string>>;
 export function EvaluationMarketReference({
@@ -82,79 +88,210 @@ export function EvaluationMarketReference({
   position,
   expanded,
   onToggle,
+  screenActive = true,
 }: {
   language: Language;
   position: Record<string, unknown> | null;
   expanded?: boolean;
   onToggle?: () => void;
+  screenActive?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
+  const [prices, setPrices] = useState<LivePrices | null>(null);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
+    if (!screenActive) return;
+    let active = true,
+      busy = false,
+      nextAttempt = 0;
+    let controller: AbortController | undefined;
+    const query = async () => {
+      if (
+        !active ||
+        busy ||
+        AppState.currentState !== "active" ||
+        Date.now() < nextAttempt
+      )
+        return;
+      busy = true;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 7000);
+      try {
+        const response = await fetch(
+          "https://cmarket-nine.vercel.app/api/prices",
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw Error("MARKET_UNAVAILABLE");
+        const value = checkedLivePrices(await response.json());
+        if (active) {
+          setPrices(value);
+          setNow(Date.now());
+        }
+      } catch {
+        nextAttempt = Date.now() + 15000;
+        if (active) {
+          setPrices(null);
+          setNow(Date.now());
+        }
+      } finally {
+        clearTimeout(timeout);
+        busy = false;
+      }
+    };
+    void query();
+    const timer = setInterval(() => {
+      void query();
+    }, 5000);
+    const foreground = AppState.addEventListener("change", (state) => {
+      if (state === "active") void query();
+    });
+    return () => {
+      active = false;
+      controller?.abort();
+      clearInterval(timer);
+      foreground.remove();
+    };
+  }, [screenActive]);
   const t = copy[language],
-    r = referenceView(position, now);
-  if (!r) return <Text style={s.caption}>{t.unavailable}</Text>;
+    r = referenceView(liveReferencePosition(position, prices), now);
+  const marketCopy = {
+    en: [
+      "Market prices · USD",
+      "24h",
+      "Checked every 5 seconds · Coinbase Exchange",
+      "Purchase pending: basket performance appears after shares are confirmed.",
+    ],
+    es: [
+      "Precios de mercado · USD",
+      "24 h",
+      "Consulta cada 5 segundos · Coinbase Exchange",
+      "Compra pendiente: la evolución de tu cesta aparece al confirmar las participaciones.",
+    ],
+    "zh-CN": [
+      "市场价格 · USD",
+      "24小时",
+      "每5秒查询 · Coinbase Exchange",
+      "购买待处理：份额确认后显示篮子表现。",
+    ],
+    "pt-BR": [
+      "Preços de mercado · USD",
+      "24h",
+      "Consulta a cada 5 segundos · Coinbase Exchange",
+      "Compra pendente: o desempenho da cesta aparece após confirmar as participações.",
+    ],
+  }[language];
   return (
     <View style={s.box}>
-      {r ? (
-        <Text style={s.caption}>
-          {t.entry}: {new Date(r.basisTime).toLocaleString(language)}
-        </Text>
-      ) : null}
       <Text accessibilityRole="header" style={s.title}>
-        {r?.frozen ? t.frozen : t.title}
+        {marketCopy[0]}
       </Text>
-      {r ? (
-        <>
-          <Text style={s.value}>USD {localizedUnits(r.value, language)}</Text>
-          <View
-            testID="evaluation-basket-performance"
-            style={[
-              s.performance,
-              r.performance.direction === "down" && s.lossBox,
-              r.performance.direction === "flat" && s.flatBox,
-            ]}
-          >
-            <Text style={s.caption}>{t.change}</Text>
-            <Text
-              style={[
-                s.change,
-                r.performance.direction === "down" && s.loss,
-                r.performance.direction === "flat" && s.flat,
-              ]}
-            >
-              {t[r.performance.direction]} · {BigInt(r.change) > 0n ? "+" : ""}
-              {localizedUnits(r.change, language)} USD ·{" "}
-              {r.performance.percent.replace(
-                ".",
-                language === "es" || language === "pt-BR" ? "," : ".",
-              )}
-            </Text>
-          </View>
-          <Text style={s.caption}>
-            {t.updated}: {new Date(r.observedAt).toLocaleString(language)}
-          </Text>
-        </>
+      {prices ? (
+        prices.assets.map((asset) => {
+          const change = priceChange24h(asset.priceUnits, asset.open24hUnits);
+          const price = BigInt(asset.priceUnits);
+          return (
+            <View key={asset.product} style={s.marketRow}>
+              <Text style={s.caption}>{asset.product.slice(0, 3)}</Text>
+              <Text style={s.price}>
+                ${(price / 100000000n).toString()}.
+                {((price % 100000000n) / 1000000n).toString().padStart(2, "0")}
+              </Text>
+              <Text
+                style={[
+                  s.change,
+                  change.direction === "down" && s.loss,
+                  change.direction === "flat" && s.flat,
+                ]}
+              >
+                {change.percent} · {marketCopy[1]}
+              </Text>
+            </View>
+          );
+        })
       ) : (
         <Text style={s.caption}>{t.unavailable}</Text>
       )}
-      <Text style={s.caption}>{t.warning}</Text>
-      <EvaluationAccordion
-        title={t.detail}
-        {...(expanded === undefined ? {} : { expanded })}
-        {...(onToggle ? { onToggle } : {})}
-        inline
-      >
-        <Text style={s.caption}>{t.source}</Text>
-        <Text style={s.caption}>{t.refresh}</Text>
-        <Text style={s.caption}>{t.note}</Text>
-      </EvaluationAccordion>
+      <Text style={s.caption}>
+        {marketCopy[2]}
+        {prices
+          ? ` · ${new Date(prices.observedAt).toLocaleTimeString(language)}`
+          : ""}
+      </Text>
+      {!r && Number(position?.lifecycle) === 1 ? (
+        <Text style={s.caption}>{marketCopy[3]}</Text>
+      ) : null}
+      {r ? (
+        <>
+          {r ? (
+            <Text style={s.caption}>
+              {t.entry}: {new Date(r.basisTime).toLocaleString(language)}
+            </Text>
+          ) : null}
+          <Text accessibilityRole="header" style={s.title}>
+            {r?.frozen ? t.frozen : t.title}
+          </Text>
+          {r ? (
+            <>
+              <Text style={s.value}>
+                USD {localizedUnits(r.value, language)}
+              </Text>
+              <View
+                testID="evaluation-basket-performance"
+                style={[
+                  s.performance,
+                  r.performance.direction === "down" && s.lossBox,
+                  r.performance.direction === "flat" && s.flatBox,
+                ]}
+              >
+                <Text style={s.caption}>{t.change}</Text>
+                <Text
+                  style={[
+                    s.change,
+                    r.performance.direction === "down" && s.loss,
+                    r.performance.direction === "flat" && s.flat,
+                  ]}
+                >
+                  {t[r.performance.direction]} ·{" "}
+                  {BigInt(r.change) > 0n ? "+" : ""}
+                  {localizedUnits(r.change, language)} USD ·{" "}
+                  {r.performance.percent.replace(
+                    ".",
+                    language === "es" || language === "pt-BR" ? "," : ".",
+                  )}
+                </Text>
+              </View>
+              <Text style={s.caption}>
+                {t.updated}: {new Date(r.observedAt).toLocaleString(language)}
+              </Text>
+            </>
+          ) : (
+            <Text style={s.caption}>{t.unavailable}</Text>
+          )}
+          <Text style={s.caption}>{t.warning}</Text>
+          <EvaluationAccordion
+            title={t.detail}
+            {...(expanded === undefined ? {} : { expanded })}
+            {...(onToggle ? { onToggle } : {})}
+            inline
+          >
+            <Text style={s.caption}>{t.source}</Text>
+            <Text style={s.caption}>{t.refresh}</Text>
+            <Text style={s.caption}>{t.note}</Text>
+          </EvaluationAccordion>
+        </>
+      ) : null}
     </View>
   );
 }
 const s = StyleSheet.create({
+  marketRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  price: { fontSize: 16, color: "#0c1424", fontWeight: "600" },
   box: {
     paddingTop: 14,
     marginTop: 8,

@@ -38,6 +38,7 @@ import type { TradeMode } from "./evaluation-trade-actions";
 
 type Props = {
   language: Language;
+  screenActive?: boolean;
   wallet: string | null;
   verified: boolean;
   busy: boolean;
@@ -54,6 +55,7 @@ type Props = {
 /** Presentation only: callbacks dispatch to the original reviewed controllers. */
 export function EvaluationIndices({
   language,
+  screenActive = true,
   wallet,
   verified,
   busy,
@@ -351,14 +353,15 @@ export function EvaluationIndices({
                 : status}
           </Text>
         ) : null}
-        {ownsPosition && [2, 3].includes(Number(position?.lifecycle)) ? (
+        {
           <EvaluationMarketReference
             language={language}
             position={position}
+            screenActive={screenActive}
             expanded={openSection === "value"}
             onToggle={accordionProps("value").onToggle}
           />
-        ) : null}
+        }
       </View>
       <Text accessibilityRole="header" style={s.sectionTitle}>
         {t("about")}

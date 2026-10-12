@@ -144,13 +144,15 @@ test("performance display is localized and does not introduce wallet actions", (
       ).length,
       4,
     );
-  for (const forbidden of [
-    "signEvaluation",
-    "evaluationRequest",
-    "transact(",
-    "fetch(",
-  ])
+  for (const forbidden of ["signEvaluation", "evaluationRequest", "transact("])
     assert.ok(!source.includes(forbidden));
+  // Explicit user-approved read-only quotes are the only new network path.
+  assert.match(
+    source,
+    /fetch\(\s*"https:\/\/cmarket-nine\.vercel\.app\/api\/prices"/,
+  );
+  assert.equal((source.match(/\bfetch\(/g) ?? []).length, 1);
+  assert.ok(!source.includes('method: "POST"'));
   assert.match(source, /r\.performance\.direction === "down" && s\.loss/);
   assert.match(source, /r\.performance\.direction === "flat" && s\.flat/);
   assert.match(source, /t\[r\.performance\.direction\]/);
