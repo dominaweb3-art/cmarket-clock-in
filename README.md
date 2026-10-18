@@ -6,6 +6,118 @@
 
 > A mobile-first, on-chain basket experience for the Solana Mobile ecosystem.
 
+## Guía operativa vigente — 17 de octubre de 2026
+
+C Market ofrece una evaluación Android/Seeker de C3: depósito de USDC de prueba,
+asignación BTC/ETH/SOL objetivo 40/30/30 con router de prueba, participaciones
+on-chain, venta, quema y reclamo. Mainnet permanece deshabilitado. Los precios
+reales de mercado son informativos; no convierten los activos simulados en activos reales.
+
+**Punto de entrada documental:** [estado y pendientes](docs/STATUS.md),
+[transferencia de contexto](docs/HANDOFF.md), [producto](docs/PRODUCT.md),
+[arquitectura vigente](docs/ARCHITECTURE.md), [decisiones](docs/DECISIONS.md)
+y [reglas de trabajo](AGENTS.md). La aplicación vigente de esta rama está en
+apps/c3-pilot, variante evaluation; apps/mobile conserva el prototipo anterior.
+No hay package.json en la raíz: ejecutar comandos en el paquete correspondiente.
+
+Versión declarada: **0.1.38, Android code 39**; paquete
+com.dominaweb3.cmarket.c3evaluation. Fuente de versión: apps/c3-pilot/variants/evaluation/app.json.
+El nombre npm 0.1.0/0.1.1 de los paquetes no es la versión del APK.
+Código: [rama de entrega](https://github.com/dominaweb3-art/cmarket-clock-in/tree/delivery/c3-devnet-evaluation).
+Web configurada: https://cmarket-nine.vercel.app/.
+APK: https://cmarket-nine.vercel.app/downloads/c-market-c3-devnet-evaluation-0.1.38.apk.
+La disponibilidad de la web no se volvió a comprobar el 17 de octubre.
+
+### Tecnologías y preparación del entorno
+
+Declaradas en los manifiestos: TypeScript 6.0.3; Expo 57.0.26; React 19.2.3;
+React Native 0.86.3; MWA protocol 2.3.0; AsyncStorage 2.2.0; servicios con
+web3.js 1.99.0 y pg 8.23.0; Anchor/Rust 0.31.1, Rust edition 2021;
+web Vercel Node 24 y esbuild 0.28.2. No se reinstalaron ni validaron herramientas hoy.
+
+Requisitos: Node/npm compatibles con los paquetes, Android SDK/Java para APK,
+Seeker con depuración para QA física y wallet compatible con MWA. Expo Go no
+sustituye el build Android nativo. Para el programa se necesitan Rust, Anchor y
+herramientas Solana compatibles; confirmar las versiones instaladas antes de usarlas.
+El builder actual usa ANDROID_HOME o ANDROID_SDK_ROOT y el material Android de
+evaluación ya existente, ignorado por Git. No generar otra identidad para resolver
+un error de configuración ni borrar datos al instalar.
+
+Preparación futura, solo bajo encargo de ejecución; estos comandos no se ejecutaron hoy:
+
+    cd services/c3-mainnet
+    npm ci
+    cd ../../apps/c3-pilot
+    npm ci
+    cd ../c3-evaluation-web
+    npm ci
+
+### Ejecución y comprobaciones por paquete
+
+Desde apps/c3-pilot:
+
+    npm run typecheck
+    npm run lint:check
+    npm run format:check
+    npm test
+    npm run doctor
+    npm run android:export
+
+El script específico de evaluación es scripts/build-evaluation-apk.mjs dentro
+de ese paquete. Ejecutarlo con node solo al preparar un APK autorizado: realiza
+prebuild/Gradle, usa el certificado existente y rechaza sobrescribir un APK previo.
+No usar por accidente el builder QA/Mainnet ni un comando con --clean.
+Para desarrollo nativo, el paquete contiene android:prebuild; Metro de la variante
+se inicia desde apps/c3-pilot/variants/evaluation con el CLI Expo instalado, no
+desde c10-pocket. La entrega al jurado debe funcionar sin Metro ni Mac.
+
+Desde services/c3-mainnet: npm run typecheck, npm test, npm run lint:check y
+npm run format:check. Las suites test:postgres crean procesos/archivos y una base
+temporal; no son una comprobación documental de solo lectura.
+Desde apps/c3-evaluation-web: npm run build:evaluation genera bundle/recursos;
+node --test scripts/prices.test.mjs comprueba el colector de precios con fixtures.
+Los scripts de provisión, faucet, ciclo alojado y despliegue pueden enviar
+transacciones: leerlos y confirmar alcance antes de ejecutarlos.
+
+### Configuración, infraestructura y publicación
+
+La variante de evaluación fija red, programa y origen HTTPS en código; no usa
+los EXPO_PUBLIC_* del prototipo apps/mobile. El servidor requiere POSTGRES_URL,
+C3_EVAL_GOVERNANCE_KEY, C3_EVAL_KEEPER_KEY, C3_EVAL_MINT_KEY y C3_EVAL_QUOTES_KEY.
+Son configuración secreta de servidor: nunca documentación, chat, Git ni APK.
+Los adaptadores rechazan identidades que no coincidan con las públicas previstas.
+No se leyeron sus valores ni se confirmó su presencia hoy.
+
+Vercel sirve presentación/descargas y API; PostgreSQL alojado en Supabase mantiene
+el esquema c3_eval; Solana Devnet mantiene custodia y participaciones. Los precios
+proceden de Coinbase Exchange. Véase [arquitectura](docs/ARCHITECTURE.md).
+El proyecto Vercel configurado es cmarket. Antes de publicar, comprobar equipo,
+proyecto, commit, aislamiento, ausencia de secretos, APK/certificado/hash y salud.
+Una publicación autorizada utiliza el bundle de evaluación y promoción comprobada;
+no publicar simplemente por abrir este README. No enviar formularios automáticamente.
+
+### Solución de problemas y límites
+
+- Sesión vencida: volver a verificar propiedad mediante mensaje MWA; conservar
+  firma e intent originales. Conectar no equivale a autenticar ni comprar.
+- Solicitud/plan vencidos: consultar y conciliar el original; la renovación es
+  explícita. Nunca reenviar una firma incierta ni bajar mínimos automáticamente.
+- Compra pendiente: un depósito confirmado no implica participaciones emitidas.
+  El último registro de 100 USDC seguía pendiente; ver STATUS antes de repetirlo.
+- Valor de mercado: spot/24 h reales y referencia orientativa de cesta; no son
+  USDC rescatables. Si falta precio, mostrar indisponibilidad, no inventar datos.
+- Posición cerrada: cero participaciones; depósito previo en Actividad, no saldo activo.
+- Expo Doctor: último aviso documentado 18/19 por 57.0.26 frente a ~57.0.27;
+  no actualizar dependencias solo para silenciarlo.
+- Instalación: conservar certificado y datos; detenerse ante firma incompatible.
+
+## Registro histórico conservado
+
+Las secciones siguientes se mantienen como procedencia. Sus referencias a
+0.1.14, apps/mobile, iconos pendientes, candidato Mainnet o pago a tesorería
+no sustituyen la guía vigente ni acreditan funcionamiento actual. El alcance
+físico de 0.1.14 está documentado y no se extiende automáticamente a 0.1.38.
+
 C Market is an experimental Android application designed for Seeker users who want a simple, transparent way to explore predefined crypto-asset baskets such as C3, C10, and future basket sizes.
 
 The project is being prepared for **CLOCK IN — A Solana Mobile Hackathon**.

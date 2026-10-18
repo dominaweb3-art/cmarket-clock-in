@@ -1,5 +1,95 @@
 # C Market workspace guidance
 
+## Continuidad permanente — vigente desde el 17 de octubre de 2026
+
+### Misión permanente
+
+Conservar la continuidad técnica, funcional y operativa en este repositorio,
+independientemente de sesión, cuenta, plan o modelo. La memoria del chat no es
+una fuente persistente ni un respaldo. Esta incorporación documental es SHARED;
+no autoriza integrar ramas ni cambia la arquitectura o las reglas económicas.
+
+### Fuentes y orden de lectura
+
+Al retomar: leer AGENTS.md, [STATUS](docs/STATUS.md) y [HANDOFF](docs/HANDOFF.md),
+y contrastar rama, HEAD y cambios reales. Consultar [PRODUCT](docs/PRODUCT.md)
+para requisitos, [ARCHITECTURE](docs/ARCHITECTURE.md) para código/datos/servicios,
+[DECISIONS](docs/DECISIONS.md) para decisiones y [README](README.md) para operación.
+Cada documento tiene esa responsabilidad; enlazar evidencia sin duplicarla.
+
+Clasificar afirmaciones como VERIFICADO (evidencia y alcance explícitos),
+DOCUMENTADO (registro anterior no reproducido), APROBADO (decisión expresa),
+PENDIENTE, HIPÓTESIS o DESCONOCIDO. Código presente no prueba ejecución;
+compilación, prueba local, firma física y liquidación Mainnet son evidencias distintas.
+
+### Precedencia y desarrollo
+
+Preservar las secciones históricas siguientes. En esta rama rige primero el
+override Devnet y después la regla open-vault del 28 de septiembre. Las menciones
+posteriores a Symmetry como custodio, al Mainnet-only y a apps/mobile como única
+app describen etapas anteriores; no anulan el override ni describen el APK actual.
+El mapa vigente está en ARCHITECTURE y las sustituciones en DECISIONS.
+Ante una contradicción nueva, registrarla y resolver el alcance antes de modificar
+comportamiento. No inventar aprobación ni eliminar controles para obtener PASS.
+
+Proteger funcionalidades, recursos y cambios existentes; respetar requisitos,
+convenciones y arquitectura. No introducir productos, dependencias, refactors ni
+cambios de negocio ajenos al encargo. Comunicar riesgos de cambios críticos y
+validar en proporción al cambio. No confundir pruebas aprobadas antiguas con QA nueva.
+
+### Reglas de memoria y actualización A–J
+
+- A: actualizar STATUS tras modificaciones funcionales significativas.
+- B: actualizar ARCHITECTURE y DECISIONS si cambia la arquitectura.
+- C: actualizar PRODUCT solo cuando cambien requisitos aprobados.
+- D: actualizar README si cambian instalación, ejecución o despliegue.
+- E: registrar decisiones relevantes con fecha conocida, estado, razón y evidencia;
+  conservar las sustituidas y marcar fechas o razones desconocidas.
+- F: actualizar HANDOFF al cerrar una etapa significativa o cambiar el punto de reanudación.
+- G: reportar contradicciones entre código y documentos sin sobrescribir su historia.
+- H: no modificar documentación innecesariamente ni copiar extensamente otros documentos.
+- I: no inventar datos, pruebas, resultados, aprobaciones o respaldos.
+- J: ante transferencia de sesión/cuenta/plan, producir un punto completo de recuperación.
+
+### Reglas de continuidad y prevención de pérdida
+
+Registrar rama, HEAD, estado Git, cambios sin commit, archivos relevantes no
+rastreados, tareas pendientes, problemas, worktrees, ramas sin integrar, servicios
+externos y próxima acción exacta. Las referencias remotas locales pueden estar
+desactualizadas: distinguirlas de una lectura remota comprobada. No integrar ni
+copiar manualmente trabajo entre worktrees. Revisar tareas Cloud solo si hay
+acceso y alcance; de lo contrario marcar DESCONOCIDO.
+
+Antes de cambiar de cuenta/plan: revisar estado Git y worktrees, actualizar los
+siete documentos cuando corresponda, identificar material local ignorado que Git
+no respalda y comunicar pendientes. No suponer que los chats se transfieren.
+Una sesión nueva debe poder continuar desde archivos y Git; si solo existe un
+recuerdo conversacional, marcarlo pendiente de recuperación, no hecho verificado.
+
+### Seguridad y protección
+
+No incluir contraseñas, tokens, claves privadas, seeds, URLs con credenciales,
+archivos de secretos ni material de firma en documentos o informes. No leer su
+contenido para documentar: describir nombres de variables y responsabilidades.
+No eliminar información ni sobrescribir trabajo sin confirmar. Git destructivo,
+reescritura de historia y migraciones destructivas siguen prohibidos.
+Push, despliegue, producción y acciones sensibles requieren autorización explícita
+aplicable al encargo; conservar autorizaciones previas válidas sin ampliarlas.
+Este encargo documental del 17 de octubre prohíbe commits, push, despliegues,
+instalaciones, cambios funcionales y operaciones de base de datos.
+
+### Calidad documental y cierre
+
+Confirmar qué cambió, revisar archivos, ejecutar solo comprobaciones permitidas,
+documentar resultados/limitaciones, actualizar la memoria pertinente e informar
+al usuario según el informe obligatorio de abajo. Si no se ejecutó una prueba,
+indicarlo. Un cierre documental autorizado sin commit deja cambios pendientes:
+reportarlo; nunca crear un commit solo para cumplir la regla histórica de árbol limpio.
+Los siete documentos son memoria persistente local, no mantenimiento automático
+en segundo plano ni garantía de respaldo. Al pedir diagnóstico de recuperación,
+explicar producto, objetivos, evidencia, decisiones, errores, riesgos y próxima
+tarea antes de cambiar código; esperar el encargo correspondiente.
+
 ## Active delivery override — Devnet evaluation (5 October 2026)
 
 Evaluation purchase update (11 October 2026): the owner explicitly authorizes
